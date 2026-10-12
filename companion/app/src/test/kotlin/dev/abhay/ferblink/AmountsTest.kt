@@ -37,6 +37,29 @@ class AmountsTest {
     }
 
     @Test
+    fun `the rerun's alarm misses`() {
+        assertThat(Amounts.normalize("shaam saat baje ka alarm lagao", "Set an alarm for 7 o'clock")).isEqualTo("Set an alarm for 7 pm")
+        assertThat(Amounts.normalize("alarm add quarter to 8", "alarm add quarter to 8")).isEqualTo("alarm add 7:45")
+    }
+
+    @Test
+    fun `English clock phrases become H MM`() {
+        assertThat(Amounts.englishClock("wake me at a quarter past seven")).isEqualTo("wake me at 7:15")
+        assertThat(Amounts.englishClock("alarm for half past 5 pm")).isEqualTo("alarm for 5:30 pm")
+        assertThat(Amounts.englishClock("quarter to 1")).isEqualTo("12:45")
+        assertThat(Amounts.englishClock("set a timer for a quarter of an hour")).isEqualTo("set a timer for a quarter of an hour")
+    }
+
+    @Test
+    fun `am or pm goes on bare times only when the time of day was said`() {
+        assertThat(Amounts.withHalfOfDay("raat 11 baje", "Remind me at 11")).isEqualTo("Remind me at 11 pm")
+        assertThat(Amounts.withHalfOfDay("subah 6:30 baje", "Wake me at 6:30")).isEqualTo("Wake me at 6:30 am")
+        assertThat(Amounts.withHalfOfDay("shaam 7 baje", "Alarm for 7 in the evening")).isEqualTo("Alarm for 7 in the evening")
+        assertThat(Amounts.withHalfOfDay("7 baje ka alarm", "Set an alarm for 7")).isEqualTo("Set an alarm for 7")
+        assertThat(Amounts.withHalfOfDay("shaam ko 10 minute ka timer", "Set a timer for 10 minutes")).isEqualTo("Set a timer for 10 minutes")
+    }
+
+    @Test
     fun `no Hindi amount leaves the text alone`() {
         assertThat(Amounts.fix("subah 5 baje ka alarm laga do", "Set an alarm for 5 am")).isEqualTo("Set an alarm for 5 am")
         assertThat(Amounts.fix("10 minute ka timer lagao", "Set a timer for 10 minutes")).isEqualTo("Set a timer for 10 minutes")

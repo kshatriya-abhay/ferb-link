@@ -40,6 +40,14 @@ object Amounts {
         return if (time) Amount(clock(value), isTime = true) else Amount(length(value, unit), isTime = false)
     }
 
+    /**
+     * Everything Ferb Link does to a transcript's times and lengths: the Hindi amount from [heard]
+     * ([fix]), English "quarter to 8" and "half past 5" as 7:45 and 5:30 (the model read "quarter
+     * to 8" as 8:15 in the rerun), and am/pm from subah, dopahar, shaam or raat on any time that has
+     * none (the model dropped shaam: "shaam saat baje" became "7 o'clock", a morning alarm).
+     */
+    fun normalize(heard: String, text: String): String = withHalfOfDay(heard, englishClock(fix(heard, text)))
+
     /** [text] with its time or length replaced by the one worked out from [heard]. */
     fun fix(heard: String, text: String): String {
         val amount = parse(heard) ?: return text
@@ -56,13 +64,57 @@ object Amounts {
      */
     private fun halfOfDay(heard: String, modelTime: String, time: String): String {
         Regex("\\b([ap])\\.?m\\.?$", RegexOption.IGNORE_CASE).find(modelTime.trim())?.let { return " ${it.groupValues[1].lowercase()}m" }
-        val hour = time.substringBefore(':').toInt()
+        return dayHalf(heard, time.substringBefore(':').toInt())?.let { " $it" } ?: ""
+    }
+
+    /** "am" or "pm" from the time of day said in [heard], for a time at [hour]; null when none was. */
+    private fun dayHalf(heard: String, hour: Int): String? {
         val words = heard.lowercase().split(Regex("[^a-z]+")).toSet()
         return when {
-            "subah" in words -> " am"
-            "dopahar" in words || "shaam" in words || "sham" in words -> " pm"
-            "raat" in words -> if (hour in 7..11) " pm" else " am"
-            else -> ""
+            "subah" in words -> "am"
+            "dopahar" in words || "shaam" in words || "sham" in words -> "pm"
+            "raat" in words -> if (hour in 7..11) "pm" else "am"
+            else -> null
+        }
+    }
+
+    private val englishNumbers = listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve")
+    private val hourWord = "(\\d{1,2}|${englishNumbers.joinToString("|")})"
+
+    // "quarter to 8", "a quarter past seven", "half past 5".
+    private val clockPhrase = Regex("\\b(?:a\\s+)?(quarter\\s+past|quarter\\s+to|half\\s+past)\\s+$hourWord\\b(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
+
+    /** [text] with "quarter to/past N" and "half past N" as H:MM. */
+    fun englishClock(text: String): String = clockPhrase.replace(text) { match ->
+        val (phrase, hourText) = match.destructured
+        val hour = hourText.toIntOrNull() ?: (englishNumbers.indexOf(hourText.lowercase()) + 1)
+        if (hour !in 1..12) return@replace match.value
+        val minutes = when (phrase.lowercase().replace(Regex("\\s+"), " ")) {
+            "quarter past" -> hour * 60 + 15
+            "half past" -> hour * 60 + 30
+            else -> hour * 60 - 15
+        }
+        clock(minutes / 60.0)
+    }
+
+    // A clock time without am/pm: "7:30", "7 o'clock", or a bare hour after "at" or "for" ("at 7").
+    private val bareTime = Regex(
+        "\\b(\\d{1,2}):(\\d{2})\\b(?!\\s*(?:am|pm|a\\.m|p\\.m))|\\b(\\d{1,2})\\s*o'clock\\b|" +
+            "\\b(?:at|for)\\s+(\\d{1,2})\\b(?!\\s*(?::|am|pm|a\\.m|p\\.m|o'clock|minutes?|mins?|hours?|seconds?|days?))",
+        RegexOption.IGNORE_CASE,
+    )
+    private val saysDayHalf = Regex("\\b(?:am|pm|a\\.m|p\\.m|morning|afternoon|evening|night|tonight)\\b", RegexOption.IGNORE_CASE)
+
+    /** [text] with am or pm on each time that has neither, when [heard] says the time of day. */
+    fun withHalfOfDay(heard: String, text: String): String {
+        if (saysDayHalf.containsMatchIn(text) || dayHalf(heard, 12) == null) return text
+        return bareTime.replace(text) { match ->
+            val g = match.groupValues
+            when {
+                g[1].isNotEmpty() -> "${g[1]}:${g[2]} ${dayHalf(heard, g[1].toInt())}"
+                g[3].isNotEmpty() -> "${g[3]} ${dayHalf(heard, g[3].toInt())}"
+                else -> match.value + " " + dayHalf(heard, g[4].toInt())
+            }
         }
     }
 

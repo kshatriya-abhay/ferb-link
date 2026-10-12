@@ -108,7 +108,7 @@ class LinkProvider : ContentProvider() {
                         // Silence and steady noise never reach the model, which would imagine words in them.
                         if (!SpeechCheck.mayHoldSpeech(wav)) Transcript("", "", "", 0, null)
                         else settings.client(trace).transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS)
-                            .let { val heard = Latin.of(it.heard); it.copy(heard = heard, text = Amounts.fix(heard, Latin.of(it.text))) }
+                            .let { val heard = Latin.of(it.heard); it.copy(heard = heard, text = Amounts.normalize(heard, Latin.of(it.text))) }
                             .also {
                             if (it.failure == null) settings.lastModel = it.model
                             // A server in text mode turns audio down: stop offering the mic.
