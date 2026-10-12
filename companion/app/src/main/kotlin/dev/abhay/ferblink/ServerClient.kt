@@ -330,16 +330,32 @@ class ServerClient(
 
         /**
          * How a spoken request is written down. Hindi comes back in Latin letters for the user to
-         * read, and translated, because Ferb's keywords, date reader and Needle 3 need English. The
-         * model also "translated" English (it dropped a "not"), so it says whether the speech was
-         * English, and then [parseTranscript] keeps what was heard. Tried on synthetic Hindi and
-         * English clips (2026-10-12); real voices are for the audio bench.
+         * read, and translated, because Ferb's keywords, date reader and Needle 3 need English.
+         * "speech" comes first, so the model decides whether anyone spoke before writing words: asked
+         * only to leave the fields empty, it turned silence and room noise into commands ("call
+         * mom"). The model also "translated" English (it dropped a "not"), so it says whether any
+         * word was Hindi, and [parseTranscript] keeps what was heard for English. Tried on synthetic
+         * clips, noise and silence (2026-10-12); real voices are for the audio bench.
          */
-        const val TRANSCRIBE = """You write down a voice request to a phone assistant. Reply with JSON only, with three fields:
-- "heard": the words that were said, in Latin letters. Write Hindi words the way people type Hinglish ("subah 5 baje ka alarm laga do"), never in Devanagari. Write English words in English. Write numbers as digits.
-- "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know.
-- "english": true if every word said was English, false if any was Hindi.
-If there is no speech, "heard" and "text" are empty."""
+        const val TRANSCRIBE = """You write down a voice request to a phone assistant. The recording may contain no speech at all: silence, room noise, hiss, hum, wind, breathing, rustling or a tap on the phone. Reply with JSON only, with four fields, in this order:
+- "speech": true only if you clearly hear a person saying words. False for silence, noise or any other sound. Never guess words from noise.
+- "hindi": true if any word said was Hindi (Hinglish counts), false if every word was English.
+- "heard": the words that were said, in Latin letters. Write Hindi words the way people type Hinglish ("subah 5 baje ka alarm laga do"), never in Devanagari. Write English words in English. Write numbers as digits. Empty when "speech" is false.
+- "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know. Empty when "speech" is false."""
+
+        /**
+         * Common Hindi words in Latin letters, as a second opinion on the model's "hindi", which
+         * called "zoom kholo" English. Only words that aren't also everyday English.
+         */
+        private val HINDI_WORDS = setOf(
+            "kholo", "karo", "kar", "kardo", "laga", "lagao", "lagado", "chalao", "chalu", "bajao", "bhejo", "batao", "dikhao",
+            "ka", "ki", "ke", "ko", "hai", "hain", "mein", "se", "mujhe", "mera", "meri", "mere", "kya", "kaise", "kaisa",
+            "baje", "kal", "aaj", "subah", "shaam", "raat", "ghante", "ghanta", "dedh", "dhai", "abhi", "jaldi", "nahi",
+            "aur", "wala", "wali", "rasta", "liye", "saath", "daal", "dalo", "bolo", "sunao", "yaad", "dilana",
+        )
+
+        /** Whether [heard] has a Hindi word in it (see [HINDI_WORDS]). */
+        fun soundsHindi(heard: String) = heard.lowercase().split(Regex("[^a-z]+")).any { it in HINDI_WORDS }
 
         /** The smallest request that loads the model. */
         private fun wakeBody(model: String) = JSONObject()
@@ -370,10 +386,12 @@ If there is no speech, "heard" and "text" are empty."""
 
         fun transcribeBody(model: String, wav: ByteArray): JSONObject {
             val audio = JSONObject().put("data", Base64.getEncoder().encodeToString(wav)).put("format", "wav")
+            // In this order (the model writes them in it): whether anyone spoke, before any words.
             val fields = JSONObject()
+                .put("speech", JSONObject().put("type", "boolean"))
+                .put("hindi", JSONObject().put("type", "boolean"))
                 .put("heard", JSONObject().put("type", "string"))
                 .put("text", JSONObject().put("type", "string"))
-                .put("english", JSONObject().put("type", "boolean"))
             return JSONObject()
                 .put("model", model)
                 .put("messages", JSONArray()
@@ -382,17 +400,19 @@ If there is no speech, "heard" and "text" are empty."""
                         .put(JSONObject().put("type", "input_audio").put("input_audio", audio)))))
                 .put("temperature", 0)
                 .put("max_tokens", 300)
-                // Constrained to the three fields, so the answer is always JSON.
+                // Constrained to the four fields, so the answer is always JSON.
                 .put("response_format", JSONObject().put("type", "json_schema").put("json_schema", JSONObject().put("schema",
-                    JSONObject().put("type", "object").put("properties", fields).put("required", JSONArray(listOf("heard", "text", "english"))))))
+                    JSONObject().put("type", "object").put("properties", fields).put("required", JSONArray(listOf("speech", "hindi", "heard", "text"))))))
                 .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
 
         fun parseTranscript(reply: JSONObject, ms: Long): Transcript {
             val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
             val fields = JSONObject(content)
+            if (!fields.optBoolean("speech", true)) return Transcript("", "", reply.optString("model"), ms, null)
             val heard = fields.getString("heard").trim()
-            val text = if (fields.optBoolean("english")) heard else fields.getString("text").trim()
+            val hindi = fields.optBoolean("hindi") || soundsHindi(heard)
+            val text = if (hindi) fields.getString("text").trim() else heard
             return Transcript(heard, text, reply.optString("model"), ms, null)
         }
 

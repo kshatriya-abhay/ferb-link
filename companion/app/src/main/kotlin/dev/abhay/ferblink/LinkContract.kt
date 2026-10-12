@@ -69,7 +69,8 @@ object LinkContract {
      * The reply: `success`, `heard` (what was said, Hindi in Latin letters, to show the user),
      * `text` (the same request as a plain English command, to route and send with [METHOD_COMPLETE];
      * the same as `heard` when it was said in English), `model`, `ms`, `source: "laptop"`, and
-     * `error`, `error_detail` and `error_kind` on failure. No speech gives success with empty `heard` and `text`.
+     * `error`, `error_detail` and `error_kind` on failure. No speech (silence, noise: [SpeechCheck] or the model says so) gives success with empty
+     * `heard` and `text`.
      */
     const val METHOD_TRANSCRIBE = "transcribe"
 

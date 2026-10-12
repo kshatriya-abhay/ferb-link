@@ -50,10 +50,19 @@ if [ ! -s "$KEY_FILE" ]; then
   echo "Created the API key in $KEY_FILE (mise run server:key shows it)."
 fi
 
+mise run server:unit
+echo "Next: set MODEL in server/server.conf, mise run server:model <name>, mise run server:start."
+'''
+
+[tasks."server:unit"]
+description = "Install the systemd user unit ferb-llama and enable it at login (doesn't start or restart it)"
+run = '''
+set -euo pipefail
 mkdir -p ~/.config/systemd/user
 sed "s|@ROOT@|$PWD|g" server/ferb-llama.service.in > ~/.config/systemd/user/ferb-llama.service
 systemctl --user daemon-reload
-echo "Installed ferb-llama.service. Next: set MODEL in server/server.conf, mise run server:model <name>, mise run server:start."
+systemctl --user enable ferb-llama
+echo "Installed ferb-llama.service, enabled at login."
 '''
 
 [tasks."server:model"]

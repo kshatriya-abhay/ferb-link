@@ -98,7 +98,9 @@ class LinkProvider : ContentProvider() {
                     else -> try {
                         val wav = AudioDecoder.toWav(audio, mime)
                         recording = "Recording, %.1f s".format(AudioDecoder.seconds(wav))
-                        settings.client().transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS).also {
+                        // Silence and steady noise never reach the model, which would imagine words in them.
+                        if (!SpeechCheck.mayHoldSpeech(wav)) Transcript("", "", "", 0, null)
+                        else settings.client().transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS).also {
                             if (it.failure == null) settings.lastModel = it.model
                             // A server in text mode turns audio down: stop offering the mic.
                             else if (it.failure.kind == ErrorKind.Server) refreshAudio(settings)

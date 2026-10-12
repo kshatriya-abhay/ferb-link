@@ -292,7 +292,7 @@ class ServerClientTest {
     @Test
     fun `a recording goes as WAV with the prompt, and comes back heard and in English`() {
         chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content":
-            "{\"heard\": \"subah 5 baje ka alarm laga do\", \"text\": \"Set an alarm for 5 am\", \"english\": false}"}}]}"""
+            "{\"speech\": true, \"hindi\": true, \"heard\": \"subah 5 baje ka alarm laga do\", \"text\": \"Set an alarm for 5 am\"}"}}]}"""
 
         val transcript = ServerClient(url, "secret").transcribe(byteArrayOf(1, 2, 3))
 
@@ -314,11 +314,33 @@ class ServerClientTest {
     @Test
     fun `English speech keeps what was heard, not the model's rewording`() {
         chatReply = 200 to """{"choices": [{"message": {"content":
-            "{\"heard\": \"ask not what your country can do\", \"text\": \"Ask what your country can do\", \"english\": true}"}}]}"""
+            "{\"speech\": true, \"hindi\": false, \"heard\": \"ask not what your country can do\", \"text\": \"Ask what your country can do\"}"}}]}"""
 
         val transcript = ServerClient(url, "secret").transcribe(byteArrayOf(1))
 
         assertThat(transcript.text).isEqualTo("ask not what your country can do")
+    }
+
+    @Test
+    fun `no speech gives empty heard and text, whatever words the model wrote`() {
+        chatReply = 200 to """{"choices": [{"message": {"content":
+            "{\"speech\": false, \"hindi\": false, \"heard\": \"call mom\", \"text\": \"Call mom\"}"}}]}"""
+
+        val json = JSONObject(ServerClient(url, "secret").transcribe(byteArrayOf(1)).toJson())
+
+        assertThat(json.getBoolean("success")).isTrue()
+        assertThat(json.getString("heard")).isEmpty()
+        assertThat(json.getString("text")).isEmpty()
+    }
+
+    @Test
+    fun `a Hindi word keeps the translation even when the model calls it English`() {
+        chatReply = 200 to """{"choices": [{"message": {"content":
+            "{\"speech\": true, \"hindi\": false, \"heard\": \"zoom kholo\", \"text\": \"Open zoom\"}"}}]}"""
+
+        assertThat(ServerClient(url, "secret").transcribe(byteArrayOf(1)).text).isEqualTo("Open zoom")
+        assertThat(ServerClient.soundsHindi("set a timer for ten minutes")).isFalse()
+        assertThat(ServerClient.soundsHindi("Paytm kholo")).isTrue()
     }
 
     @Test
