@@ -360,13 +360,16 @@ class ServerClient(
          * only to leave the fields empty, it turned silence and room noise into commands ("call
          * mom"). The model also "translated" English (it dropped a "not"), so it says whether any
          * word was Hindi, and [parseTranscript] keeps what was heard for English. Tried on synthetic
-         * clips, noise and silence (2026-10-12); real voices are for the audio bench.
+         * clips, noise and silence (2026-10-12). The amounts paragraph is from the audio bench, where
+         * sava, dhai and paune were misheard ("subah", "thai", "phone") or dropped: named, they're heard.
+         * Its sums still slip, so [Amounts] works them out from "heard".
          */
         const val TRANSCRIBE = """You write down a voice request to a phone assistant. The recording may contain no speech at all: silence, room noise, hiss, hum, wind, breathing, rustling or a tap on the phone. Reply with JSON only, with four fields, in this order:
 - "speech": true only if you clearly hear a person saying words. False for silence, noise or any other sound. Never guess words from noise.
 - "hindi": true if any word said was Hindi (Hinglish counts), false if every word was English.
 - "heard": the words that were said, in Latin letters. Write Hindi words the way people type Hinglish ("subah 5 baje ka alarm laga do"), never in Devanagari. Write English words in English. Write numbers as digits. Empty when "speech" is false.
-- "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know. Empty when "speech" is false."""
+- "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know. Empty when "speech" is false.
+Hindi amounts are common in these requests; listen for them and keep them: sava (a quarter more: sava saat = 7:15, sava ghanta = 1 hour 15 minutes), saade (a half more: saade paanch = 5:30), paune (a quarter less: paune aath = 7:45, paune do ghante = 1 hour 45 minutes), dedh (one and a half: dedh ghanta = 1 hour 30 minutes), dhai (two and a half: dhai minute = 2 minutes 30 seconds, dhai baje = 2:30). In "heard" write the amount word as said ("sava 7 baje"). In "text" write the exact time or length ("Wake me up at 7:15", "Set a timer for 2 minutes 30 seconds"). If you aren't sure which amount word was said, keep it as said in "text" too ("Set a timer for dhai minutes") rather than guessing a number."""
 
         /**
          * Common Hindi words in Latin letters, as a second opinion on the model's "hindi", which
