@@ -51,6 +51,25 @@ class AmountsTest {
     }
 
     @Test
+    fun `dopahar however it was written down`() {
+        for (heard in listOf("dopahar do baje", "do peher do baje", "dopehar 2 baje", "dopaher 2 baje", "dophar 2 baje", "dupahar 2 baje", "do pahar 2 baje")) {
+            assertThat(Amounts.withHalfOfDay(heard, "Wake me up at 2")).isEqualTo("Wake me up at 2 pm")
+        }
+        assertThat(Amounts.withHalfOfDay("do baje", "Wake me up at 2")).isEqualTo("Wake me up at 2")
+        assertThat(Amounts.withHalfOfDay("do paar 2 baje", "at 2")).isEqualTo("at 2")
+    }
+
+    @Test
+    fun `minutes past and to the hour`() {
+        assertThat(Amounts.englishClock("alarm at 5 past 7 in the morning")).isEqualTo("alarm at 7:05 in the morning")
+        assertThat(Amounts.englishClock("wake me at ten to eight")).isEqualTo("wake me at 7:50")
+        assertThat(Amounts.englishClock("20 minutes past 6")).isEqualTo("6:20")
+        assertThat(Amounts.englishClock("twenty-five to nine")).isEqualTo("8:35")
+        assertThat(Amounts.englishClock("quarter to eight")).isEqualTo("7:45")
+        assertThat(Amounts.englishClock("set a timer for 10 minutes")).isEqualTo("set a timer for 10 minutes")
+    }
+
+    @Test
     fun `am or pm goes on bare times only when the time of day was said`() {
         assertThat(Amounts.withHalfOfDay("raat 11 baje", "Remind me at 11")).isEqualTo("Remind me at 11 pm")
         assertThat(Amounts.withHalfOfDay("subah 6:30 baje", "Wake me at 6:30")).isEqualTo("Wake me at 6:30 am")

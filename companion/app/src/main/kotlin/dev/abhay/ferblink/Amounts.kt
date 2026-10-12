@@ -72,11 +72,14 @@ object Amounts {
         val words = heard.lowercase().split(Regex("[^a-z]+")).toSet()
         return when {
             "subah" in words -> "am"
-            "dopahar" in words || "shaam" in words || "sham" in words -> "pm"
+            afternoon.containsMatchIn(heard.lowercase()) || "shaam" in words || "sham" in words -> "pm"
             "raat" in words -> if (hour in 7..11) "pm" else "am"
             else -> null
         }
     }
+
+    // dopahar as it gets written down: dopahar, dopehar, dopaher, dophar, dupahar, "do peher".
+    private val afternoon = Regex("\\bd[ou]\\s?p(?:a|e)?h(?:a|e)r\\b")
 
     private val englishNumbers = listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve")
     private val hourWord = "(\\d{1,2}|${englishNumbers.joinToString("|")})"
@@ -84,10 +87,27 @@ object Amounts {
     // "quarter to 8", "a quarter past seven", "half past 5".
     private val clockPhrase = Regex("\\b(?:a\\s+)?(quarter\\s+past|quarter\\s+to|half\\s+past)\\s+$hourWord\\b(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
 
-    /** [text] with "quarter to/past N" and "half past N" as H:MM. */
-    fun englishClock(text: String): String = clockPhrase.replace(text) { match ->
+    // "5 past 7", "ten to eight", "20 minutes past 6", "twenty-five to nine".
+    private val minutesWord = "(\\d{1,2}|five|ten|twenty|twenty[- ]five)"
+    private val minutesPhrase = Regex("\\b$minutesWord\\s+(?:minutes?\\s+)?(past|to)\\s+$hourWord\\b(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
+
+    private fun hourOf(text: String) = text.toIntOrNull() ?: (englishNumbers.indexOf(text.lowercase()) + 1)
+
+    /** [text] with "quarter to/past N", "half past N" and "M past/to N" as H:MM. */
+    fun englishClock(text: String): String = minutesClock(quarterClock(text))
+
+    private fun minutesClock(text: String): String = minutesPhrase.replace(text) { match ->
+        val (minutesText, direction, hourText) = match.destructured
+        val minutes = minutesText.toIntOrNull()
+            ?: mapOf("five" to 5, "ten" to 10, "twenty" to 20).getOrElse(minutesText.lowercase()) { 25 }
+        val hour = hourOf(hourText)
+        if (hour !in 1..12 || minutes !in 1..59) return@replace match.value
+        clock((hour * 60 + if (direction.lowercase() == "past") minutes else -minutes) / 60.0)
+    }
+
+    private fun quarterClock(text: String): String = clockPhrase.replace(text) { match ->
         val (phrase, hourText) = match.destructured
-        val hour = hourText.toIntOrNull() ?: (englishNumbers.indexOf(hourText.lowercase()) + 1)
+        val hour = hourOf(hourText)
         if (hour !in 1..12) return@replace match.value
         val minutes = when (phrase.lowercase().replace(Regex("\\s+"), " ")) {
             "quarter past" -> hour * 60 + 15
