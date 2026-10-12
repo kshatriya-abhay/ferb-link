@@ -278,7 +278,7 @@ class ServerClient(
     fun transcribe(wav: ByteArray, timeoutMs: Int? = null): Transcript {
         val started = System.nanoTime()
         return try {
-            val (code, text) = send("POST", "/v1/chat/completions", transcribeBody(modelName(timeoutMs), wav).toString(), auth = true, timeoutMs)
+            val (code, text) = send("POST", "/v1/chat/completions", transcribeBody(modelName(timeoutMs), wav), auth = true, timeoutMs)
             val ms = msSince(started)
             if (code != 200) problem(code, text).let { Transcript.failed(it, ms) } else parseTranscript(JSONObject(text), ms)
         } catch (e: IOException) {
@@ -412,14 +412,16 @@ Hindi amounts are common in these requests; listen for them and keep them: sava 
                 .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
 
-        fun transcribeBody(model: String, wav: ByteArray): JSONObject {
+        /**
+         * The answer's shape, as a literal: the model writes the fields in this order (whether anyone
+         * spoke, before any words), and the JVM's org.json (the laptop harness) doesn't keep key order.
+         */
+        private const val TRANSCRIBE_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", """ +
+            """"properties": {"speech": {"type": "boolean"}, "hindi": {"type": "boolean"}, "heard": {"type": "string"}, "text": {"type": "string"}}, """ +
+            """"required": ["speech", "hindi", "heard", "text"]}}}"""
+
+        fun transcribeBody(model: String, wav: ByteArray): String {
             val audio = JSONObject().put("data", Base64.getEncoder().encodeToString(wav)).put("format", "wav")
-            // In this order (the model writes them in it): whether anyone spoke, before any words.
-            val fields = JSONObject()
-                .put("speech", JSONObject().put("type", "boolean"))
-                .put("hindi", JSONObject().put("type", "boolean"))
-                .put("heard", JSONObject().put("type", "string"))
-                .put("text", JSONObject().put("type", "string"))
             return JSONObject()
                 .put("model", model)
                 .put("messages", JSONArray()
@@ -428,11 +430,14 @@ Hindi amounts are common in these requests; listen for them and keep them: sava 
                         .put(JSONObject().put("type", "input_audio").put("input_audio", audio)))))
                 .put("temperature", 0)
                 .put("max_tokens", 300)
-                // Constrained to the four fields, so the answer is always JSON.
-                .put("response_format", JSONObject().put("type", "json_schema").put("json_schema", JSONObject().put("schema",
-                    JSONObject().put("type", "object").put("properties", fields).put("required", JSONArray(listOf("speech", "hindi", "heard", "text"))))))
                 .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+                // Constrained to the four fields, so the answer is always JSON.
+                .put("response_format", FORMAT_SLOT)
+                .toString()
+                .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_FORMAT)
         }
+
+        private const val FORMAT_SLOT = "@response_format@"
 
         fun parseTranscript(reply: JSONObject, ms: Long): Transcript {
             val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")

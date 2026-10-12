@@ -20,12 +20,13 @@ object Amounts {
     private val units = "baje|ghanta|ghante|ghanton|minute|minut|minat|mint|min|second|sekand"
 
     // "paune 8 baje", "sava ghanta", "dhai minute"; the number is optional (sava ghanta = 1¼ hours).
-    private val inHeard = Regex("\\b($words)\\b\\s*(?:(\\d{1,2}|[a-z]+)\\s+)?($units)\\b")
+    private val inHeard = Regex("\\b($words)\\b\\s*(?:(\\d{1,2}|[a-z]+)\\s+)?($units)\\b", RegexOption.IGNORE_CASE)
 
     /** The first Hindi amount in [heard], worked out; null when there's none. */
-    fun parse(heard: String): Amount? {
-        val match = inHeard.find(heard.lowercase()) ?: return null
-        val (word, numberText, unit) = match.destructured
+    fun parse(heard: String): Amount? = inHeard.find(heard)?.let { amountOf(it) }
+
+    private fun amountOf(match: MatchResult): Amount? {
+        val (word, numberText, unit) = match.destructured.toList().map { it.lowercase() }
         val number = numberText.takeIf { it.isNotEmpty() }?.let { it.toIntOrNull() ?: numbers[it] ?: return null }
         val time = unit == "baje"
         val base = number ?: if (word in setOf("sava", "paune", "pone")) 1 else 0
@@ -38,6 +39,25 @@ object Amounts {
         }
         if (value <= 0) return null
         return if (time) Amount(clock(value), isTime = true) else Amount(length(value, unit), isTime = false)
+    }
+
+    // "5 baje", "saat baje": a whole hour.
+    private val wholeHour = Regex("\\b(\\d{1,2}|[a-z]+)\\s+baje\\b", RegexOption.IGNORE_CASE)
+
+    /**
+     * The same for a typed request, which has no English rewrite to correct: its Hindi amounts and
+     * "N baje" become times and lengths in place ("saade paanch baje ka alarm" → "5:30 ka alarm"),
+     * then English clock phrases and am/pm as in [normalize]. Typed and spoken requests then reach
+     * the model alike (typed "paune aath" had become 8:00). English requests only get [englishClock].
+     */
+    fun forRequest(request: String): String {
+        val amounts = inHeard.replace(request) { match -> amountOf(match)?.english ?: match.value }
+        val hours = wholeHour.replace(amounts) { match ->
+            val text = match.groupValues[1].lowercase()
+            val hour = text.toIntOrNull() ?: numbers[text]
+            if (hour == null || hour !in 1..12) match.value else "$hour:00"
+        }
+        return withHalfOfDay(request, englishClock(hours))
     }
 
     /**

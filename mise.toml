@@ -213,6 +213,23 @@ curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE"
 }' | jq '{model, tool_calls: .choices[0].message.tool_calls, content: .choices[0].message.content, timings}'
 '''
 
+[tasks."companion:harness"]
+description = "Run Ferb Link's complete and transcribe on the laptop, no phone: JSON lines in, Ferb Link's replies out"
+usage = '''
+arg "<in>" help="JSON lines: {\"request\": …, \"tools\": […]} or {\"audio\": \"clip.ogg\"}, optional \"id\" (see LaptopHarness.kt)"
+arg "[out]" help="where to write the replies; without it they're printed"
+'''
+run = '''
+set -euo pipefail
+IN=$(realpath "$usage_in")
+OUT=$(realpath -m "${usage_out:-$(mktemp)}")
+# No daemons left behind: they hold gigabytes the model server needs for its page cache.
+(cd companion && ./gradlew -q --no-daemon -Pkotlin.compiler.execution.strategy=in-process \
+  :app:testDebugUnitTest --tests dev.abhay.ferblink.LaptopHarness --rerun \
+  -Pharness.in="$IN" -Pharness.out="$OUT")
+[ -n "${usage_out:-}" ] && echo "Replies in $OUT" || { cat "$OUT"; rm -f "$OUT"; }
+'''
+
 [tasks."companion:build"]
 description = "Build the companion app's debug APK"
 dir = "companion"

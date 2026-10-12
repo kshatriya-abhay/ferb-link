@@ -55,3 +55,11 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.org.json)
 }
+
+// The laptop harness (LaptopHarness, `mise run companion:harness`) takes its files and server
+// from -Pharness.in=… and friends; other test runs skip it.
+tasks.withType<Test>().configureEach {
+    listOf("harness.in", "harness.out", "harness.url", "harness.key", "harness.model").forEach { name ->
+        providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
+    }
+}

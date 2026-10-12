@@ -43,3 +43,9 @@ Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_confi
 
 ## Logs
 `adb logcat -s FerbLink`: each call's arrival and total time, and each HTTP request's connect, send, wait and read times. Connections are kept and reused (`send()` no longer closes them): the first request after a while takes about 50–100 ms to connect over the tailnet, the next ones 0–2 ms.
+
+## On the laptop, without the phone
+`mise run companion:harness in.jsonl [out.jsonl]` runs Ferb Link's own `complete` and `transcribe` code (`LaptopHarness`, a JVM test skipped otherwise) against the local server: one JSON object per line in, one Ferb Link reply per line out.
+- `{"id": "a1", "request": "sava saat baje utha dena", "tools": [...], "facts": "...", "timeout_ms": 10000}` → the `complete` reply, plus `"sent"`: the request after `Amounts.forRequest`, as the model gets it.
+- `{"id": "v1", "audio": "clip.ogg"}` → the `transcribe` reply (`heard`, `text`). The file is decoded with ffmpeg to 16 kHz mono WAV, and ICU's transliteration goes through `uconv`; the rest (`SpeechCheck`, the prompt, `Latin`, `Amounts`) is the phone's code.
+It starts Gradle without a daemon (about 40 s), so batch the lines. Models run one at a time: don't run it during a bench.

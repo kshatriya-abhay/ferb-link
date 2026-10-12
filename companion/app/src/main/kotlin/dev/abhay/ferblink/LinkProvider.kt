@@ -47,7 +47,8 @@ class LinkProvider : ContentProvider() {
                     !settings.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
                     !settings.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
                     request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
-                    else -> settings.client(trace).complete(request, tools, facts, timeoutMs(extras)).also {
+                    // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
+                    else -> settings.client(trace).complete(Amounts.forRequest(request), tools, facts, timeoutMs(extras)).also {
                         if (it.failure == null) {
                             settings.lastModel = it.model
                             refreshAudio(settings)
@@ -105,11 +106,7 @@ class LinkProvider : ContentProvider() {
                     else -> try {
                         val wav = AudioDecoder.toWav(audio, mime)
                         recording = "Recording, %.1f s".format(AudioDecoder.seconds(wav))
-                        // Silence and steady noise never reach the model, which would imagine words in them.
-                        if (!SpeechCheck.mayHoldSpeech(wav)) Transcript("", "", "", 0, null)
-                        else settings.client(trace).transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS)
-                            .let { val heard = Latin.of(it.heard); it.copy(heard = heard, text = Amounts.normalize(heard, Latin.of(it.text))) }
-                            .also {
+                        Voice.transcribe(settings.client(trace), wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS).also {
                             if (it.failure == null) settings.lastModel = it.model
                             // A server in text mode turns audio down: stop offering the mic.
                             else if (it.failure.kind == ErrorKind.Server) refreshAudio(settings)
