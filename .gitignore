@@ -1,0 +1,14 @@
+# Downloaded by `mise run server:install` and `server:model` (pinned and SHA-256 checked)
+server/build/
+*.part
+
+# Local instructions for coding agents; they point into a private notes vault
+CLAUDE.md
+
+# Gradle and Android Studio (companion/)
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml

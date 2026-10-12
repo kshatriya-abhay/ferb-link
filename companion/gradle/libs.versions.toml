@@ -1,0 +1,36 @@
+# The same versions as Ferb's (on-device-assistant/gradle/libs.versions.toml).
+[versions]
+agp = "9.4.1"
+kotlin = "2.4.20"
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
+coreKtx = "1.19.1"
+coroutines = "1.11.0"
+material3 = "1.5.0-alpha29"
+materialComponents = "1.14.0"
+junit = "4.13.2"
+truth = "1.4.5"
+orgJson = "20250517"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
+material-components = { module = "com.google.android.material:material", version.ref = "materialComponents" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+junit = { module = "junit:junit", version.ref = "junit" }
+truth = { module = "com.google.truth:truth", version.ref = "truth" }
+# Android's org.json is a stub in JVM unit tests; this is the real implementation for them.
+org-json = { module = "org.json:json", version.ref = "orgJson" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

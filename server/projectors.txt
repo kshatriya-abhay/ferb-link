@@ -1,0 +1,5 @@
+# Projectors for CAPABILITIES=full (images and audio): model name (from models.txt), Hugging Face repo,
+# revision, file, SHA-256. Saved as server/build/models/<model>-<file>.
+# Gemma 4 E2B's has a vision encoder (gemma4v) and an audio encoder (gemma4a); same repo and
+# revision as the model file.
+gemma-4-e2b unsloth/gemma-4-E2B-it-GGUF 0314792d7f1f7e229411f620751375812bb9faf2 mmproj-F16.gguf 140be8d7849741f88c50757d529b84373ee8e27052cc2236855b537f4a8215fa

@@ -1,0 +1,10 @@
+# Models the server can run: name, Hugging Face repo, revision, file, SHA-256.
+# The same pinned files as Ferb's tool-check/models.txt, so bench results carry over. Larger models
+# (the laptop can hold more than a phone) go here once the bench has tried them.
+functiongemma-270m unsloth/functiongemma-270m-it-GGUF 1de0f7fc7cae0062012c2e91ef02e642c161aa57 functiongemma-270m-it-Q4_K_M.gguf 7474135cf63b5de86bd29d2feb92c644d48e9df5e1ac31550662af373c67d0fc
+lfm2.5-350m LiquidAI/LFM2.5-350M-GGUF 657e078c94084481950a2d555a941481f715536b LFM2.5-350M-Q4_K_M.gguf 7e6f72643caafc9a68256686638c4d7916f2cec76d1df478d4c3ddcd95a6aed4
+hammer2.1-0.5b mradermacher/Hammer2.1-0.5b-GGUF 9e6662dbe13e4cc6b86e5feb9c05e5a4794513f9 Hammer2.1-0.5b.Q4_K_M.gguf 94ba806ab754e5a4073e9f70c4d6aa09a709cd312c8958566308b84aad32c5f8
+qwen3.5-0.8b unsloth/Qwen3.5-0.8B-GGUF 6ab461498e2023f6e3c1baea90a8f0fe38ab64d0 Qwen3.5-0.8B-Q4_K_M.gguf bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517
+lfm2.5-1.2b LiquidAI/LFM2.5-1.2B-Instruct-GGUF 8ed288026e23958ad9dfa92d53ed773a8eee7125 LFM2.5-1.2B-Instruct-Q4_K_M.gguf b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5
+qwen3.5-2b unsloth/Qwen3.5-2B-GGUF f6d5376be1edb4d416d56da11e5397a961aca8ae Qwen3.5-2B-Q4_K_M.gguf aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+gemma-4-e2b unsloth/gemma-4-E2B-it-GGUF 0314792d7f1f7e229411f620751375812bb9faf2 gemma-4-E2B-it-Q4_K_M.gguf 740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8

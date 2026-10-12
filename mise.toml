@@ -1,0 +1,251 @@
+# ferb-link: the laptop's model server for Ferb (server/) and the Android companion app that
+# connects Ferb to it (companion/).
+#
+# The server is llama.cpp's llama-server (a pinned release build, the same version as Ferb's
+# bench), run as a systemd user service on localhost and put on the tailnet with Tailscale Serve.
+# Settings are in server/server.conf.
+
+[tools]
+java = "temurin-21"   # JDK for the companion's Gradle build (as Ferb)
+
+[env]
+ANDROID_HOME = "{{env.HOME}}/Android/Sdk"
+_.path = ["{{env.HOME}}/Android/Sdk/platform-tools"]
+
+[tasks."server:install"]
+description = "Download llama.cpp's pinned build (cuda or vulkan), create the API key, install the systemd user unit"
+usage = '''
+arg "[backend]" help="cuda (default; the RTX 3050 Ti) or vulkan (no CUDA libraries, smaller download)" default="cuda"
+'''
+run = '''
+set -euo pipefail
+B=server/build
+REL=https://github.com/ggml-org/llama.cpp/releases/download/b11541
+case "$usage_backend" in
+  cuda)
+    server/fetch.sh $REL/llama-b11541-bin-ubuntu-cuda-13.4-x64.tar.gz $B/downloads/llama-cuda.tar.gz 2d6f7589eb46f80905cd8fadcc41c67a0a5f5d6fe96ddd4fb37fd7a73a0872d5
+    # The CUDA runtime it was built with (cuBLAS and friends), so it doesn't depend on the system's CUDA.
+    server/fetch.sh $REL/cudart-llama-b11541-bin-ubuntu-cuda-13.4-x64.tar.gz $B/downloads/cudart.tar.gz 4d6dba50d1d16b3987b6a8cff73a58338ea1eba7ded1d3295ea174b4f515a746 ;;
+  vulkan)
+    server/fetch.sh $REL/llama-b11541-bin-ubuntu-vulkan-x64.tar.gz $B/downloads/llama-vulkan.tar.gz bf91ce14ddfda55c01c8b8846aa7d6093a07b0213913b6216ed4a2d6ea78b1f8 ;;
+  *) echo "backend: cuda or vulkan"; exit 1 ;;
+esac
+D="$B/llama-$usage_backend"
+rm -rf "$D"; mkdir -p "$D"
+tar -xzf "$B/downloads/llama-$usage_backend.tar.gz" -C "$D"
+BIN=$(dirname "$(find "$D" -name llama-server -type f | head -1)")
+if [ "$usage_backend" = cuda ]; then
+  # llama-server looks for its libraries next to itself ($ORIGIN).
+  T=$(mktemp -d); tar -xzf "$B/downloads/cudart.tar.gz" -C "$T"
+  find "$T" -name '*.so*' -exec cp -a {} "$BIN/" \;
+  rm -rf "$T"
+fi
+ln -sfn "$(realpath "$BIN")" "$B/llama"
+"$B/llama/llama-server" --list-devices
+
+source server/server.conf
+if [ ! -s "$KEY_FILE" ]; then
+  mkdir -p "$(dirname "$KEY_FILE")"
+  (umask 077; head -c 24 /dev/urandom | base64 | tr '+/' '-_' > "$KEY_FILE")
+  echo "Created the API key in $KEY_FILE (mise run server:key shows it)."
+fi
+
+mkdir -p ~/.config/systemd/user
+sed "s|@ROOT@|$PWD|g" server/ferb-llama.service.in > ~/.config/systemd/user/ferb-llama.service
+systemctl --user daemon-reload
+echo "Installed ferb-llama.service. Next: set MODEL in server/server.conf, mise run server:model <name>, mise run server:start."
+'''
+
+[tasks."server:model"]
+description = "Download a model from server/models.txt (pinned, SHA-256 checked)"
+usage = '''
+arg "<name>" help="A name from server/models.txt"
+'''
+run = '''
+set -euo pipefail
+read -r _ REPO REV FILE SHA < <(grep "^$usage_name " server/models.txt) || { echo "No model $usage_name in server/models.txt"; exit 1; }
+source server/server.conf
+DEST="server/build/models/$FILE"
+mkdir -p server/build/models
+# Ferb's bench may have it already: same file, same filesystem, so a hard link costs nothing.
+CACHED="$FERB_REPO/build/bench/models/$FILE"
+if [ ! -f "$DEST" ] && [ -f "$CACHED" ] && echo "$SHA  $CACHED" | sha256sum -c --quiet 2>/dev/null; then
+  ln "$CACHED" "$DEST" 2>/dev/null || true
+fi
+server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "$DEST" "$SHA"
+echo "$usage_name is in $DEST."
+'''
+
+[tasks."server:start"]
+description = "Start the model server (systemd user service) and wait until it answers"
+run = '''
+set -euo pipefail
+source server/server.conf
+# Models run one at a time: never start while Ferb's bench holds its lock.
+LOCK="$FERB_REPO/build/bench/.lock"
+if [ -e "$LOCK" ] && ! flock -n "$LOCK" true; then
+  echo "Ferb's bench is running; start the server after it finishes."; exit 1
+fi
+server/run.sh check
+systemctl --user reset-failed ferb-llama 2>/dev/null || true
+systemctl --user start ferb-llama
+for _ in $(seq 120); do
+  curl -fs "http://127.0.0.1:$PORT/health" >/dev/null && { echo "Serving $MODEL on 127.0.0.1:$PORT."; exit 0; }
+  systemctl --user -q is-active ferb-llama || break
+  sleep 1
+done
+echo "The server didn't come up:"; journalctl --user -u ferb-llama -n 30 --no-pager; exit 1
+'''
+
+[tasks."server:stop"]
+description = "Stop the model server (do this before running Ferb's bench)"
+run = "systemctl --user stop ferb-llama"
+
+[tasks."server:run"]
+description = "Run the model server in the foreground, for debugging (Ctrl+C stops it)"
+run = "server/run.sh"
+
+[tasks."server:status"]
+description = "Show the service, whether it answers, and the Tailscale Serve config"
+run = '''
+source server/server.conf
+systemctl --user --no-pager status ferb-llama | head -5
+echo "health: $(curl -s "http://127.0.0.1:$PORT/health" || echo 'no answer')"
+tailscale serve status
+'''
+
+[tasks."server:logs"]
+description = "Follow the model server's log"
+run = "journalctl --user -u ferb-llama -f"
+
+[tasks."server:mode"]
+description = "Show or switch what the model takes in: text (as Ferb's bench measured) or full (also images and audio)"
+usage = 'arg "[capabilities]" help="text or full; without it, shows the current one"'
+run = '''
+set -euo pipefail
+source server/server.conf
+if [ -z "${usage_capabilities:-}" ]; then echo "CAPABILITIES=${CAPABILITIES:-text} (model $MODEL)"; exit 0; fi
+case "$usage_capabilities" in text|full) ;; *) echo "text or full"; exit 1 ;; esac
+if [ "$usage_capabilities" = full ]; then
+  read -r _ REPO REV FILE SHA < <(grep "^$MODEL " server/projectors.txt) || { echo "No projector for $MODEL in server/projectors.txt"; exit 1; }
+  server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "server/build/models/$MODEL-$FILE" "$SHA"
+fi
+sed -i "s/^CAPABILITIES=.*/CAPABILITIES=$usage_capabilities/" server/server.conf
+echo "CAPABILITIES=$usage_capabilities"
+if systemctl --user -q is-active ferb-llama; then
+  systemctl --user stop ferb-llama
+  mise run server:start
+else
+  echo "The server isn't running; mise run server:start uses it."
+fi
+'''
+
+[tasks."server:chat"]
+description = "Try the model in the terminal: a chat, or requests with Ferb's tools (/help inside)"
+raw = true
+run = "server/chat.sh"
+
+[tasks."server:key"]
+description = "Print the API key, to enter in the companion app"
+run = 'source server/server.conf; cat "$KEY_FILE"'
+
+[tasks."server:tailnet"]
+description = "Put the server on the tailnet at http://<laptop>.<tailnet>.ts.net (Tailscale Serve), or take it off"
+usage = '''
+arg "[state]" help="on or off; without it, show whether the server is on the tailnet"
+'''
+run = '''
+set -euo pipefail
+source server/server.conf
+URL="http://$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')"
+case "${usage_state:-}" in
+  # Plain HTTP: Tailscale already encrypts everything between devices (WireGuard), and HTTPS
+  # would need the tailnet's certificates turned on.
+  on) tailscale serve --bg --http=80 "$PORT"
+      echo "URL for the companion app: $URL" ;;
+  off) tailscale serve --http=80 off ;;
+  "") if tailscale serve status --json | jq -e --arg p "127.0.0.1:$PORT" 'any(.. | .Proxy? // empty; endswith($p))' >/dev/null; then
+        echo "On the tailnet: $URL"
+      else
+        echo "Not on the tailnet (mise run server:tailnet on)"
+      fi ;;
+  *) echo "state: on or off"; exit 1 ;;
+esac
+'''
+
+[tasks."server:unload"]
+description = "Unload the model now, freeing its GPU memory and RAM; the next request loads it again"
+run = '''
+set -euo pipefail
+source server/server.conf
+curl -sS -X POST "http://127.0.0.1:$PORT/models/unload" -H "Authorization: Bearer $(cat "$KEY_FILE")" \
+  -H "Content-Type: application/json" -d "{\"model\": \"$MODEL\"}" | jq -r 'if .success then "Unloaded" else .error.message end'
+'''
+
+[tasks."server:ping"]
+description = "Send one test request (a timer tool) and print the reply and timings"
+usage = '''
+arg "[where]" help="local (127.0.0.1) or tailnet (through Tailscale Serve, as the phone would)" default="local"
+'''
+run = '''
+set -euo pipefail
+source server/server.conf
+case "$usage_where" in
+  local) URL="http://127.0.0.1:$PORT" ;;
+  tailnet) URL="http://$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')" ;;
+  *) echo "where: local or tailnet"; exit 1 ;;
+esac
+curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE")" -H "Content-Type: application/json" -d '{
+  "model": "'"$MODEL"'",
+  "messages": [{"role": "user", "content": "set a timer for 5 minutes"}],
+  "tools": [{"type": "function", "function": {"name": "set_timer", "description": "Start a countdown timer",
+    "parameters": {"type": "object", "properties": {"minutes": {"type": "integer"}}, "required": ["minutes"]}}}],
+  "temperature": 0, "max_tokens": 128, "logprobs": true
+}' | jq '{model, tool_calls: .choices[0].message.tool_calls, content: .choices[0].message.content, timings}'
+'''
+
+[tasks."companion:build"]
+description = "Build the companion app's debug APK"
+dir = "companion"
+run = "./gradlew assembleDebug"
+
+[tasks."companion:test"]
+description = "The companion app's JVM unit tests"
+dir = "companion"
+run = "./gradlew testDebugUnitTest"
+
+[tasks."companion:install"]
+description = "Install the companion app on the connected phone"
+dir = "companion"
+run = "./gradlew installDebug"
+
+[tasks."companion:run"]
+description = "Install and open the companion app on the connected phone"
+depends = ["companion:install"]
+run = "adb shell am start -n dev.abhay.ferblink/.MainActivity"
+
+[tasks."companion:send-over-tailscale"]
+description = "Build the companion's debug APK and send it to a device with Taildrop"
+usage = 'arg "<device>" help="The Tailscale device to send to, e.g. my-phone"'
+depends = ["companion:build"]
+dir = "companion"
+run = """
+set -euo pipefail
+# Always the same name (Tailscale on Android never overwrites: a repeat arrives as FerbLink-<uuid>.apk).
+cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/FerbLink.apk
+tailscale file cp app/build/outputs/apk/debug/FerbLink.apk "${usage_device}:"
+echo "Sent FerbLink.apk to ${usage_device}"
+"""
+
+[tasks."companion:try"]
+description = "Ask the companion on the connected phone for an answer through adb, as Ferb would (debug builds only)"
+usage = 'arg "[request]" default="set a timer for 5 minutes"'
+run = """
+set -euo pipefail
+# The sample tools from LinkViewModel, on one line for the shell.
+TOOLS='[{"name":"set_timer","description":"Start a countdown timer for a number of minutes","parameters":{"type":"object","properties":{"minutes":{"type":"integer"}},"required":["minutes"]}}]'
+# `content` splits each extra at colons, so the ones in a value are escaped.
+escape() { printf %q "$(printf %s "$1" | sed 's/:/\\\\:/g')"; }
+adb shell content call --uri content://dev.abhay.ferblink.link --method complete \
+  --extra "request:s:$(escape "$usage_request")" --extra "tools:s:$(escape "$TOOLS")"
+"""

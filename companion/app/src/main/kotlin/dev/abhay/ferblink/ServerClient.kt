@@ -1,0 +1,465 @@
+package dev.abhay.ferblink
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.net.ConnectException
+import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
+import java.net.URL
+import java.net.UnknownHostException
+import java.net.URLEncoder
+import java.net.UnknownServiceException
+import java.util.Base64
+import kotlin.math.exp
+
+/** One call the model asked for: a tool name and its arguments. */
+data class Call(val name: String, val arguments: JSONObject) {
+    /** `name(key = value, …)` with strings quoted, for display. */
+    fun signature(): String = arguments.keys().asSequence().joinToString(prefix = "$name(", postfix = ")") { key ->
+        val value = arguments.get(key)
+        "$key = " + if (value is String) "\"$value\"" else value.toString()
+    }
+}
+
+/**
+ * The laptop's answer to one request. Other models have no confidence score like Needle 3's, so
+ * [confidence] is the probability of the least likely token the model wrote (its weakest choice),
+ * [first] that of its first token (whether to call a tool at all), [mean] their mean: the same
+ * stand-ins Ferb's bench scores (`tool-check/bench.py`).
+ */
+data class Reply(
+    val calls: List<Call>,
+    val text: String,
+    val confidence: Double,
+    val first: Double,
+    val mean: Double,
+    val model: String,
+    val ms: Long,
+    /** Set when there's no answer. */
+    val failure: Failure?,
+) {
+    /** What went wrong, in a few lowercase words ("timed out"); null when there's an answer. */
+    val error: String? get() = failure?.short
+
+    /** What went wrong, in a sentence. */
+    val errorDetail: String? get() = failure?.message
+
+    /** Shaped like Needle 3's reply, so Ferb reads it with the same parser. */
+    fun toJson(): String = JSONObject()
+        .put("success", error == null)
+        .put("function_calls", JSONArray(calls.map { JSONObject().put("name", it.name).put("arguments", it.arguments) }))
+        .put("confidence", confidence)
+        .put("first", first)
+        .put("mean", mean)
+        .put("text", text)
+        .put("model", model)
+        .put("ms", ms)
+        .put("source", "laptop")
+        .apply { if (failure != null) put("error", failure.short).put("error_detail", failure.message).put("error_kind", failure.kind.wire) }
+        .toString()
+
+    companion object {
+        fun failed(kind: ErrorKind, message: String, ms: Long = 0, short: String = kind.short) =
+            Reply(emptyList(), "", 0.0, 0.0, 0.0, "", ms, Failure(kind, message, short))
+
+        fun failed(failure: Failure, ms: Long = 0) = Reply(emptyList(), "", 0.0, 0.0, 0.0, "", ms, failure)
+    }
+}
+
+/**
+ * Why there's no answer, as LinkContract's `error_kind` values, so Ferb can word its own notice.
+ * [short] is the reply's `error` unless a failure gives its own: lowercase, no full stop, one line
+ * in Ferb's chat ("📱 timed out").
+ */
+enum class ErrorKind(val wire: String, val short: String) {
+    Off("off", "turned off"),
+    NotSetUp("not_set_up", "not set up"),
+    /** No request, or the tools aren't a JSON array. */
+    BadRequest("bad_request", "bad request"),
+    /** No connection: an unknown name, refused, or plain HTTP to a non-Tailscale name. */
+    Unreachable("unreachable", "can't reach your computer"),
+    /** Connected, but no answer in time. */
+    Timeout("timeout", "timed out"),
+    /** The server turned down the API key: fixable in Ferb Link. */
+    Auth("auth", "key refused"),
+    /** Any other answer than 200 (503 while the model loads). */
+    Server("server", "server error"),
+    /** An answer that isn't the expected JSON. */
+    BadReply("bad_reply", "unexpected answer"),
+}
+
+/** [message] is a sentence for details (the reply's `error_detail`); [short] goes in `error`. */
+data class Failure(val kind: ErrorKind, val message: String, val short: String = kind.short)
+
+/**
+ * Whether the server answers, and with which model; [failure] says why not. [state] and [audio]
+ * are null when the server didn't say.
+ */
+data class Health(
+    val ok: Boolean,
+    val model: String?,
+    val ms: Long,
+    val failure: Failure?,
+    val state: ModelState? = null,
+    val audio: Boolean? = null,
+) {
+    val message: String get() = failure?.message ?: "Connected"
+    val short: String get() = failure?.short ?: "connected"
+}
+
+/** Where the model is: in memory, asleep (llama-server's idle sleep), or not running at all. */
+enum class ModelState(val words: String) {
+    Loaded("loaded"),
+    Loading("loading"),
+    Asleep("asleep"),
+    Unloaded("unloaded"),
+}
+
+/** What the server says about its model without loading it. [audio] is null when it can't tell (unloaded). */
+data class Props(val state: ModelState, val audio: Boolean?)
+
+/**
+ * A spoken request written down: [heard] is what was said (Hindi in Latin letters), [text] the
+ * same request as a plain English command (the same as [heard] when it was said in English).
+ */
+data class Transcript(val heard: String, val text: String, val model: String, val ms: Long, val failure: Failure?) {
+    val error: String? get() = failure?.short
+    val errorDetail: String? get() = failure?.message
+
+    fun toJson(): String = JSONObject()
+        .put("success", error == null)
+        .put("heard", heard)
+        .put("text", text)
+        .put("model", model)
+        .put("ms", ms)
+        .put("source", "laptop")
+        .apply { if (failure != null) put("error", failure.short).put("error_detail", failure.message).put("error_kind", failure.kind.wire) }
+        .toString()
+
+    companion object {
+        fun failed(kind: ErrorKind, message: String, ms: Long = 0, short: String = kind.short) =
+            Transcript("", "", "", ms, Failure(kind, message, short))
+
+        fun failed(failure: Failure, ms: Long = 0) = Transcript("", "", "", ms, failure)
+    }
+}
+
+/**
+ * llama.cpp's server on the laptop, through its OpenAI-style API, asked the way Ferb's bench asks
+ * it (`tool-check/bench.py`), so the bench's results hold: the same system prompt, the tools as
+ * functions, temperature 0, thinking off. Blocking: call it off the main thread.
+ */
+class ServerClient(
+    baseUrl: String,
+    private val apiKey: String,
+    /** The model to ask for (the router needs it named); looked up in `/v1/models` when empty. */
+    private var model: String = "",
+    private val connectTimeoutMs: Int = 3_000,
+    private val readTimeoutMs: Int = 30_000,
+) {
+    private val base = baseUrl.trim().trimEnd('/')
+
+    /** `/health`, then `/v1/models` with the key, both within [timeoutMs] each (default: the client's). */
+    fun health(timeoutMs: Int? = null): Health {
+        val started = System.nanoTime()
+        return try {
+            val (code, body) = send("GET", "/health", null, auth = false, timeoutMs)
+            if (code == 503) return Health(false, null, msSince(started), Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"))
+            if (code != 200) return Health(false, null, msSince(started), problem(code, body))
+            val (modelsCode, models) = send("GET", "/v1/models", null, auth = true, timeoutMs)
+            if (modelsCode != 200) return Health(false, null, msSince(started), problem(modelsCode, models))
+            val model = JSONObject(models).optJSONArray("data")?.optJSONObject(0)?.optString("id")
+            if (!model.isNullOrEmpty()) this.model = model
+            val props = props(timeoutMs)
+            Health(true, model, msSince(started), null, props?.state, props?.audio)
+        } catch (e: IOException) {
+            Health(false, null, msSince(started), failureOf(e))
+        } catch (e: Exception) {
+            Health(false, null, msSince(started), Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}"))
+        }
+    }
+
+    /**
+     * Asks the model for tool calls for [request], given [toolsJson] (a JSON array of schemas).
+     * [timeoutMs] replaces the client's answer timeout for this call (and caps its connect timeout).
+     */
+    fun complete(request: String, toolsJson: String, facts: String? = null, timeoutMs: Int? = null): Reply {
+        val started = System.nanoTime()
+        val tools = try {
+            JSONArray(toolsJson)
+        } catch (e: Exception) {
+            return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
+        }
+        val body = try {
+            requestBody(modelName(timeoutMs), request, tools, facts)
+        } catch (e: IOException) {
+            return failureOf(e).let { Reply.failed(it, msSince(started)) }
+        }
+        return try {
+            val (code, text) = send("POST", "/v1/chat/completions", body.toString(), auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) problem(code, text).let { Reply.failed(it, ms) } else parse(JSONObject(text), ms)
+        } catch (e: IOException) {
+            failureOf(e).let { Reply.failed(it, msSince(started)) }
+        } catch (e: Exception) {
+            Reply.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
+        }
+    }
+
+    /**
+     * Where the model is and whether it takes audio, without loading or waking it: the router's
+     * `/v1/models` status, then, when it's running, its `/props`. Null when they can't be read.
+     */
+    fun props(timeoutMs: Int? = null): Props? = try {
+        val (code, body) = send("GET", "/v1/models", null, auth = true, timeoutMs)
+        val entry = if (code == 200) JSONObject(body).optJSONArray("data")?.optJSONObject(0) else null
+        when (entry?.optJSONObject("status")?.optString("value")) {
+            null -> null
+            "unloaded" -> Props(ModelState.Unloaded, null)
+            "loading" -> Props(ModelState.Loading, null)
+            else -> {
+                val name = entry.getString("id").also { model = it }
+                val (propsCode, propsBody) = send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
+                if (propsCode != 200) null else JSONObject(propsBody).let {
+                    Props(
+                        if (it.optBoolean("is_sleeping")) ModelState.Asleep else ModelState.Loaded,
+                        it.optJSONObject("modalities")?.optBoolean("audio") == true,
+                    )
+                }
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Stops the model's process on the laptop, freeing its GPU memory and RAM; the next request
+     * starts it again (a few seconds, or longer from disk). Null when it worked or wasn't running.
+     */
+    fun unload(timeoutMs: Int? = null): Failure? = try {
+        val body = JSONObject().put("model", modelName(timeoutMs)).toString()
+        val (code, text) = send("POST", "/models/unload", body, auth = true, timeoutMs)
+        val notRunning = code == 400 && text.contains("not running")
+        when {
+            notRunning -> null
+            code != 200 -> problem(code, text)
+            else -> {
+                // The router answers before the model's process has exited (about 2 s): wait for
+                // it, so a check straight after shows it unloaded.
+                repeat(20) {
+                    if (props(LinkContract.CHECK_TIMEOUT_MS)?.state == ModelState.Unloaded) return null
+                    Thread.sleep(250)
+                }
+                null
+            }
+        }
+    } catch (e: IOException) {
+        failureOf(e)
+    } catch (e: Exception) {
+        Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}")
+    }
+
+    /**
+     * Loads the model if it's asleep, with a one-token request, so the next request doesn't wait
+     * for it. Returns what `/props` said before, or null when it couldn't be read.
+     */
+    fun wake(timeoutMs: Int? = null): Props? {
+        val props = props(LinkContract.CHECK_TIMEOUT_MS) ?: return null
+        if (props.state != ModelState.Loaded) runCatching {
+            send("POST", "/v1/chat/completions", wakeBody(modelName(timeoutMs)), auth = true, timeoutMs)
+        }
+        return props
+    }
+
+    /** Writes down the request in [wav] (a WAV file), within [timeoutMs] (default: the client's). */
+    fun transcribe(wav: ByteArray, timeoutMs: Int? = null): Transcript {
+        val started = System.nanoTime()
+        return try {
+            val (code, text) = send("POST", "/v1/chat/completions", transcribeBody(modelName(timeoutMs), wav).toString(), auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) problem(code, text).let { Transcript.failed(it, ms) } else parseTranscript(JSONObject(text), ms)
+        } catch (e: IOException) {
+            failureOf(e).let { Transcript.failed(it, msSince(started)) }
+        } catch (e: Exception) {
+            Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
+        }
+    }
+
+    /** The model to name in requests: the one given, or the first in `/v1/models`. */
+    private fun modelName(timeoutMs: Int?): String {
+        if (model.isEmpty()) {
+            val (code, body) = send("GET", "/v1/models", null, auth = true, timeoutMs)
+            if (code != 200) throw Refused(problem(code, body))
+            model = JSONObject(body).optJSONArray("data")?.optJSONObject(0)?.optString("id").orEmpty()
+        }
+        return model
+    }
+
+    private fun send(method: String, path: String, body: String?, auth: Boolean, timeoutMs: Int?): Pair<Int, String> {
+        val connection = URL(base + path).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = timeoutMs?.let { minOf(it, connectTimeoutMs) } ?: connectTimeoutMs
+            connection.readTimeout = timeoutMs ?: readTimeoutMs
+            if (auth) connection.setRequestProperty("Authorization", "Bearer $apiKey")
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+            }
+            // Connect before sending, so a failure here is "unreachable" and a timeout later is "timeout".
+            try {
+                connection.connect()
+            } catch (e: IOException) {
+                throw NotConnected(e)
+            }
+            if (body != null) connection.outputStream.use { it.write(body.toByteArray()) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            return code to (stream?.bufferedReader()?.use { it.readText() } ?: "")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    companion object {
+        /** Ferb's bench's instruction, word for word (`tool-check/bench.py`), so its results hold here. */
+        const val SYSTEM = "You are Ferb, an assistant on an Android phone. When the user asks for something one of the tools does, " +
+            "call that tool with the arguments in the user's words. If no tool fits, or the user isn't asking for an " +
+            "action, reply in a few words without calling a tool."
+
+        /**
+         * How a spoken request is written down. Hindi comes back in Latin letters for the user to
+         * read, and translated, because Ferb's keywords, date reader and Needle 3 need English. The
+         * model also "translated" English (it dropped a "not"), so it says whether the speech was
+         * English, and then [parseTranscript] keeps what was heard. Tried on synthetic Hindi and
+         * English clips (2026-10-12); real voices are for the audio bench.
+         */
+        const val TRANSCRIBE = """You write down a voice request to a phone assistant. Reply with JSON only, with three fields:
+- "heard": the words that were said, in Latin letters. Write Hindi words the way people type Hinglish ("subah 5 baje ka alarm laga do"), never in Devanagari. Write English words in English. Write numbers as digits.
+- "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know.
+- "english": true if every word said was English, false if any was Hindi.
+If there is no speech, "heard" and "text" are empty."""
+
+        /** The smallest request that loads the model. */
+        private fun wakeBody(model: String) = JSONObject()
+            .put("model", model)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", "hi")))
+            .put("max_tokens", 1)
+            .toString()
+
+        /** The bench's stop strings: FunctionGemma otherwise goes on to imagine the tool's answer. */
+        private val STOP = listOf("<start_function_response>", "<end_function_call>call:")
+
+        fun requestBody(model: String, request: String, tools: JSONArray, facts: String?): JSONObject {
+            val system = if (facts.isNullOrBlank()) SYSTEM else "$SYSTEM\n\n$facts"
+            return JSONObject()
+                .put("model", model)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", system))
+                    .put(JSONObject().put("role", "user").put("content", request)))
+                .put("tools", JSONArray((0 until tools.length()).map { JSONObject().put("type", "function").put("function", tools.get(it)) }))
+                .put("tool_choice", "auto")
+                .put("temperature", 0)
+                .put("max_tokens", 256)
+                .put("logprobs", true)
+                .put("stop", JSONArray(STOP))
+                // Thinking models (Qwen3.5) answer straight away, as in the bench.
+                .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        }
+
+        fun transcribeBody(model: String, wav: ByteArray): JSONObject {
+            val audio = JSONObject().put("data", Base64.getEncoder().encodeToString(wav)).put("format", "wav")
+            val fields = JSONObject()
+                .put("heard", JSONObject().put("type", "string"))
+                .put("text", JSONObject().put("type", "string"))
+                .put("english", JSONObject().put("type", "boolean"))
+            return JSONObject()
+                .put("model", model)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", TRANSCRIBE))
+                    .put(JSONObject().put("role", "user").put("content", JSONArray()
+                        .put(JSONObject().put("type", "input_audio").put("input_audio", audio)))))
+                .put("temperature", 0)
+                .put("max_tokens", 300)
+                // Constrained to the three fields, so the answer is always JSON.
+                .put("response_format", JSONObject().put("type", "json_schema").put("json_schema", JSONObject().put("schema",
+                    JSONObject().put("type", "object").put("properties", fields).put("required", JSONArray(listOf("heard", "text", "english"))))))
+                .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        }
+
+        fun parseTranscript(reply: JSONObject, ms: Long): Transcript {
+            val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+            val fields = JSONObject(content)
+            val heard = fields.getString("heard").trim()
+            val text = if (fields.optBoolean("english")) heard else fields.getString("text").trim()
+            return Transcript(heard, text, reply.optString("model"), ms, null)
+        }
+
+        fun parse(reply: JSONObject, ms: Long): Reply {
+            val choice = reply.getJSONArray("choices").getJSONObject(0)
+            val message = choice.getJSONObject("message")
+            val calls = message.optJSONArray("tool_calls")?.let { array ->
+                (0 until array.length()).map { i ->
+                    val function = array.getJSONObject(i).getJSONObject("function")
+                    Call(function.getString("name"), arguments(function.opt("arguments")))
+                }
+            }.orEmpty()
+            val tokens = choice.optJSONObject("logprobs")?.optJSONArray("content")
+            val probabilities = (0 until (tokens?.length() ?: 0)).mapNotNull { i ->
+                tokens!!.getJSONObject(i).optDouble("logprob").takeUnless { it.isNaN() }?.let { exp(it) }
+            }
+            return Reply(
+                calls = calls,
+                text = message.optString("content").takeUnless { message.isNull("content") }.orEmpty(),
+                confidence = probabilities.minOrNull() ?: 0.0,
+                first = probabilities.firstOrNull() ?: 0.0,
+                mean = if (probabilities.isEmpty()) 0.0 else probabilities.average(),
+                model = reply.optString("model"),
+                ms = ms,
+                failure = null,
+            )
+        }
+
+        /** The arguments come as a JSON string (OpenAI's format) or, from some servers, an object. */
+        private fun arguments(value: Any?): JSONObject = when (value) {
+            is JSONObject -> value
+            is String -> try {
+                JSONObject(value.ifBlank { "{}" })
+            } catch (e: Exception) {
+                JSONObject().put("_unparsed", value)
+            }
+            else -> JSONObject()
+        }
+
+        private fun problem(code: Int, body: String): Failure {
+            val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull()
+            return when (code) {
+                401 -> Failure(ErrorKind.Auth, "Your computer turned down the API key")
+                503 -> Failure(ErrorKind.Server, "Your computer is loading the model", "model loading")
+                else -> Failure(ErrorKind.Server, "Your computer answered $code" + (message?.let { ": $it" } ?: ""), "server error $code")
+            }
+        }
+
+        private fun failureOf(e: IOException): Failure = when {
+            e is Refused -> e.failure
+            e is NotConnected -> Failure(ErrorKind.Unreachable, when (val cause = e.cause) {
+                is UnknownHostException -> "Can't find your computer's name. Is Tailscale on?"
+                // Android's network security config: plain HTTP only to Tailscale names.
+                is UnknownServiceException -> "Plain HTTP only works with your computer's Tailscale name (….ts.net)"
+                is ConnectException, is SocketTimeoutException -> "Your computer doesn't answer. Is the server running?"
+                else -> cause?.message ?: e.toString()
+            })
+            e is SocketTimeoutException -> Failure(ErrorKind.Timeout, "Your computer took too long to answer")
+            else -> Failure(ErrorKind.Unreachable, e.message ?: e.toString())
+        }
+
+        /** The server answered, but not with what was needed (looking up the model). */
+        private class Refused(val failure: Failure) : IOException(failure.message)
+
+        /** The connection itself failed (as opposed to the answer taking too long). */
+        private class NotConnected(cause: IOException) : IOException(cause)
+
+        private fun msSince(started: Long) = (System.nanoTime() - started) / 1_000_000
+    }
+}
