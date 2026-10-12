@@ -7,12 +7,22 @@ import org.junit.Test
 class AmountsTest {
     @Test
     fun `times of day`() {
-        assertThat(Amounts.fix("sava saat baje utha dena", "Wake me up at 7 AM")).isEqualTo("Wake me up at 7:15")
+        assertThat(Amounts.fix("sava saat baje utha dena", "Wake me up at 7 AM")).isEqualTo("Wake me up at 7:15 am")
         assertThat(Amounts.fix("sava 7 baje utha dena", "Wake me up at 7:15")).isEqualTo("Wake me up at 7:15")
         assertThat(Amounts.fix("paune 8 baje ka alarm laga do", "Set an alarm for 8:45")).isEqualTo("Set an alarm for 7:45")
         assertThat(Amounts.fix("saade paanch baje ka alarm laga do", "Set an alarm for half past 5")).isEqualTo("Set an alarm for 5:30")
         assertThat(Amounts.fix("dhai baje yaad dilana", "Remind me at half past")).isEqualTo("Remind me at 2:30")
         assertThat(Amounts.fix("paune ek baje", "at 1")).isEqualTo("at 12:45")
+    }
+
+    @Test
+    fun `am or pm is kept, or taken from the time of day said`() {
+        assertThat(Amounts.fix("shaam saade 7 baje", "Set an alarm for 7:30 pm")).isEqualTo("Set an alarm for 7:30 pm")
+        assertThat(Amounts.fix("shaam saade 7 baje", "Set an alarm for 7")).isEqualTo("Set an alarm for 7:30 pm")
+        assertThat(Amounts.fix("subah sava 6 baje utha dena", "Wake me up at 6 am")).isEqualTo("Wake me up at 6:15 am")
+        assertThat(Amounts.fix("raat paune 11 baje", "at 11")).isEqualTo("at 10:45 pm")
+        assertThat(Amounts.fix("raat dhai baje", "at half past 2")).isEqualTo("at 2:30 am")
+        assertThat(Amounts.fix("dopahar sava 1 baje", "at 1")).isEqualTo("at 1:15 pm")
     }
 
     @Test

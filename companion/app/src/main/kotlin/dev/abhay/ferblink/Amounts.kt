@@ -45,7 +45,25 @@ object Amounts {
         val amount = parse(heard) ?: return text
         val pattern = if (amount.isTime) timeInText else lengthInText
         val found = pattern.find(text) ?: return text
-        return text.replaceRange(found.range, amount.english)
+        val english = if (amount.isTime) amount.english + halfOfDay(heard, found.value, amount.english) else amount.english
+        return text.replaceRange(found.range, english)
+    }
+
+    /**
+     * " am" or " pm" for a time, or "" when nothing says: Ferb takes a time without one as written
+     * (5 is 5 am). The model's own am/pm first, then the time of day in [heard]: subah is morning,
+     * dopahar and shaam afternoon and evening, raat night (pm from 7, else the small hours).
+     */
+    private fun halfOfDay(heard: String, modelTime: String, time: String): String {
+        Regex("\\b([ap])\\.?m\\.?$", RegexOption.IGNORE_CASE).find(modelTime.trim())?.let { return " ${it.groupValues[1].lowercase()}m" }
+        val hour = time.substringBefore(':').toInt()
+        val words = heard.lowercase().split(Regex("[^a-z]+")).toSet()
+        return when {
+            "subah" in words -> " am"
+            "dopahar" in words || "shaam" in words || "sham" in words -> " pm"
+            "raat" in words -> if (hour in 7..11) " pm" else " am"
+            else -> ""
+        }
     }
 
     private fun clock(hours: Double): String {
