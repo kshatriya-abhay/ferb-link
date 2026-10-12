@@ -39,7 +39,7 @@ class LinkSettings(context: Context) {
             if (value != audio) prefs.edit { putBoolean(KEY_AUDIO, value) }
         }
 
-    fun client() = ServerClient(serverUrl, apiKey, model = lastModel)
+    fun client(trace: ((String) -> Unit)? = null) = ServerClient(serverUrl, apiKey, model = lastModel, trace = trace)
 
     companion object {
         private const val KEY_URL = "server_url"

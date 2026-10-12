@@ -157,6 +157,8 @@ class ServerClient(
     private var model: String = "",
     private val connectTimeoutMs: Int = 3_000,
     private val readTimeoutMs: Int = 30_000,
+    /** Gets one line of timings per HTTP request (Ferb Link logs them). */
+    private val trace: ((String) -> Unit)? = null,
 ) {
     private val base = baseUrl.trim().trimEnd('/')
 
@@ -296,8 +298,15 @@ class ServerClient(
         return model
     }
 
+    /**
+     * One request. The connection isn't closed afterwards: reading the answer to the end returns it
+     * to Android's pool, so the next request (transcribe, then complete) skips a new TCP handshake
+     * over the tailnet. It's closed only when something went wrong.
+     */
     private fun send(method: String, path: String, body: String?, auth: Boolean, timeoutMs: Int?): Pair<Int, String> {
+        val started = System.nanoTime()
         val connection = URL(base + path).openConnection() as HttpURLConnection
+        var ok = false
         try {
             connection.requestMethod = method
             connection.connectTimeout = timeoutMs?.let { minOf(it, connectTimeoutMs) } ?: connectTimeoutMs
@@ -313,14 +322,30 @@ class ServerClient(
             } catch (e: IOException) {
                 throw NotConnected(e)
             }
-            if (body != null) connection.outputStream.use { it.write(body.toByteArray()) }
+            val connected = System.nanoTime()
+            val bytes = body?.toByteArray()
+            if (bytes != null) connection.outputStream.use { it.write(bytes) }
+            val sent = System.nanoTime()
             val code = connection.responseCode
+            val answered = System.nanoTime()
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            return code to (stream?.bufferedReader()?.use { it.readText() } ?: "")
+            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            ok = true
+            // A connect of a few ms means a pooled connection; a new one over the tailnet takes longer.
+            trace?.invoke(
+                "$method $path ${bytes?.size ?: 0} B → $code: connect ${ms(started, connected)} ms, send ${ms(connected, sent)} ms, " +
+                    "wait ${ms(sent, answered)} ms, read ${ms(answered, System.nanoTime())} ms",
+            )
+            return code to text
+        } catch (e: IOException) {
+            trace?.invoke("$method $path failed after ${ms(started, System.nanoTime())} ms: $e")
+            throw e
         } finally {
-            connection.disconnect()
+            if (!ok) connection.disconnect()
         }
     }
+
+    private fun ms(from: Long, to: Long) = (to - from) / 1_000_000
 
     companion object {
         /** Ferb's bench's instruction, word for word (`tool-check/bench.py`), so its results hold here. */

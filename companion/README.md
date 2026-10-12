@@ -28,7 +28,7 @@ One `ContentResolver.call` on `dev.abhay.ferblink.link`; there's no service to b
 ## How it asks the server
 Every request names the model (the server's router needs it): the last one the server named, or the first in `/v1/models`. Like Ferb's bench (`tool-check/bench.py`), so the bench's results hold: the same system prompt, the tools as OpenAI functions, `tool_choice: auto`, temperature 0, 256 tokens at most, thinking off, `logprobs` on. The bench's three stand-ins for a confidence come back: the weakest token (`confidence`), the first token (`first`) and their `mean`. Not ported yet: the bench's fallbacks for models that write calls as text (FunctionGemma's own format, Hammer's list).
 
-Recordings go with their own prompt (`ServerClient.TRANSCRIBE`), at temperature 0, with a JSON schema. The answer is held to `{speech, hindi, heard, text}` in that order, so the model decides whether anyone spoke before writing words; asked only to leave the fields empty, it turned silence and noise into commands. When nothing was Hindi (by the model, or a list of common Hindi words), `text` is set to `heard`: asked to restate English, the model sometimes changed its meaning.
+Recordings go with their own prompt (`ServerClient.TRANSCRIBE`), at temperature 0, with a JSON schema. Any Devanagari the model writes anyway is converted to Latin letters on the phone (`Latin`, with ICU, as Ferb does for contacts; an ASCII-only schema pattern made llama.cpp fail some answers with HTTP 500). The answer is held to `{speech, hindi, heard, text}` in that order, so the model decides whether anyone spoke before writing words; asked only to leave the fields empty, it turned silence and noise into commands. When nothing was Hindi (by the model, or a list of common Hindi words), `text` is set to `heard`: asked to restate English, the model sometimes changed its meaning.
 
 ## Network
 Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_config.xml`), because the tailnet already encrypts it; HTTPS anywhere. The app rejects other `http://` addresses (a raw `100.x` address or a short name like `my-laptop` won't do).
@@ -40,3 +40,6 @@ Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_confi
   - Try: it uses three sample tools (timer, alarm, flashlight); tap an answer for the confidence stand-ins.
   - Voice: available only when the server runs in full mode (`mise run server:mode full`).
   - Unload: frees the computer's GPU memory; the next request starts the model again (a few seconds).
+
+## Logs
+`adb logcat -s FerbLink`: each call's arrival and total time, and each HTTP request's connect, send, wait and read times. Connections are kept and reused (`send()` no longer closes them): the first request after a while takes about 50–100 ms to connect over the tailnet, the next ones 0–2 ms.

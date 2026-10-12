@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
 import android.os.Process
+import android.util.Log
 import androidx.core.os.bundleOf
 import java.util.Base64
 import java.util.concurrent.ExecutorService
@@ -23,6 +24,12 @@ class LinkProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         val caller = checkCaller()
+        val arrived = System.nanoTime()
+        Log.i(TAG, "$method from $caller")
+        return answer(method, extras, caller).also { Log.i(TAG, "$method answered in ${(System.nanoTime() - arrived) / 1_000_000} ms") }
+    }
+
+    private fun answer(method: String, extras: Bundle?, caller: String): Bundle {
         val settings = LinkSettings(context!!)
         return when (method) {
             LinkContract.METHOD_STATUS -> bundleOf(
@@ -40,7 +47,7 @@ class LinkProvider : ContentProvider() {
                     !settings.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
                     !settings.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
                     request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
-                    else -> settings.client().complete(request, tools, facts, timeoutMs(extras)).also {
+                    else -> settings.client(trace).complete(request, tools, facts, timeoutMs(extras)).also {
                         if (it.failure == null) {
                             settings.lastModel = it.model
                             refreshAudio(settings)
@@ -56,7 +63,7 @@ class LinkProvider : ContentProvider() {
                     !settings.configured -> Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up")
                     else -> null
                 }
-                val health = failure?.let { Health(false, null, 0, it) } ?: settings.client().health(LinkContract.CHECK_TIMEOUT_MS)
+                val health = failure?.let { Health(false, null, 0, it) } ?: settings.client(trace).health(LinkContract.CHECK_TIMEOUT_MS)
                 health.model?.let { settings.lastModel = it }
                 health.audio?.let { settings.audio = it }
                 bundleOf(
@@ -76,7 +83,7 @@ class LinkProvider : ContentProvider() {
                 if (settings.enabled && settings.configured && waking.compareAndSet(false, true)) {
                     background.execute {
                         try {
-                            settings.client().wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.audio?.let { settings.audio = it }
+                            settings.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.audio?.let { settings.audio = it }
                         } finally {
                             waking.set(false)
                         }
@@ -100,7 +107,9 @@ class LinkProvider : ContentProvider() {
                         recording = "Recording, %.1f s".format(AudioDecoder.seconds(wav))
                         // Silence and steady noise never reach the model, which would imagine words in them.
                         if (!SpeechCheck.mayHoldSpeech(wav)) Transcript("", "", "", 0, null)
-                        else settings.client().transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS).also {
+                        else settings.client(trace).transcribe(wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS)
+                            .let { it.copy(heard = Latin.of(it.heard), text = Latin.of(it.text)) }
+                            .also {
                             if (it.failure == null) settings.lastModel = it.model
                             // A server in text mode turns audio down: stop offering the mic.
                             else if (it.failure.kind == ErrorKind.Server) refreshAudio(settings)
@@ -118,7 +127,7 @@ class LinkProvider : ContentProvider() {
 
     /** Reads `/props` again in the background, so `status` notices the laptop switching modes. */
     private fun refreshAudio(settings: LinkSettings) = background.execute {
-        settings.client().props(LinkContract.CHECK_TIMEOUT_MS)?.audio?.let { settings.audio = it }
+        settings.client(trace).props(LinkContract.CHECK_TIMEOUT_MS)?.audio?.let { settings.audio = it }
     }
 
     /** The caller's answer timeout (an Int, or a Long), clamped; null without one. */
@@ -149,6 +158,10 @@ class LinkProvider : ContentProvider() {
     override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
 
     private companion object {
+        /** `adb logcat -s FerbLink`: each call's arrival and time, and each HTTP request's timings. */
+        const val TAG = "FerbLink"
+        val trace: (String) -> Unit = { Log.i(TAG, it) }
+
         /** `adb shell`'s user id (android.os.Process.SHELL_UID isn't public). */
         const val SHELL_UID = 2000
 
