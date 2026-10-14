@@ -56,7 +56,15 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    ```sh
    mise run companion:install
    ```
-8. **Connect Ferb Link to the computer.** Open Ferb Link, tap **Address** under Computer, and enter the address from step 6 and the key from `mise run server:key`. Save. The status card turns green and shows the model.
+8. **Connect Ferb Link to the computer.** Open Ferb Link: it shows how to connect. With the phone still on USB:
+   ```sh
+   mise run companion:pair
+   ```
+   Or show a QR code and scan it with the phone's camera (needs `qrencode`):
+   ```sh
+   mise run server:pair
+   ```
+   Either way, Ferb Link asks first, with the computer's name: tap **Connect**. The status card turns green and shows the model. (**Enter by hand** takes the address from step 6 and the key from `mise run server:key`.)
 9. **Install Ferb the same way you installed Ferb Link**: from [Ferb's Releases](https://github.com/kshatriya-abhay/ferb/releases/latest), or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
 
 ## Troubleshooting
@@ -67,7 +75,8 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 | The server doesn't come up | `mise run server:logs`. With the CUDA build, check `nvidia-smi` works; otherwise try `mise run server:install vulkan`. Out of GPU memory: set `GPU_LAYERS` lower in `server/server.conf`, or `auto`. |
 | `server:tailnet on` says access denied | Step 2: `sudo tailscale set --operator=$USER`. |
 | Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. |
-| Ferb Link: "key refused" | Enter the key again from `mise run server:key`. |
+| Ferb Link: "key refused" | Pair again (`mise run companion:pair` or `server:pair`), or enter the key from `mise run server:key`. |
+| "This pairing link doesn't work" | The server isn't on the tailnet (`mise run server:tailnet on`), or the link was cut off: run `server:pair` again. |
 | The first answer after a while takes seconds | The server unloads the model after 5 minutes idle and loads it again on the next request: about 2 s, up to 30 s after a reboot. Ferb waits 10 s, then answers on the phone. |
 | Ferb doesn't see Ferb Link, or it says it's not allowed | The two apps are signed with different keys: one from Releases and one built here, or built on different computers. Uninstall one and install it the same way as the other. |
 | Ferb has no mic button | Voice needs the server in full mode: `mise run server:mode` should say `full` (the default). |
@@ -134,6 +143,7 @@ mise run companion:publish   # the maintainer only: asks for the version, then c
 | [LFM2.5-350M, LFM2.5-1.2B](https://huggingface.co/LiquidAI) by Liquid AI | LFM Open License | Optional models |
 | [Qwen3.5-0.8B, Qwen3.5-2B](https://huggingface.co/Qwen) by Alibaba (GGUF by Unsloth) | Apache-2.0 | Optional models |
 | [Hammer2.1-0.5b](https://huggingface.co/MadeAgents/Hammer2.1-0.5b) by MadeAgents (GGUF by mradermacher) | CC-BY-NC-4.0 | Optional model |
+| [qrencode](https://fukuchi.org/works/qrencode/) | LGPL-2.1 (library), GPL (tool) | `server:pair`'s QR code (optional, installed separately) |
 | [Tailscale](https://tailscale.com) | BSD-3-Clause (client) | The network between phone and computer (installed separately) |
 | [AndroidX](https://developer.android.com/jetpack/androidx) (Compose, Material 3, Lifecycle, Core) | Apache-2.0 | Ferb Link's interface |
 | [Material Components for Android](https://github.com/material-components/material-components-android) | Apache-2.0 | The Material 3 window theme behind Compose |

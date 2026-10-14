@@ -27,9 +27,14 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         val unloadError: String? = null,
         val trying: Boolean = false,
         val tried: Pair<String, Reply>? = null,
+        /** An address and key are saved: until then the screen shows how to connect. */
+        val configured: Boolean = false,
+        /** A pairing link waiting for the user to confirm it, or why one didn't work. */
+        val pairing: Pairing.Offer? = null,
+        val pairingProblem: String? = null,
     )
 
-    private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled))
+    private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured))
     val state: StateFlow<State> = _state.asStateFlow()
     val recent = RecentRequests.entries
 
@@ -44,9 +49,29 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     fun save() {
         settings.serverUrl = _state.value.serverUrl
         settings.apiKey = _state.value.apiKey
-        _state.update { it.copy(serverUrl = settings.serverUrl, apiKey = settings.apiKey, edited = false) }
+        _state.update { it.copy(serverUrl = settings.serverUrl, apiKey = settings.apiKey, edited = false, configured = settings.configured) }
         check()
     }
+
+    /** A ferblink://pair link arrived: ask before using it (any app can open one). */
+    fun offerPairing(link: String) = when (val result = Pairing.parse(link)) {
+        is Pairing.Result.Ok -> _state.update { it.copy(pairing = result.offer, pairingProblem = null) }
+        is Pairing.Result.Bad -> _state.update { it.copy(pairing = null, pairingProblem = result.reason) }
+    }
+
+    /** The user confirmed the pairing: save its address and key, turn Ferb Link on, and check. */
+    fun acceptPairing() {
+        val offer = _state.value.pairing ?: return
+        settings.serverUrl = offer.url
+        settings.apiKey = offer.key
+        settings.enabled = true
+        _state.update {
+            it.copy(serverUrl = settings.serverUrl, apiKey = settings.apiKey, enabled = true, edited = false, configured = settings.configured, pairing = null, health = null)
+        }
+        check()
+    }
+
+    fun dismissPairing() = _state.update { it.copy(pairing = null, pairingProblem = null) }
 
     /** Drops unsaved edits to the address and key. */
     fun cancelEdit() = _state.update { it.copy(serverUrl = settings.serverUrl, apiKey = settings.apiKey, edited = false) }

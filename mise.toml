@@ -187,6 +187,17 @@ case "${usage_state:-}" in
 esac
 '''
 
+[tasks."server:pair"]
+description = "Show a QR code that connects Ferb Link to this computer: scan it with the phone's camera"
+run = '''
+set -euo pipefail
+LINK=$(server/pair-link.sh)
+command -v qrencode >/dev/null || { echo "Needs qrencode (your distribution's package), or use mise run companion:pair with the phone on USB."; exit 1; }
+qrencode -t ansiutf8 -m 2 "$LINK"
+echo "Scan it with the phone's camera: Ferb Link opens and asks before connecting."
+echo "It holds the API key: don't screenshot or share it. Clear the terminal when done."
+'''
+
 [tasks."server:unload"]
 description = "Unload the model now, freeing its GPU memory and RAM; the next request loads it again"
 run = '''
@@ -270,6 +281,16 @@ run = "release/publish.sh"
 description = "Install and open the companion app on the connected phone"
 depends = ["companion:install"]
 run = "adb shell am start -n dev.abhay.ferblink/.MainActivity"
+
+[tasks."companion:pair"]
+description = "Connect Ferb Link on the phone (USB) to this computer: it asks on the phone before connecting"
+run = '''
+set -euo pipefail
+LINK=$(server/pair-link.sh)
+# adb shell joins its arguments into one remote command line: quote the link for the phone's shell.
+adb shell am start -a android.intent.action.VIEW -d "'$LINK'" dev.abhay.ferblink >/dev/null
+echo "Sent. On the phone, Ferb Link asks to connect: check the computer's name and tap Connect."
+'''
 
 [tasks."companion:send-over-tailscale"]
 description = "Build the companion's debug APK and send it to a device with Taildrop"

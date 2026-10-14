@@ -4,7 +4,7 @@ An Android app (`dev.abhay.ferblink`) that holds the INTERNET permission Ferb mu
 
 ## Using it
 1. On the laptop: `mise run server:start`, `mise run server:tailnet on` (prints the address), `mise run server:key` (prints the key).
-2. Install Ferb Link (`mise run companion:install`, or `companion:send-over-tailscale <phone>`), tap Address under Computer, enter the address and key, and Save. It checks the connection.
+2. Install Ferb Link (from Releases, `mise run companion:install`, or `companion:send-over-tailscale <phone>`). Until it's connected it shows only how to connect. Pair it: `mise run companion:pair` (USB) or `mise run server:pair` (a QR code for the camera) opens a `ferblink://pair?url=…&key=…` link, and Ferb Link asks before saving it, showing the computer's name in full (any app can open such a link). Or tap Enter by hand. It checks the connection.
 3. The status card shows whether the computer answers, the model, its state (Loaded, Asleep, Unloaded), and a mic when it takes voice. Refresh checks again; Unload stops the model on the computer to free its memory, and the next request starts it again.
 4. Try sends a request with three sample tools (timer, alarm, flashlight); tap the answer for the time and the confidence stand-ins.
 5. Recent lists what went to the computer, recordings included with what was heard (kept in memory only); tap a row for details.
@@ -47,7 +47,6 @@ A miss found in a model evaluation becomes a unit test of the code that should h
 
 ## Before the first release
 - **First-use hints.** The screen has no explanations, by choice (Material 3 Expressive, little text). These were removed and should come back as first-use hints:
-  - Computer: on the computer, in ferb-link, `mise run server:tailnet on` prints the address and `mise run server:key` the key.
   - The main switch: Ferb's requests go to the computer; when off, or when the computer can't be reached, Ferb answers on the phone.
   - Try: it uses three sample tools (timer, alarm, flashlight); tap an answer for the confidence stand-ins.
   - Voice: available only when the server runs in full mode (`mise run server:mode full`).

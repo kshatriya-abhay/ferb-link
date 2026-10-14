@@ -1,11 +1,13 @@
 package dev.abhay.ferblink
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -74,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,29 +85,44 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 /**
  * One screen, Material 3 Expressive: the main switch, the computer's status, its address and key,
- * a request to try, and recent requests. Explanations are kept out; first-use hints are a TODO
- * before the first release (companion/README.md).
+ * a request to try, and recent requests; before an address and key are saved, only how to connect.
+ * Other explanations are kept out; first-use hints are a TODO before the first release
+ * (companion/README.md).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class MainActivity : ComponentActivity() {
+    private val viewModel: LinkViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // A recreated activity has the same intent: its pairing link was offered already.
+        if (savedInstanceState == null) offerPairing(intent)
         setContent {
             // minSdk 33, so the wallpaper-based dynamic colours are always available.
             val context = LocalContext.current
             val colors = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialExpressiveTheme(colorScheme = colors, motionScheme = MotionScheme.expressive()) {
-                LinkScreen(viewModel())
+                LinkScreen(viewModel)
             }
         }
         // No autofill: the API key isn't a login, so password managers have nothing to offer for it,
         // and they'd treat the whole screen as a sign-in form.
         window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        offerPairing(intent)
+    }
+
+    /** A ferblink://pair link (server:pair's QR code, companion:pair): asks before saving it. */
+    private fun offerPairing(intent: Intent?) {
+        val link = intent?.dataString
+        if (intent?.action == Intent.ACTION_VIEW && Pairing.isPairingLink(link)) viewModel.offerPairing(link!!)
     }
 }
 
@@ -138,6 +156,11 @@ private fun LinkScreen(viewModel: LinkViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp, bottom = padding.calculateBottomPadding() + 16.dp),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
+            if (!state.configured) {
+                // Not set up: only how to connect. The switch, Try and Recent come once it is.
+                item { ConnectCard(onEnterByHand = { editing = true }) }
+                return@LazyColumn
+            }
             item { MainSwitch(state.enabled, viewModel::setEnabled) }
             item { Spacer(Modifier.size(10.dp)) }
             item { StatusCard(state, viewModel) }
@@ -169,6 +192,61 @@ private fun LinkScreen(viewModel: LinkViewModel) {
         }
     }
     if (editing) ServerDialog(state, viewModel, onDone = { editing = false })
+    state.pairing?.let { PairDialog(it, replacing = state.serverUrl.takeIf { url -> state.configured && url != it.url }, viewModel) }
+    state.pairingProblem?.let { problem ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissPairing,
+            title = { Text("This pairing link doesn't work") },
+            text = { Text("$problem. On your computer, run mise run server:pair again.") },
+            confirmButton = { TextButton(onClick = viewModel::dismissPairing) { Text("OK") } },
+        )
+    }
+}
+
+/** First launch: how to connect, in three steps. */
+@Composable
+private fun ConnectCard(onEnterByHand: () -> Unit) {
+    val uris = LocalUriHandler.current
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = MaterialTheme.shapes.extraLarge) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Connect to your computer", style = MaterialTheme.typography.titleLarge)
+            Text("Ferb Link sends Ferb's requests to a model on your own computer. Until it's connected, Ferb answers on the phone.", style = MaterialTheme.typography.bodyMedium)
+            listOf(
+                "Set up the server on your computer (the quick start in Ferb Link's README).",
+                "Turn on Tailscale on this phone, on the same tailnet as the computer.",
+                "On the computer, run mise run server:pair and scan its QR code with this phone's camera. Or, with the phone on USB, run mise run companion:pair.",
+            ).forEachIndexed { i, step ->
+                Row {
+                    Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(20.dp))
+                    Text(step, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onEnterByHand) { Text("Enter by hand") }
+                TextButton(onClick = { uris.openUri(SETUP_GUIDE) }) { Text("Setup guide") }
+            }
+        }
+    }
+}
+
+private const val SETUP_GUIDE = "https://github.com/kshatriya-abhay/ferb-link#quick-start"
+
+/** A pairing link arrived. Any app can open one, so the computer's name is shown in full first. */
+@Composable
+private fun PairDialog(offer: Pairing.Offer, replacing: String?, viewModel: LinkViewModel) {
+    AlertDialog(
+        onDismissRequest = viewModel::dismissPairing,
+        title = { Text("Connect to this computer?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(offer.host, style = MaterialTheme.typography.titleMedium)
+                Text("Ferb's requests will go to it. Connect only if it's your own computer and you just ran server:pair or companion:pair.")
+                replacing?.let { Text("This replaces $it.", color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = viewModel::acceptPairing) { Text("Connect") } },
+        dismissButton = { TextButton(onClick = viewModel::dismissPairing) { Text("Cancel") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
