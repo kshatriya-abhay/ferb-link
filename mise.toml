@@ -256,6 +256,16 @@ description = "Install the companion app on the connected phone"
 dir = "companion"
 run = "./gradlew --no-daemon installDebug"
 
+[tasks."companion:release"]
+description = "Build the release APK and sign it with the release key (asks for what isn't set); dist/ferb-link-<version>.apk"
+raw = true
+run = "release/release.sh"
+
+[tasks."companion:publish"]
+description = "Publish dist/'s APK as a GitHub release (you run it: it asks you to type the version)"
+raw = true
+run = "release/publish.sh"
+
 [tasks."companion:run"]
 description = "Install and open the companion app on the connected phone"
 depends = ["companion:install"]

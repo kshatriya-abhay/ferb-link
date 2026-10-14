@@ -12,3 +12,6 @@ build/
 local.properties
 .idea/
 *.iml
+
+# Release APKs (mise run companion:release)
+dist/

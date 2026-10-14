@@ -111,6 +111,19 @@ Ferb Link's screens, its contract with Ferb, and its tests are in [companion/REA
 
 **Other models.** `server/models.txt` lists the other models Ferb's bench compared. Any of them can be served: set `MODEL` in `server/server.conf`, run `mise run server:model <name>`, then `server:mode text` (only Gemma 4 E2B has a projector here) and `server:start`. Gemma 4 E2B was right most often in the bench.
 
+## Releases
+
+Releases are built and signed on the maintainer's computer, not in CI, with the same key as Ferb's releases:
+
+```sh
+mise run companion:release   # build, sign, check the certificate: dist/ferb-link-<version>.apk and .sha256
+mise run companion:publish   # the maintainer only: asks for the version, then creates GitHub release v<version>
+```
+
+`companion:release` asks for the key alias and keystore password unless `FERB_RELEASE_KEY_ALIAS` and `FERB_RELEASE_STORE_PASSWORD` are set (`FERB_RELEASE_KEYSTORE` names the keystore; `FERB_RELEASE_KEY_PASSWORD` only if the key's password differs). They reach `apksigner` through the environment only. Gradle never sees the key. The signed APK's certificate must match `release-cert.sha256`, the same line as in Ferb's repo; to check a downloaded APK yourself, compare `apksigner verify --print-certs` with that file. `companion:publish` refuses without a terminal, with uncommitted or unpushed changes, when the tag exists, or when the APK's certificate doesn't match.
+
+**Who can call Ferb Link.** Ferb Link answers any app signed with its key. For releases, that's Ferb, and also any other app the maintainer signs with the same release key. That's by design (it's how Android's signature checks work), but it means trusting those apps as much as Ferb.
+
 ## Credits
 
 | Project | Licence | Used for |
