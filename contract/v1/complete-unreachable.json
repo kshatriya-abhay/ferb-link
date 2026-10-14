@@ -1,0 +1,25 @@
+{
+  "method": "complete",
+  "note": "Nothing answers at the laptop's address.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "error": "can't reach your computer",
+      "error_detail": "Your computer doesn't answer. Is the server running?",
+      "error_kind": "unreachable",
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

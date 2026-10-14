@@ -7,7 +7,7 @@ import androidx.core.content.edit
  * The laptop's address and API key, and whether Ferb Link answers Ferb at all. In the app's
  * private storage (no backups: `allowBackup="false"`), read afresh on every request.
  */
-class LinkSettings(context: Context) {
+class LinkSettings(context: Context) : LinkState {
     private val prefs = context.getSharedPreferences("link", Context.MODE_PRIVATE)
 
     var serverUrl: String
@@ -19,27 +19,27 @@ class LinkSettings(context: Context) {
         set(value) = prefs.edit { putString(KEY_API_KEY, value.trim()) }
 
     /** Off: Ferb's requests get "off" at once, without going to the laptop. */
-    var enabled: Boolean
+    override var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_ENABLED, value) }
 
-    val configured: Boolean get() = serverUrl.isNotEmpty() && apiKey.isNotEmpty()
+    override val configured: Boolean get() = serverUrl.isNotEmpty() && apiKey.isNotEmpty()
 
     /** The model the server last named (a connection check or an answer), for `status`; empty if none yet. */
-    var lastModel: String
+    override var lastModel: String
         get() = prefs.getString(KEY_LAST_MODEL, "").orEmpty()
         set(value) {
             if (value.isNotEmpty() && value != lastModel) prefs.edit { putString(KEY_LAST_MODEL, value) }
         }
 
     /** Whether the server last said it takes audio, for `status`: refreshed by checks, wakes and answers. */
-    var audio: Boolean
+    override var audio: Boolean
         get() = prefs.getBoolean(KEY_AUDIO, false)
         set(value) {
             if (value != audio) prefs.edit { putBoolean(KEY_AUDIO, value) }
         }
 
-    fun client(trace: ((String) -> Unit)? = null) = ServerClient(serverUrl, apiKey, model = lastModel, trace = trace)
+    override fun client(trace: ((String) -> Unit)?) = ServerClient(serverUrl, apiKey, model = lastModel, trace = trace)
 
     companion object {
         private const val KEY_URL = "server_url"

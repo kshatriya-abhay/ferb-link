@@ -1,0 +1,25 @@
+{
+  "method": "complete",
+  "synthetic": true,
+  "note": "An older Ferb Link (before error_detail): a failure with error and error_kind only.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "error": "Your computer took too long to answer",
+      "error_kind": "timeout",
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "",
+      "ms": 30000,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

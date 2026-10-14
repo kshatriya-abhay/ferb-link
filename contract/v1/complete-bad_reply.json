@@ -1,0 +1,25 @@
+{
+  "method": "complete",
+  "note": "An answer that isn't the expected JSON.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "error": "unexpected answer",
+      "error_detail": "Couldn't read your computer's answer: A JSONObject text must begin with '{' at 1 [character 2 line 1]",
+      "error_kind": "bad_reply",
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "",
+      "ms": 41,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

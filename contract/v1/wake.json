@@ -1,0 +1,8 @@
+{
+  "method": "wake",
+  "note": "Returns at once; the model loads in the background if it's asleep.",
+  "extras": {},
+  "result": {
+    "version": 1
+  }
+}

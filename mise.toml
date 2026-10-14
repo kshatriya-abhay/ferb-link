@@ -224,7 +224,7 @@ set -euo pipefail
 IN=$(realpath "$usage_in")
 OUT=$(realpath -m "${usage_out:-$(mktemp)}")
 # No daemons left behind: they hold gigabytes the model server needs for its page cache.
-(cd companion && ./gradlew -q --no-daemon -Pkotlin.compiler.execution.strategy=in-process \
+(cd companion && ./gradlew -q --no-daemon \
   :app:testDebugUnitTest --tests dev.abhay.ferblink.LaptopHarness --rerun \
   -Pharness.in="$IN" -Pharness.out="$OUT")
 [ -n "${usage_out:-}" ] && echo "Replies in $OUT" || { cat "$OUT"; rm -f "$OUT"; }
@@ -233,17 +233,23 @@ OUT=$(realpath -m "${usage_out:-$(mktemp)}")
 [tasks."companion:build"]
 description = "Build the companion app's debug APK"
 dir = "companion"
-run = "./gradlew assembleDebug"
+run = "./gradlew --no-daemon assembleDebug"
 
 [tasks."companion:test"]
-description = "The companion app's JVM unit tests"
+description = "The companion app's unit and contract tests: no model, server or phone (see README, Testing)"
 dir = "companion"
-run = "./gradlew testDebugUnitTest"
+# No daemons left behind: they hold gigabytes the model server needs for its page cache.
+run = "./gradlew -q --no-daemon :app:testDebugUnitTest"
+
+[tasks."companion:contract-write"]
+description = "Rewrite contract/v1's fixtures from what Ferb Link answers; review the diff, and tell Ferb (link:contract-sync)"
+dir = "companion"
+run = "./gradlew -q --no-daemon :app:testDebugUnitTest --tests dev.abhay.ferblink.ContractTest --rerun -Pcontract.write=true"
 
 [tasks."companion:install"]
 description = "Install the companion app on the connected phone"
 dir = "companion"
-run = "./gradlew installDebug"
+run = "./gradlew --no-daemon installDebug"
 
 [tasks."companion:run"]
 description = "Install and open the companion app on the connected phone"

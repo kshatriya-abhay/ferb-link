@@ -85,4 +85,47 @@ class AmountsTest {
         assertThat(Amounts.fix("set a timer for 2 minutes", "set a timer for 2 minutes")).isEqualTo("set a timer for 2 minutes")
         assertThat(Amounts.parse("sava kya hai")).isNull()
     }
+
+    @Test
+    fun `typed requests get the same times as spoken ones`() {
+        assertThat(Amounts.forRequest("saade paanch baje ka alarm lagao")).isEqualTo("5:30 ka alarm lagao")
+        assertThat(Amounts.forRequest("shaam 7 baje ka alarm lagao")).isEqualTo("shaam 7:00 pm ka alarm lagao")
+        assertThat(Amounts.forRequest("sava saat baje utha dena")).isEqualTo("7:15 utha dena")
+        assertThat(Amounts.forRequest("paune aath baje ka alarm lagao")).isEqualTo("7:45 ka alarm lagao")
+        assertThat(Amounts.forRequest("dedh ghante ka timer laga do")).isEqualTo("1 hour 30 minutes ka timer laga do")
+        assertThat(Amounts.forRequest("set a timer for 10 minutes")).isEqualTo("set a timer for 10 minutes")
+        assertThat(Amounts.forRequest("call mom at 7")).isEqualTo("call mom at 7")
+    }
+
+    /** tool-check/audio-alarms.txt in Ferb, typed: the time Ferb should get for each line. */
+    @Test
+    fun `the alarm rerun's lines, typed`() {
+        val lines = mapOf(
+            "subah 5 baje ka alarm laga do" to "subah 5:00 am ka alarm laga do",
+            "saade paanch baje ka alarm lagao" to "5:30 ka alarm lagao",
+            "sava saat baje utha dena" to "7:15 utha dena",
+            "paune aath baje ka alarm lagao" to "7:45 ka alarm lagao",
+            "shaam 7 baje ka alarm lagao" to "shaam 7:00 pm ka alarm lagao",
+            "alarm at half past six" to "alarm at 6:30",
+            "alarm at quarter to eight" to "alarm at 7:45",
+            "alarm for 7 in the evening" to "alarm for 7 in the evening",
+            "raat 11 baje ka alarm" to "raat 11:00 pm ka alarm",
+            "dopahar 2 baje utha dena" to "dopahar 2:00 pm utha dena",
+            "do peher do baje utha dena" to "do peher 2:00 pm utha dena",
+            "alarm at quarter past 9 at night" to "alarm at 9:15 at night",
+            "alarm at half past 7 in the morning" to "alarm at 7:30 in the morning",
+        )
+        for ((typed, sent) in lines) assertThat(Amounts.forRequest(typed)).isEqualTo(sent)
+    }
+
+    /** The voice runs' misses (2026-10-12), as heard and as the model wrote them. */
+    @Test
+    fun `the voice runs' misses, spoken`() {
+        assertThat(Amounts.normalize("do peher do baje utha dena", "Wake me up at 2")).isEqualTo("Wake me up at 2 pm")
+        assertThat(Amounts.normalize("shaam saat baje ka alarm lagao", "Set an alarm for 7")).isEqualTo("Set an alarm for 7 pm")
+        assertThat(Amounts.normalize("alarm at quarter to eight", "Set an alarm for quarter to 8")).isEqualTo("Set an alarm for 7:45")
+        assertThat(Amounts.normalize("paune aath baje ka alarm lagao", "Set an alarm for 8:45")).isEqualTo("Set an alarm for 7:45")
+        assertThat(Amounts.normalize("raat 11 baje ka alarm", "Set an alarm for 11")).isEqualTo("Set an alarm for 11 pm")
+        assertThat(Amounts.normalize("subah sava saat baje utha dena", "Wake me up at 7 AM")).isEqualTo("Wake me up at 7:15 am")
+    }
 }

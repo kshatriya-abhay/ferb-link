@@ -43,7 +43,7 @@ mise run server:mode full          # all of Gemma 4's inputs: images and audio t
 Needs the Android SDK in `~/Android/Sdk` (mise sets up Java 21).
 
 ```sh
-mise run companion:test                      # JVM unit tests
+mise run companion:test                      # unit and contract tests (companion/README.md, Testing)
 mise run companion:install                   # or: companion:send-over-tailscale <phone>
 mise run companion:try "set a timer for 5"   # ask it through adb, as Ferb would (debug builds)
 ```

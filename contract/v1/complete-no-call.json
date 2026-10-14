@@ -1,0 +1,22 @@
+{
+  "method": "complete",
+  "note": "The model answers in words and calls no tool.",
+  "extras": {
+    "request": "what's the capital of France",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "source": "laptop",
+      "success": true,
+      "text": "I can't do that."
+    },
+    "version": 1
+  }
+}

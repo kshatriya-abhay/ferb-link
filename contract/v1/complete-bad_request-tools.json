@@ -1,0 +1,25 @@
+{
+  "method": "complete",
+  "note": "Tools that aren't a JSON array.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "{}"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "error": "bad request: tools",
+      "error_detail": "The tools aren't a JSON array: A JSONArray text must start with '[' at 1 [character 2 line 1]",
+      "error_kind": "bad_request",
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

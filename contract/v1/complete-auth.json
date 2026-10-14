@@ -1,0 +1,25 @@
+{
+  "method": "complete",
+  "note": "The laptop turns the API key down.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "error": "key refused",
+      "error_detail": "Your computer turned down the API key",
+      "error_kind": "auth",
+      "first": 0,
+      "function_calls": [],
+      "mean": 0,
+      "model": "",
+      "ms": 1,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "method": "transcribe",
+  "note": "The server is in text mode and turns audio down.",
+  "extras": {
+    "audio": {
+      "bytes": "speech"
+    },
+    "audio_mime": "audio/ogg"
+  },
+  "result": {
+    "reply": {
+      "error": "server error 500",
+      "error_detail": "Your computer answered 500: audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj",
+      "error_kind": "server",
+      "heard": "",
+      "model": "",
+      "ms": 43,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

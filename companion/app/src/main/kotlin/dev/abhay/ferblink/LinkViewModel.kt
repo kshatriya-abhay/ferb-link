@@ -60,7 +60,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         if (!settings.configured) return
         _state.update { it.copy(checking = true, unloadError = null) }
         viewModelScope.launch {
-            val health = withContext(Dispatchers.IO) { settings.client().health() }
+            val health = withContext(Dispatchers.IO) { settings.client(null).health() }
             health.model?.let { settings.lastModel = it }
             health.audio?.let { settings.audio = it }
             _state.update { it.copy(checking = false, health = health) }
@@ -72,7 +72,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         if (!settings.configured) return
         _state.update { it.copy(unloading = true, unloadError = null) }
         viewModelScope.launch {
-            val failure = withContext(Dispatchers.IO) { settings.client().unload() }
+            val failure = withContext(Dispatchers.IO) { settings.client(null).unload() }
             _state.update { it.copy(unloading = false) }
             check()
             _state.update { it.copy(unloadError = failure?.message) }
@@ -84,7 +84,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         if (!settings.configured || request.isBlank()) return
         _state.update { it.copy(trying = true) }
         viewModelScope.launch {
-            val reply = withContext(Dispatchers.IO) { settings.client().complete(request, SAMPLE_TOOLS) }
+            val reply = withContext(Dispatchers.IO) { settings.client(null).complete(request, SAMPLE_TOOLS) }
             if (reply.failure == null) settings.lastModel = reply.model
             RecentRequests.add("this app", request, reply)
             _state.update { it.copy(trying = false, tried = request to reply) }

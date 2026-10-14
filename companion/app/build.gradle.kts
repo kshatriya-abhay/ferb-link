@@ -56,10 +56,13 @@ dependencies {
     testImplementation(libs.org.json)
 }
 
-// The laptop harness (LaptopHarness, `mise run companion:harness`) takes its files and server
-// from -Pharness.in=… and friends; other test runs skip it.
+// The laptop harness (LaptopHarness, `mise run companion:harness`) is a model evaluation, not a
+// test: it runs only with -Pharness.in=… (and friends) and is left out of other test runs.
+// -Pcontract.write=true rewrites the contract fixtures (`mise run companion:contract-write`).
 tasks.withType<Test>().configureEach {
-    listOf("harness.in", "harness.out", "harness.url", "harness.key", "harness.model").forEach { name ->
+    listOf("harness.in", "harness.out", "harness.url", "harness.key", "harness.model", "contract.write").forEach { name ->
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
+    systemProperty("contract.dir", rootProject.file("../contract/v1").path)
+    if (!providers.gradleProperty("harness.in").isPresent) filter.excludeTestsMatching("dev.abhay.ferblink.LaptopHarness")
 }

@@ -1,0 +1,21 @@
+{
+  "method": "transcribe",
+  "note": "No recording.",
+  "extras": {
+    "audio_mime": "audio/ogg"
+  },
+  "result": {
+    "reply": {
+      "error": "bad request: no audio",
+      "error_detail": "No recording",
+      "error_kind": "bad_request",
+      "heard": "",
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

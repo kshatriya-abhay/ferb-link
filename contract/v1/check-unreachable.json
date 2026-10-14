@@ -1,0 +1,14 @@
+{
+  "method": "check",
+  "note": "Nothing answers at the laptop's address.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "error": "can't reach your computer",
+    "error_detail": "Your computer doesn't answer. Is the server running?",
+    "error_kind": "unreachable",
+    "model": "",
+    "reachable": false,
+    "version": 1
+  }
+}

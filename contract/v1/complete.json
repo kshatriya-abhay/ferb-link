@@ -1,0 +1,24 @@
+{
+  "method": "complete",
+  "note": "A typed Hinglish alarm: Ferb Link sends \"shaam 7:00 pm ka alarm lagao\" and the model calls set_alarm.",
+  "extras": {
+    "facts": "date: 2026-10-14 (Wednesday)",
+    "request": "shaam 7 baje ka alarm lagao",
+    "timeout_ms": 10000,
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0.9,
+      "first": 0.98,
+      "function_calls": [{"name":"set_alarm","arguments":{"time":"7:00 pm"}}],
+      "mean": 0.94,
+      "model": "gemma-4-e2b",
+      "ms": 42,
+      "source": "laptop",
+      "success": true,
+      "text": ""
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "method": "transcribe",
+  "note": "Hinglish: heard in Latin letters, text in English, with sava saat worked out as 7:15 and subah as am.",
+  "extras": {
+    "audio": {
+      "bytes": "speech"
+    },
+    "audio_mime": "audio/ogg"
+  },
+  "result": {
+    "reply": {
+      "heard": "subah sava saat baje utha dena",
+      "model": "gemma-4-e2b",
+      "ms": 45,
+      "source": "laptop",
+      "success": true,
+      "text": "Wake me up at 7:15 am"
+    },
+    "version": 1
+  }
+}

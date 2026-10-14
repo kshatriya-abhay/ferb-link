@@ -1,0 +1,22 @@
+{
+  "method": "transcribe",
+  "note": "English: text is what was heard.",
+  "extras": {
+    "audio": {
+      "bytes": "speech"
+    },
+    "audio_mime": "audio/ogg",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "heard": "set a timer for ten minutes",
+      "model": "gemma-4-e2b",
+      "ms": 44,
+      "source": "laptop",
+      "success": true,
+      "text": "set a timer for ten minutes"
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "method": "check",
+  "note": "The laptop turns the API key down.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "error": "key refused",
+    "error_detail": "Your computer turned down the API key",
+    "error_kind": "auth",
+    "model": "",
+    "reachable": false,
+    "version": 1
+  }
+}

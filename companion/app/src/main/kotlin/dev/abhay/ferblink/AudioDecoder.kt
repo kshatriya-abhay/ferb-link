@@ -24,6 +24,11 @@ object AudioDecoder {
     fun toWav(audio: ByteArray, mime: String?): ByteArray {
         if (mime in WAV_TYPES || isWav(audio)) return audio
         val (pcm, rate, channels) = decode(audio)
+        return fromPcm(pcm, rate, channels)
+    }
+
+    /** Decoded PCM as Ferb Link sends it: mono, 16 kHz when [rate] is a multiple of it, at most [LinkContract.MAX_AUDIO_SECONDS]. */
+    internal fun fromPcm(pcm: ShortArray, rate: Int, channels: Int): ByteArray {
         var samples = mono(pcm, channels)
         var outRate = rate
         if (rate > TARGET_RATE && rate % TARGET_RATE == 0) {
@@ -43,9 +48,9 @@ object AudioDecoder {
         return if (byteRate <= 0) 0.0 else (wav.size - 44).toDouble() / byteRate
     }
 
-    private val WAV_TYPES = setOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")
+    internal val WAV_TYPES = setOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")
 
-    private fun isWav(audio: ByteArray) = audio.size > 12 &&
+    internal fun isWav(audio: ByteArray) = audio.size > 12 &&
         String(audio, 0, 4, Charsets.US_ASCII) == "RIFF" && String(audio, 8, 4, Charsets.US_ASCII) == "WAVE"
 
     /** 16-bit PCM, interleaved, with its rate and channel count. */
@@ -119,7 +124,7 @@ object AudioDecoder {
         }
     }
 
-    private fun mono(pcm: ShortArray, channels: Int): ShortArray {
+    internal fun mono(pcm: ShortArray, channels: Int): ShortArray {
         if (channels <= 1) return pcm
         return ShortArray(pcm.size / channels) { i ->
             var sum = 0
@@ -129,13 +134,13 @@ object AudioDecoder {
     }
 
     /** Averages each [factor] samples: a crude low-pass, enough for speech. */
-    private fun downsample(pcm: ShortArray, factor: Int) = ShortArray(pcm.size / factor) { i ->
+    internal fun downsample(pcm: ShortArray, factor: Int) = ShortArray(pcm.size / factor) { i ->
         var sum = 0
         for (k in 0 until factor) sum += pcm[i * factor + k]
         (sum / factor).toShort()
     }
 
-    private fun wav(samples: ShortArray, rate: Int): ByteArray {
+    internal fun wav(samples: ShortArray, rate: Int): ByteArray {
         val data = samples.size * 2
         return ByteBuffer.allocate(44 + data).order(ByteOrder.LITTLE_ENDIAN).apply {
             put("RIFF".toByteArray()); putInt(36 + data); put("WAVE".toByteArray())

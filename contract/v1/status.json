@@ -1,0 +1,12 @@
+{
+  "method": "status",
+  "note": "On, set up, last saw gemma-4-e2b, which takes audio.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "model": "gemma-4-e2b",
+    "version": 1
+  }
+}

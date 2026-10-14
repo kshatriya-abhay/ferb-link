@@ -1,0 +1,13 @@
+{
+  "method": "status",
+  "synthetic": true,
+  "note": "A newer Ferb Link whose contract changed meaning (VERSION 2): this Ferb should treat it as not available.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "model": "gemma-4-e2b",
+    "version": 2
+  }
+}

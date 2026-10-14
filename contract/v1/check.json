@@ -1,0 +1,11 @@
+{
+  "method": "check",
+  "note": "The laptop answers, in full mode (takes audio).",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "model": "gemma-4-e2b",
+    "reachable": true,
+    "version": 1
+  }
+}

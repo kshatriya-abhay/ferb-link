@@ -1,0 +1,21 @@
+{
+  "method": "transcribe",
+  "note": "Silence: success, with empty heard and text, and no request to the laptop.",
+  "extras": {
+    "audio": {
+      "bytes": "silence"
+    },
+    "audio_mime": "audio/ogg"
+  },
+  "result": {
+    "reply": {
+      "heard": "",
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": true,
+      "text": ""
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "method": "summarize",
+  "note": "A method this Ferb Link doesn't have (an older one, for a newer Ferb).",
+  "extras": {},
+  "result": {
+    "throws": "IllegalArgumentException"
+  }
+}

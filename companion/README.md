@@ -33,6 +33,18 @@ Recordings go with their own prompt (`ServerClient.TRANSCRIBE`), at temperature 
 ## Network
 Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_config.xml`), because the tailnet already encrypts it; HTTPS anywhere. The app rejects other `http://` addresses (a raw `100.x` address or a short name like `my-laptop` won't do).
 
+## Testing
+Four tiers. Most tests check one piece; models are evaluated only when tuning them.
+
+| Tier | What | When | How |
+|---|---|---|---|
+| Unit | `Amounts`, `SpeechCheck`, `Latin`, `AudioDecoder`'s steps around MediaCodec, request building and reply parsing, error kinds, timeouts and connection reuse (`ServerClient` against a fake llama-server), the provider's calls and caller check (`LinkCalls`). No model, server or phone. | Every change | `mise run companion:test` |
+| Contract | `contract/v1/`: one JSON file per case, each method's extras and result, and every error kind. `ContractTest` checks `LinkCalls` gives exactly those; Ferb's tests read a copy (`mise run link:contract-check` / `link:contract-sync` in Ferb). | Every change, in the same run | `mise run companion:test`; after a contract change, `mise run companion:contract-write`, review the diff, tell Ferb |
+| Model evaluation | The transcribe prompt and schema, the complete system prompt, tool configuration: the harness, synthetic-voice clip runs, `server:chat`. | Only when tuning a prompt or tool config | `mise run companion:harness`, `mise run server:chat` |
+| End to end | `mise run server:ping`, and the ~6-case smoke checklist on the phone (in Ferb's repo). | Before an install-worthy release | by hand |
+
+A miss found in a model evaluation becomes a unit test of the code that should have caught it (most are in `AmountsTest`), not a new evaluation case. Gradle runs without daemons (`--no-daemon`, and the Kotlin compiler in-process): nothing outlives a build to crowd the model server's memory, and never run `./gradlew --stop`, which stops Ferb's builds too.
+
 ## Before the first release
 - **First-use hints.** The screen has no explanations, by choice (Material 3 Expressive, little text). These were removed and should come back as first-use hints:
   - Computer: on the computer, in ferb-link, `mise run server:tailnet on` prints the address and `mise run server:key` the key.
@@ -45,7 +57,7 @@ Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_confi
 `adb logcat -s FerbLink`: each call's arrival and total time, and each HTTP request's connect, send, wait and read times. Connections are kept and reused (`send()` no longer closes them): the first request after a while takes about 50–100 ms to connect over the tailnet, the next ones 0–2 ms.
 
 ## On the laptop, without the phone
-`mise run companion:harness in.jsonl [out.jsonl]` runs Ferb Link's own `complete` and `transcribe` code (`LaptopHarness`, a JVM test skipped otherwise) against the local server: one JSON object per line in, one Ferb Link reply per line out.
+`mise run companion:harness in.jsonl [out.jsonl]` runs Ferb Link's own `complete` and `transcribe` code (`LaptopHarness`, a model evaluation: left out of `companion:test`) against the local server: one JSON object per line in, one Ferb Link reply per line out.
 - `{"id": "a1", "request": "sava saat baje utha dena", "tools": [...], "facts": "...", "timeout_ms": 10000}` → the `complete` reply, plus `"sent"`: the request after `Amounts.forRequest`, as the model gets it.
 - `{"id": "v1", "audio": "clip.ogg"}` → the `transcribe` reply (`heard`, `text`). The file is decoded with ffmpeg to 16 kHz mono WAV, and ICU's transliteration goes through `uconv`; the rest (`SpeechCheck`, the prompt, `Latin`, `Amounts`) is the phone's code.
 It starts Gradle without a daemon (about 40 s), so batch the lines. Models run one at a time: don't run it during a bench.
