@@ -17,7 +17,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 - **[Tailscale](https://tailscale.com)** on the computer and the phone, on the same tailnet, with MagicDNS on (the default).
 - **[mise](https://mise.jdx.dev)**, plus `curl` and `jq`. mise installs Java 21 for the app's build.
 - **The Android SDK** in `~/Android/Sdk` (Android Studio installs it there), with its licences accepted (`sdkmanager --licenses`) so Gradle can fetch the platform it needs, and `adb`.
-- **Ferb, built on the same computer.** Ferb Link answers only apps signed with its own key, so build both apps on one machine: its debug key signs both.
+- **Ferb and Ferb Link signed with the same key.** Ferb Link answers only apps signed with its own key: install both from GitHub Releases (one release key signs both), or build both on one computer (its debug key signs both). Don't mix the two.
 - **An Android phone** (Android 13 or later) with USB debugging on.
 
 ## Quick start
@@ -25,7 +25,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 1. **Clone this repo next to Ferb's**, so the two share a parent folder, and trust its mise config:
    ```sh
    git clone https://github.com/kshatriya-abhay/ferb
-   git clone <this repo> ferb-link
+   git clone https://github.com/kshatriya-abhay/ferb-link
    cd ferb-link
    mise trust && mise install
    ```
@@ -52,12 +52,12 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    mise run server:tailnet on     # prints the address, http://<computer>.<tailnet>.ts.net
    mise run server:ping tailnet
    ```
-7. **Install Ferb Link on the phone**, connected over USB:
+7. **Install Ferb Link on the phone.** Download the latest `FerbLink-*.apk` from this repo's [Releases](https://github.com/kshatriya-abhay/ferb-link/releases/latest) on the phone and open it (allow installing from your browser when asked). Or build it from source, with the phone connected over USB:
    ```sh
    mise run companion:install
    ```
 8. **Connect Ferb Link to the computer.** Open Ferb Link, tap **Address** under Computer, and enter the address from step 6 and the key from `mise run server:key`. Save. The status card turns green and shows the model.
-9. **Install Ferb from the same computer** (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
+9. **Install Ferb the same way you installed Ferb Link**: from [Ferb's Releases](https://github.com/kshatriya-abhay/ferb/releases/latest), or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
 
 ## Troubleshooting
 
@@ -69,7 +69,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 | Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. |
 | Ferb Link: "key refused" | Enter the key again from `mise run server:key`. |
 | The first answer after a while takes seconds | The server unloads the model after 5 minutes idle and loads it again on the next request: about 2 s, up to 30 s after a reboot. Ferb waits 10 s, then answers on the phone. |
-| Ferb doesn't see Ferb Link, or it says it's not allowed | Both apps must be built on the same computer (the same debug key). Uninstall the one built elsewhere and install it from here. |
+| Ferb doesn't see Ferb Link, or it says it's not allowed | The two apps are signed with different keys: one from Releases and one built here, or built on different computers. Uninstall one and install it the same way as the other. |
 | Ferb has no mic button | Voice needs the server in full mode: `mise run server:mode` should say `full` (the default). |
 | `server:start` says Ferb's bench is running | Models run one at a time: wait for the bench to finish. |
 
