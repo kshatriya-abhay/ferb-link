@@ -1,5 +1,6 @@
 package dev.abhay.ferblink
 
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateUtils
@@ -89,8 +90,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 /**
  * One screen, Material 3 Expressive: the main switch, the computer's status, its address and key,
  * a request to try, and recent requests; before an address and key are saved, only how to connect.
- * Other explanations are kept out; first-use hints are a TODO before the first release
- * (companion/README.md).
+ * Other explanations are kept out, except first-use hints ([Hint]), each shown once.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class MainActivity : ComponentActivity() {
@@ -158,12 +158,15 @@ private fun LinkScreen(viewModel: LinkViewModel) {
         ) {
             if (!state.configured) {
                 // Not set up: only how to connect. The switch, Try and Recent come once it is.
-                item { ConnectCard(onEnterByHand = { editing = true }) }
+                item { ConnectCard(onEnterByHand = { editing = true }, onPaste = viewModel::offerPairing) }
                 return@LazyColumn
             }
             item { MainSwitch(state.enabled, viewModel::setEnabled) }
+            if (Hint.Switch in state.hints) item { HintLine(Hint.Switch, viewModel::dismissHint) }
             item { Spacer(Modifier.size(10.dp)) }
             item { StatusCard(state, viewModel) }
+            // One status hint at a time: voice (or text only), then Unload.
+            Hint.forStatus(state.health).firstOrNull { it in state.hints }?.let { hint -> item { HintLine(hint, viewModel::dismissHint) } }
             section("Computer")
             item {
                 SegmentedListItem(
@@ -182,6 +185,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
                 ) { Text("API key") }
             }
             section("Try")
+            if (Hint.Try in state.hints) item { HintLine(Hint.Try, viewModel::dismissHint) }
             item { TryRow(state, viewModel::tryRequest) }
             if (recent.isNotEmpty()) {
                 section("Recent")
@@ -205,8 +209,9 @@ private fun LinkScreen(viewModel: LinkViewModel) {
 
 /** First launch: how to connect, in three steps. */
 @Composable
-private fun ConnectCard(onEnterByHand: () -> Unit) {
+private fun ConnectCard(onEnterByHand: () -> Unit, onPaste: (String) -> Unit) {
     val uris = LocalUriHandler.current
+    val context = LocalContext.current
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Connect to your computer", style = MaterialTheme.typography.titleLarge)
@@ -214,7 +219,7 @@ private fun ConnectCard(onEnterByHand: () -> Unit) {
             listOf(
                 "Set up the server on your computer (the quick start in Ferb Link's README).",
                 "Turn on Tailscale on this phone, on the same tailnet as the computer.",
-                "On the computer, run mise run server:pair and scan its QR code with this phone's camera. Or, with the phone on USB, run mise run companion:pair.",
+                "On the computer, run mise run server:pair and scan its QR code with this phone's camera. If the camera only shows the link, copy it and tap Paste link. Or, with the phone on USB, run mise run companion:pair.",
             ).forEachIndexed { i, step ->
                 Row {
                     Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(20.dp))
@@ -222,8 +227,12 @@ private fun ConnectCard(onEnterByHand: () -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onEnterByHand) { Text("Enter by hand") }
-                TextButton(onClick = { uris.openUri(SETUP_GUIDE) }) { Text("Setup guide") }
+                FilledTonalButton(onClick = {
+                    val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip
+                    onPaste(clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty())
+                }) { Text("Paste link") }
+                TextButton(onClick = onEnterByHand) { Text("Enter by hand") }
+                TextButton(onClick = { uris.openUri(SETUP_GUIDE) }) { Text("Guide") }
             }
         }
     }
@@ -320,7 +329,25 @@ private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
                     }
                 }
             }
+            if (state.enabled && health != null && !health.ok) {
+                Guidance.of(health.failure, state.vpnActive)?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 42.dp, top = 8.dp, end = 12.dp))
+                }
+            }
             state.unloadError?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+/** A first-use hint, until "Got it". */
+@Composable
+private fun HintLine(hint: Hint, onDismiss: (Hint) -> Unit) {
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(hint.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onDismiss(hint) }) { Text("Got it") }
         }
     }
 }

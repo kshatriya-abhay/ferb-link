@@ -39,6 +39,11 @@ class LinkSettings(context: Context) : LinkState {
             if (value != audio) prefs.edit { putBoolean(KEY_AUDIO, value) }
         }
 
+    /** First-use hints the user has dismissed ([Hint] names). */
+    var hintsSeen: Set<String>
+        get() = prefs.getStringSet(KEY_HINTS_SEEN, emptySet()).orEmpty().toSet()
+        set(value) = prefs.edit { putStringSet(KEY_HINTS_SEEN, value) }
+
     override fun client(trace: ((String) -> Unit)?) = ServerClient(serverUrl, apiKey, model = lastModel, trace = trace)
 
     companion object {
@@ -47,6 +52,7 @@ class LinkSettings(context: Context) : LinkState {
         private const val KEY_ENABLED = "enabled"
         private const val KEY_LAST_MODEL = "last_model"
         private const val KEY_AUDIO = "audio"
+        private const val KEY_HINTS_SEEN = "hints_seen"
 
         /**
          * Why [url] won't work, or null when it looks right. Plain HTTP is allowed only to

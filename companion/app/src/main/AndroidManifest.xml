@@ -4,6 +4,8 @@
     <!-- The one thing Ferb must never have: Ferb Link talks to the laptop's model server over
          Tailscale, so Ferb itself stays offline. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Whether a VPN (Tailscale) is up, to say so when the computer can't be reached. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="false"

@@ -45,12 +45,10 @@ Four tiers. Most tests check one piece; models are evaluated only when tuning th
 
 A miss found in a model evaluation becomes a unit test of the code that should have caught it (most are in `AmountsTest`), not a new evaluation case. Gradle runs without daemons (`--no-daemon`, and the Kotlin compiler in-process): nothing outlives a build to crowd the model server's memory, and never run `./gradlew --stop`, which stops Ferb's builds too.
 
-## Before the first release
-- **First-use hints.** The screen has no explanations, by choice (Material 3 Expressive, little text). These were removed and should come back as first-use hints:
-  - The main switch: Ferb's requests go to the computer; when off, or when the computer can't be reached, Ferb answers on the phone.
-  - Try: it uses three sample tools (timer, alarm, flashlight); tap an answer for the confidence stand-ins.
-  - Voice: available only when the server runs in full mode (`mise run server:mode full`).
-  - Unload: frees the computer's GPU memory; the next request starts the model again (a few seconds).
+## Help on the screen
+- **Connection errors:** under the status card's error, one line saying what to do (`Guidance`): Tailscale off on the phone (no VPN up), the server not on the tailnet, a refused key (pair again), a loading model (try again), the logs for other server errors.
+- **First-use hints** (`Hint`), each shown once until "Got it": the main switch, voice (or how to turn it on), Unload, and Try.
+- **Pairing:** a "Connect to your computer" card until an address and key are saved, with Paste link (for camera apps that show a `ferblink://` link without opening it), Enter by hand, and the setup guide.
 
 ## Logs
 `adb logcat -s FerbLink`: each call's arrival and total time, and each HTTP request's connect, send, wait and read times. Connections are kept and reused (`send()` no longer closes them): the first request after a while takes about 50–100 ms to connect over the tailnet, the next ones 0–2 ms.

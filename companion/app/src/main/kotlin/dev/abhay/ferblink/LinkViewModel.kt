@@ -1,6 +1,8 @@
 package dev.abhay.ferblink
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -32,9 +34,13 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         /** A pairing link waiting for the user to confirm it, or why one didn't work. */
         val pairing: Pairing.Offer? = null,
         val pairingProblem: String? = null,
+        /** First-use hints still to show. */
+        val hints: Set<Hint> = emptySet(),
+        /** Whether this phone has a VPN up (Tailscale), at the last check; null when unknown. */
+        val vpnActive: Boolean? = null,
     )
 
-    private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured))
+    private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured, hints = unseenHints()))
     val state: StateFlow<State> = _state.asStateFlow()
     val recent = RecentRequests.entries
 
@@ -54,7 +60,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** A ferblink://pair link arrived: ask before using it (any app can open one). */
-    fun offerPairing(link: String) = when (val result = Pairing.parse(link)) {
+    fun offerPairing(link: String) = when (val result = if (link.isBlank()) Pairing.Result.Bad("The clipboard has no pairing link") else Pairing.parse(link)) {
         is Pairing.Result.Ok -> _state.update { it.copy(pairing = result.offer, pairingProblem = null) }
         is Pairing.Result.Bad -> _state.update { it.copy(pairing = null, pairingProblem = result.reason) }
     }
@@ -69,6 +75,20 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(serverUrl = settings.serverUrl, apiKey = settings.apiKey, enabled = true, edited = false, configured = settings.configured, pairing = null, health = null)
         }
         check()
+    }
+
+    fun dismissHint(hint: Hint) {
+        settings.hintsSeen = settings.hintsSeen + hint.name
+        _state.update { it.copy(hints = unseenHints()) }
+    }
+
+    private fun unseenHints() = Hint.entries.filter { it.name !in settings.hintsSeen }.toSet()
+
+    /** Whether the phone's active network goes through a VPN; Tailscale is one. */
+    private fun vpnActive(): Boolean? {
+        val connectivity = getApplication<Application>().getSystemService(ConnectivityManager::class.java) ?: return null
+        val network = connectivity.activeNetwork ?: return false
+        return connectivity.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     fun dismissPairing() = _state.update { it.copy(pairing = null, pairingProblem = null) }
@@ -88,7 +108,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
             val health = withContext(Dispatchers.IO) { settings.client(null).health() }
             health.model?.let { settings.lastModel = it }
             health.audio?.let { settings.audio = it }
-            _state.update { it.copy(checking = false, health = health) }
+            _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive()) }
         }
     }
 

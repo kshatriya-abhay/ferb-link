@@ -64,7 +64,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    ```sh
    mise run server:pair
    ```
-   Either way, Ferb Link asks first, with the computer's name: tap **Connect**. The status card turns green and shows the model. (**Enter by hand** takes the address from step 6 and the key from `mise run server:key`.)
+   If the camera only shows the link instead of opening it, copy it and tap **Paste link** in Ferb Link. Either way, Ferb Link asks first, with the computer's name: tap **Connect**. The status card turns green and shows the model. (**Enter by hand** takes the address from step 6 and the key from `mise run server:key`.)
 9. **Install Ferb the same way you installed Ferb Link**: from [Ferb's Releases](https://github.com/kshatriya-abhay/ferb/releases/latest), or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
 
 ## Troubleshooting
@@ -74,6 +74,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 | `server:start` says something is missing | It names the step: `server:install` (llama-server or the key) or `server:model gemma-4-e2b` (the model or its encoder). |
 | The server doesn't come up | `mise run server:logs`. With the CUDA build, check `nvidia-smi` works; otherwise try `mise run server:install vulkan`. Out of GPU memory: set `GPU_LAYERS` lower in `server/server.conf`, or `auto`. |
 | `server:tailnet on` says access denied | Step 2: `sudo tailscale set --operator=$USER`. |
+| The camera doesn't open Ferb Link from the QR code | Some camera apps don't open `ferblink://` links: copy the link it shows and tap **Paste link**, or use `mise run companion:pair` over USB. |
 | Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. |
 | Ferb Link: "key refused" | Pair again (`mise run companion:pair` or `server:pair`), or enter the key from `mise run server:key`. |
 | "This pairing link doesn't work" | The server isn't on the tailnet (`mise run server:tailnet on`), or the link was cut off: run `server:pair` again. |

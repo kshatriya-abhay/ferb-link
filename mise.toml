@@ -194,7 +194,8 @@ set -euo pipefail
 LINK=$(server/pair-link.sh)
 command -v qrencode >/dev/null || { echo "Needs qrencode (your distribution's package), or use mise run companion:pair with the phone on USB."; exit 1; }
 qrencode -t ansiutf8 -m 2 "$LINK"
-echo "Scan it with the phone's camera: Ferb Link opens and asks before connecting."
+echo "Scan it with the phone's camera: Ferb Link opens and asks before connecting. If the camera only shows the"
+echo "link, copy it and tap Paste link in Ferb Link."
 echo "It holds the API key: don't screenshot or share it. Clear the terminal when done."
 '''
 
