@@ -51,7 +51,7 @@ if [ ! -s "$KEY_FILE" ]; then
 fi
 
 mise run server:unit
-echo "Next: set MODEL in server/server.conf, mise run server:model <name>, mise run server:start."
+echo "Next: mise run server:model $MODEL, then mise run server:start."
 '''
 
 [tasks."server:unit"]
@@ -66,7 +66,7 @@ echo "Installed ferb-llama.service, enabled at login."
 '''
 
 [tasks."server:model"]
-description = "Download a model from server/models.txt (pinned, SHA-256 checked)"
+description = "Download a model from server/models.txt (pinned, SHA-256 checked), and its projector in full mode"
 usage = '''
 arg "<name>" help="A name from server/models.txt"
 '''
@@ -83,6 +83,11 @@ if [ ! -f "$DEST" ] && [ -f "$CACHED" ] && echo "$SHA  $CACHED" | sha256sum -c -
 fi
 server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "$DEST" "$SHA"
 echo "$usage_name is in $DEST."
+# In full mode the server also needs the model's projector (images and audio in).
+if [ "${CAPABILITIES:-text}" = full ] && read -r _ REPO REV PFILE PSHA < <(grep "^$usage_name " server/projectors.txt); then
+  server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$PFILE" "server/build/models/$usage_name-$PFILE" "$PSHA"
+  echo "Its projector is in server/build/models/$usage_name-$PFILE."
+fi
 '''
 
 [tasks."server:start"]
