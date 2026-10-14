@@ -20,8 +20,8 @@ object Guidance {
 }
 
 /**
- * First-use hints: one line each, shown once under what they explain, until "Got it". The README's
- * "Before the first release" list.
+ * First-use hints: one line each, shown once under what they explain, until "Got it"
+ * (companion/README.md, "Help on the screen").
  */
 enum class Hint(val text: String) {
     Switch("Ferb's requests go to your computer. When this is off, or the computer can't be reached, Ferb answers on the phone."),
