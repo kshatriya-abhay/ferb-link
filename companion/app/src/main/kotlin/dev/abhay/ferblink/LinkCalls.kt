@@ -143,11 +143,14 @@ class LinkCalls(
         else -> throw IllegalArgumentException("Unknown method $method")
     }
 
-    /** Jev's answer, if it's on, has a key and is under its cap; every call's cost goes on the counter. */
-    fun decide(request: String, toolsJson: String, timeoutMs: Int): JevClient.Decision {
+    /**
+     * Jev's answer, if it's on, has a key and is under its cap; every call's cost goes on the
+     * counter. [test]: the Jev card's Test button, which may try the key before Jev is turned on.
+     */
+    fun decide(request: String, toolsJson: String, timeoutMs: Int, test: Boolean = false): JevClient.Decision {
         val off = when {
             !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
-            !state.jevOn -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
+            !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
             !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
             state.jevSpentUsd >= state.jevCapUsd -> {
                 turnJevOff()

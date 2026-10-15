@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 class LinkViewModel(application: Application) : AndroidViewModel(application) {
     private val settings = LinkSettings(application)
@@ -38,17 +39,70 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         val hints: Set<Hint> = emptySet(),
         /** Whether this phone has a VPN up (Tailscale), at the last check; null when unknown. */
         val vpnActive: Boolean? = null,
+        val jev: Jev = Jev(),
     ) {
         /** The address a waiting pairing would replace: only when one is saved and it differs. */
         val replacing: String? get() = pairing?.takeIf { configured && it.url != serverUrl }?.let { serverUrl }
     }
+
+    /** The Jev card: TypeSafe's cloud model, off by default; [tested] is the last Test's outcome. */
+    data class Jev(
+        val on: Boolean = false,
+        val keySet: Boolean = false,
+        val capped: Boolean = false,
+        val spentUsd: Double = 0.0,
+        val capUsd: Double = LinkSettings.DEFAULT_JEV_CAP_USD,
+        val testing: Boolean = false,
+        val tested: String? = null,
+    )
+
+    private fun jev() = Jev(
+        on = settings.jevOn,
+        keySet = settings.jevConfigured,
+        capped = !settings.jevOn && settings.jevOffReason == LinkContract.JEV_OFF_CAP,
+        spentUsd = settings.jevSpentUsd,
+        capUsd = settings.jevCapUsd,
+        testing = _state.value.jev.testing,
+        tested = _state.value.jev.tested,
+    )
 
     private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured, hints = unseenHints()))
     val state: StateFlow<State> = _state.asStateFlow()
     val recent = RecentRequests.entries
 
     init {
+        _state.update { it.copy(jev = jev()) }
         check()
+    }
+
+    /** Turns Jev on or off. On needs a key and room under the cap; turning it on clears a cap stop. */
+    fun setJevOn(on: Boolean) {
+        if (on && (!settings.jevConfigured || settings.jevSpentUsd >= settings.jevCapUsd)) return
+        settings.jevOn = on
+        if (on) settings.jevOffReason = ""
+        _state.update { it.copy(jev = jev()) }
+    }
+
+    /** Saves the TypeSafe key (null keeps it) and the spending cap. */
+    fun saveJev(key: String?, capUsd: Double) {
+        key?.let { settings.jevKey = it }
+        settings.jevCapUsd = capUsd.coerceAtLeast(0.0)
+        if (!settings.jevConfigured || settings.jevSpentUsd >= settings.jevCapUsd) settings.jevOn = false
+        _state.update { it.copy(jev = jev().copy(tested = null)) }
+    }
+
+    /** One small call with [SAMPLE_TOOLS], counted like any other: checks the key and shows the answer. */
+    fun testJev() {
+        if (!settings.jevConfigured || _state.value.jev.testing) return
+        _state.update { it.copy(jev = it.jev.copy(testing = true)) }
+        viewModelScope.launch {
+            val decision = withContext(Dispatchers.IO) {
+                LinkCalls(settings, { it.run() }, BuildConfig.DEBUG).decide(SAMPLE_REQUEST, SAMPLE_TOOLS, LinkContract.MAX_DECIDE_TIMEOUT_MS, test = true)
+            }
+            val tested = decision.failure?.message
+                ?: "Jev picked ${decision.choice} (%.2f) in ${decision.ms} ms, for \$%.6f".format(Locale.ROOT, decision.probabilities[decision.choice] ?: 0.0, decision.billed.usd)
+            _state.update { it.copy(jev = jev().copy(testing = false, tested = tested)) }
+        }
     }
 
     fun editUrl(url: String) = _state.update { it.copy(serverUrl = url, edited = true, health = null) }

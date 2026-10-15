@@ -49,6 +49,7 @@ A miss found in a model evaluation becomes a unit test of the code that should h
 
 ## Help on the screen
 - **Connection errors:** under the status card's error, one line saying what to do (`Guidance`), only when the error's own detail doesn't already say it: Tailscale off on the phone (no VPN up), the server not on the tailnet, a refused key (pair again), a loading model (try again), the logs for other server errors.
+- **Jev (TypeSafe):** a section to turn Jev on (off by default), with a masked key field, the spending so far against its limit ($3 by default), a Test button (one small, counted request), and what leaves the phone when it's on: the request and the tools' names and descriptions, to TypeSafe in the US.
 - **First-use hints** (`Hint`), each shown once until "Got it": the main switch, voice (or how to turn it on), Unload, and Try.
 - **Pairing:** a "Connect to your computer" card until an address and key are saved, with Paste link (for camera apps that show a `ferblink://` link without opening it), Enter by hand, and the setup guide.
 

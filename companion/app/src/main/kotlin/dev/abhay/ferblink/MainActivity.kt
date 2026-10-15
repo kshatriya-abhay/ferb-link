@@ -87,6 +87,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 
 /**
  * One screen, Material 3 Expressive: the main switch, the computer's status, its address and key,
@@ -133,6 +134,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val recent by viewModel.recent.collectAsStateWithLifecycle()
     var editing by rememberSaveable { mutableStateOf(false) }
+    var editingJev by rememberSaveable { mutableStateOf(false) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -185,6 +187,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
                     supportingContent = { Text(if (state.apiKey.isBlank()) "Not set" else "Set") },
                 ) { Text("API key") }
             }
+            jevSection(state.jev, viewModel, onEdit = { editingJev = true })
             section("Try")
             if (Hint.Try in state.hints) item { HintLine(Hint.Try, viewModel::dismissHint) }
             item { TryRow(state, viewModel::tryRequest) }
@@ -197,6 +200,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
         }
     }
     if (editing) ServerDialog(state, viewModel, onDone = { editing = false })
+    if (editingJev) JevDialog(state.jev, viewModel, onDone = { editingJev = false })
     state.pairing?.let { PairDialog(it, replacing = state.replacing, viewModel) }
     state.pairingProblem?.let { problem ->
         AlertDialog(
@@ -365,6 +369,109 @@ private fun Pill(text: String) {
     }
 }
 
+/**
+ * Jev, TypeSafe's cloud model, as a second opinion on Ferb's tool choice: off by default, with what
+ * leaves the phone said plainly, the key, the spend against its cap, and a Test.
+ */
+private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onEdit: () -> Unit) {
+    section("Jev (TypeSafe)")
+    item {
+        val status = when {
+            jev.capped -> "Off: it reached its spending limit"
+            !jev.keySet -> "Off. Needs a TypeSafe key"
+            jev.on -> "On: Ferb asks Jev when it's unsure"
+            else -> "Off"
+        }
+        SegmentedListItem(
+            onClick = { if (jev.keySet && !jev.capped || jev.on) viewModel.setJevOn(!jev.on) else onEdit() },
+            shapes = ListItemDefaults.segmentedShapes(index = 0, count = 4),
+            colors = rowColors(),
+            supportingContent = { Text(status) },
+            trailingContent = { Switch(checked = jev.on, onCheckedChange = null) },
+        ) { Text("Second opinion from Jev") }
+    }
+    item {
+        SegmentedListItem(
+            onClick = onEdit,
+            shapes = ListItemDefaults.segmentedShapes(index = 1, count = 4),
+            colors = rowColors(),
+            supportingContent = { Text(if (jev.keySet) "Set" else "Not set") },
+        ) { Text("TypeSafe key") }
+    }
+    item {
+        SegmentedListItem(
+            onClick = onEdit,
+            shapes = ListItemDefaults.segmentedShapes(index = 2, count = 4),
+            colors = rowColors(),
+            supportingContent = { Text("${dollars(jev.spentUsd)} of ${dollars(jev.capUsd)}. At the limit Jev turns itself off") },
+        ) { Text("Spending limit") }
+    }
+    item {
+        SegmentedListItem(
+            onClick = { if (jev.keySet && !jev.testing) viewModel.testJev() },
+            shapes = ListItemDefaults.segmentedShapes(index = 3, count = 4),
+            colors = rowColors(),
+            supportingContent = { Text(if (jev.testing) "Asking Jev…" else jev.tested ?: "One small request (about \$0.00002), counted in the spending") },
+        ) { Text("Test") }
+    }
+    item {
+        val uris = LocalUriHandler.current
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                "When it's on and Ferb is unsure, what you type or say to Ferb, and the names and descriptions of Ferb's tools, " +
+                    "go to TypeSafe's servers in the US. Not your contacts, notes or other app data. TypeSafe doesn't train on it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { uris.openUri(TYPESAFE_PRIVACY) }, contentPadding = PaddingValues(0.dp)) { Text("TypeSafe's privacy policy") }
+        }
+    }
+}
+
+/** Small amounts with enough digits to see them move: a request costs about $0.00002. */
+private fun dollars(usd: Double) = if (usd >= 0.01 || usd == 0.0) "\$%.2f".format(Locale.ROOT, usd) else "\$%.5f".format(Locale.ROOT, usd)
+
+private const val TYPESAFE_PRIVACY = "https://typesafe.ai/legal/privacy-policy"
+
+/** The TypeSafe key (masked, left as it is when the field stays empty) and the spending limit. */
+@Composable
+private fun JevDialog(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onDone: () -> Unit) {
+    var key by rememberSaveable { mutableStateOf("") }
+    var cap by rememberSaveable { mutableStateOf("%.2f".format(Locale.ROOT, jev.capUsd)) }
+    val capValue = cap.trim().removePrefix("\$").toDoubleOrNull()?.takeIf { it >= 0 }
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("Jev (TypeSafe)") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text(if (jev.keySet) "New TypeSafe key (empty keeps the saved one)" else "TypeSafe key") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = cap,
+                    onValueChange = { cap = it },
+                    label = { Text("Spending limit, in dollars") },
+                    singleLine = true,
+                    isError = capValue == null,
+                    supportingText = { Text("Spent so far: ${dollars(jev.spentUsd)}. This phone's count; it never resets.") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { viewModel.saveJev(key.trim().ifEmpty { null }, capValue!!); onDone() }, enabled = capValue != null) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
+    )
+}
+
 /** The address and key, edited together; saving checks them. */
 @Composable
 private fun ServerDialog(state: LinkViewModel.State, viewModel: LinkViewModel, onDone: () -> Unit) {
@@ -442,7 +549,7 @@ private fun TryRow(state: LinkViewModel.State, onSend: (String) -> Unit) {
     }
 }
 
-private const val SAMPLE_REQUEST = "set a timer for 5 minutes"
+internal const val SAMPLE_REQUEST = "set a timer for 5 minutes"
 
 /** The calls (or the model's words, or why it failed); tap for the timings and confidence. */
 @Composable
