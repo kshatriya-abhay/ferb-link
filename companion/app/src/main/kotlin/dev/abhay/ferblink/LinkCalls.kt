@@ -10,6 +10,9 @@ interface LinkState {
     val configured: Boolean
     var lastModel: String
     var audio: Boolean
+    /** The model's state as last seen ([LinkContract.RESULT_MODEL_STATE]'s words; empty if none yet), and when. */
+    var modelState: String
+    var modelStateAt: Long
     fun client(trace: ((String) -> Unit)? = null): ServerClient
 }
 
@@ -24,15 +27,17 @@ class LinkCalls(
     private val debug: Boolean,
     private val decode: (ByteArray, String?) -> ByteArray = AudioDecoder::toWav,
     private val trace: ((String) -> Unit)? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     fun answer(method: String, extras: Map<String, Any?>, caller: String): Map<String, Any?> = when (method) {
-        LinkContract.METHOD_STATUS -> mapOf(
-            LinkContract.RESULT_VERSION to LinkContract.VERSION,
-            LinkContract.RESULT_ENABLED to state.enabled,
-            LinkContract.RESULT_CONFIGURED to state.configured,
-            LinkContract.RESULT_MODEL to state.lastModel,
-            LinkContract.RESULT_AUDIO to state.audio,
-        )
+        LinkContract.METHOD_STATUS -> buildMap {
+            put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
+            put(LinkContract.RESULT_ENABLED, state.enabled)
+            put(LinkContract.RESULT_CONFIGURED, state.configured)
+            put(LinkContract.RESULT_MODEL, state.lastModel)
+            put(LinkContract.RESULT_AUDIO, state.audio)
+            state.modelStateNow(now())?.let { put(LinkContract.RESULT_MODEL_STATE, it) }
+        }
         LinkContract.METHOD_COMPLETE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
             val tools = extras[LinkContract.EXTRA_TOOLS] as? String ?: "[]"
@@ -45,6 +50,7 @@ class LinkCalls(
                 else -> state.client(trace).complete(Amounts.forRequest(request), tools, facts, timeoutMs(extras)).also {
                     if (it.failure == null) {
                         state.lastModel = it.model
+                        state.saw(ModelState.Loaded, now())
                         refreshAudio()
                     }
                     RecentRequests.add(caller, request, it)
@@ -61,11 +67,13 @@ class LinkCalls(
             val health = failure?.let { Health(false, null, 0, it) } ?: state.client(trace).health(LinkContract.CHECK_TIMEOUT_MS)
             health.model?.let { state.lastModel = it }
             health.audio?.let { state.audio = it }
+            health.state?.let { state.saw(it, now()) }
             buildMap {
                 put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
                 put(LinkContract.RESULT_REACHABLE, health.ok)
                 put(LinkContract.RESULT_MODEL, health.model ?: "")
                 put(LinkContract.RESULT_AUDIO, state.audio)
+                state.modelStateNow(now())?.let { put(LinkContract.RESULT_MODEL_STATE, it) }
                 health.failure?.let {
                     put(LinkContract.RESULT_ERROR, it.short)
                     put(LinkContract.RESULT_ERROR_DETAIL, it.message)
@@ -100,7 +108,11 @@ class LinkCalls(
                     val wav = decode(audio, mime)
                     recording = "Recording, %.1f s".format(AudioDecoder.seconds(wav))
                     Voice.transcribe(state.client(trace), wav, timeoutMs(extras) ?: LinkContract.TRANSCRIBE_TIMEOUT_MS).also {
-                        if (it.failure == null) state.lastModel = it.model
+                        if (it.failure == null) {
+                            state.lastModel = it.model
+                            // Silence is answered on the phone: the model wasn't asked.
+                            if (it.model.isNotEmpty()) state.saw(ModelState.Loaded, now())
+                        }
                         // A server in text mode turns audio down: stop offering the mic.
                         else if (it.failure.kind == ErrorKind.Server) refreshAudio()
                     }
@@ -141,4 +153,19 @@ class LinkCalls(
         fun callerAllowed(uid: Int, myUid: Int, debug: Boolean, signatureMatches: () -> Boolean) =
             uid == myUid || (debug && uid == SHELL_UID) || signatureMatches()
     }
+}
+
+/** Notes the model's state, seen at [at] (ms). */
+fun LinkState.saw(model: ModelState, at: Long) {
+    modelState = when (model) {
+        ModelState.Loaded -> LinkContract.MODEL_LOADED
+        ModelState.Loading, ModelState.Asleep -> LinkContract.MODEL_ASLEEP
+        ModelState.Unloaded -> LinkContract.MODEL_UNLOADED
+    }
+    modelStateAt = at
+}
+
+/** The last state seen, with "loaded" turned "asleep" once the server would have put it to sleep; null if none. */
+fun LinkState.modelStateNow(now: Long): String? = modelState.ifEmpty { null }?.let {
+    if (it == LinkContract.MODEL_LOADED && now - modelStateAt > LinkContract.LOADED_FOR_MS) LinkContract.MODEL_ASLEEP else it
 }

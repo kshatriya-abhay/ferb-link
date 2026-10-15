@@ -5,6 +5,7 @@
   "result": {
     "audio": true,
     "model": "gemma-4-e2b",
+    "model_state": "loaded",
     "reachable": true,
     "version": 1
   }

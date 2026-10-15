@@ -12,6 +12,8 @@ class LinkCallsTest {
         override val configured = true
         override var lastModel = ""
         override var audio = false
+        override var modelState = ""
+        override var modelStateAt = 0L
         var clients = 0
         // A port nothing listens on: a call that reaches the network fails as unreachable.
         override fun client(trace: ((String) -> Unit)?): ServerClient { clients++; return ServerClient("http://127.0.0.1:9", "key") }
@@ -24,6 +26,19 @@ class LinkCallsTest {
         assertThat(LinkCalls.callerAllowed(10_200, 10_100, debug = false) { false }).isFalse()
         assertThat(LinkCalls.callerAllowed(LinkCalls.SHELL_UID, 10_100, debug = true) { false }).isTrue()
         assertThat(LinkCalls.callerAllowed(LinkCalls.SHELL_UID, 10_100, debug = false) { false }).isFalse()
+    }
+
+    @Test
+    fun `model_state says loaded only within the server's idle window, and loading counts as asleep`() {
+        val state = State()
+        assertThat(state.modelStateNow(1_000)).isNull()
+        state.saw(ModelState.Loaded, at = 1_000)
+        assertThat(state.modelStateNow(1_000 + LinkContract.LOADED_FOR_MS)).isEqualTo("loaded")
+        assertThat(state.modelStateNow(1_001 + LinkContract.LOADED_FOR_MS)).isEqualTo("asleep")
+        state.saw(ModelState.Loading, at = 1_000)
+        assertThat(state.modelStateNow(1_000)).isEqualTo("asleep")
+        state.saw(ModelState.Unloaded, at = 1_000)
+        assertThat(state.modelStateNow(Long.MAX_VALUE)).isEqualTo("unloaded")
     }
 
     @Test

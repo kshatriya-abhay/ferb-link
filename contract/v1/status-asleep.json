@@ -1,0 +1,13 @@
+{
+  "method": "status",
+  "note": "Last seen loaded over 270 s ago: the server has likely put it to sleep, so a request may wait for a cold load.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "model": "gemma-4-e2b",
+    "model_state": "asleep",
+    "version": 1
+  }
+}

@@ -39,7 +39,8 @@ object LinkContract {
     /**
      * No network: whether Ferb Link is on and has a server, the model it last saw (empty if none
      * yet), and whether that server last said it takes audio (for [METHOD_TRANSCRIBE]). Returns
-     * [RESULT_VERSION], [RESULT_ENABLED], [RESULT_CONFIGURED], [RESULT_MODEL], [RESULT_AUDIO].
+     * [RESULT_VERSION], [RESULT_ENABLED], [RESULT_CONFIGURED], [RESULT_MODEL], [RESULT_AUDIO], and
+     * [RESULT_MODEL_STATE] once a state has been seen.
      */
     const val METHOD_STATUS = "status"
 
@@ -52,7 +53,7 @@ object LinkContract {
     /**
      * Whether the laptop answers now: its `/health`, models and `/props`, [CHECK_TIMEOUT_MS] each.
      * Doesn't wake the model. Returns [RESULT_VERSION], [RESULT_REACHABLE], [RESULT_MODEL],
-     * [RESULT_AUDIO], and [RESULT_ERROR], [RESULT_ERROR_DETAIL] and [RESULT_ERROR_KIND] when it isn't reachable.
+     * [RESULT_AUDIO], [RESULT_MODEL_STATE] (live when reachable, else the last known), and [RESULT_ERROR], [RESULT_ERROR_DETAIL] and [RESULT_ERROR_KIND] when it isn't reachable.
      */
     const val METHOD_CHECK = "check"
 
@@ -101,6 +102,18 @@ object LinkContract {
     const val RESULT_REPLY = "reply"
     /** Boolean: the server last said it takes audio (`mise run server:mode full` on the laptop). */
     const val RESULT_AUDIO = "audio"
+    /**
+     * Whether the laptop's model is ready: [MODEL_LOADED], [MODEL_ASLEEP] (also while it loads) or
+     * [MODEL_UNLOADED]. "loaded" only if seen loaded within [LOADED_FOR_MS]: the server puts it to
+     * sleep after idling without telling the phone. Missing when no state has been seen yet.
+     * Anything but loaded can take far longer to answer (a cold load), so Ferb waits longer.
+     */
+    const val RESULT_MODEL_STATE = "model_state"
+    const val MODEL_LOADED = "loaded"
+    const val MODEL_ASLEEP = "asleep"
+    const val MODEL_UNLOADED = "unloaded"
+    /** The server sleeps after 300 s idle (`SLEEP_IDLE` in server/server.conf); a margin below that. */
+    const val LOADED_FOR_MS = 270_000L
 
     const val MIN_TIMEOUT_MS = 1_000
     const val MAX_TIMEOUT_MS = 60_000

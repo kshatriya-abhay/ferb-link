@@ -8,6 +8,7 @@
     "error_detail": "Your computer doesn't answer. Is the server running?",
     "error_kind": "unreachable",
     "model": "",
+    "model_state": "loaded",
     "reachable": false,
     "version": 1
   }

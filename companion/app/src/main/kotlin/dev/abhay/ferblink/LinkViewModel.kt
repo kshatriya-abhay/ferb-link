@@ -111,6 +111,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
             val health = withContext(Dispatchers.IO) { settings.client(null).health() }
             health.model?.let { settings.lastModel = it }
             health.audio?.let { settings.audio = it }
+            health.state?.let { settings.saw(it, System.currentTimeMillis()) }
             _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive()) }
         }
     }

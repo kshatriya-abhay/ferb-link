@@ -46,6 +46,8 @@ class ContractTest {
         var key: String = "secret",
         override var lastModel: String = "gemma-4-e2b",
         override var audio: Boolean = true,
+        override var modelState: String = LinkContract.MODEL_LOADED,
+        override var modelStateAt: Long = NOW - 60_000,
     ) : LinkState {
         override val configured get() = url.isNotEmpty() && key.isNotEmpty()
         override fun client(trace: ((String) -> Unit)?) = ServerClient(url, key, model = lastModel, trace = trace)
@@ -62,8 +64,11 @@ class ContractTest {
 
     private val cases = listOf(
         Case("status", "status", "On, set up, last saw gemma-4-e2b, which takes audio."),
+        Case("status-asleep", "status", "Last seen loaded over 270 s ago: the server has likely put it to sleep, so a request may wait for a cold load.") {
+            it.modelStateAt = NOW - LinkContract.LOADED_FOR_MS - 1
+        },
         Case("status-off", "status", "Turned off in Ferb Link.") { it.enabled = false },
-        Case("status-not-set-up", "status", "No server set up yet: no model seen.") { it.url = ""; it.lastModel = ""; it.audio = false },
+        Case("status-not-set-up", "status", "No server set up yet: no model seen.") { it.url = ""; it.lastModel = ""; it.audio = false; it.modelState = "" },
         Case("check", "check", "The laptop answers, in full mode (takes audio)."),
         Case("check-unreachable", "check", "Nothing answers at the laptop's address.") { it.url = CLOSED },
         Case("check-auth", "check", "The laptop turns the API key down.") { it.key = "wrong" },
@@ -185,7 +190,7 @@ class ContractTest {
     /** What the provider would put in its Bundle, as JSON: `reply` parsed, a throw as {"throws"}. */
     private fun run(case: Case, state: State): JSONObject {
         val extras = case.extras.mapValues { (_, value) -> if (value is Map<*, *>) recording(value["bytes"] as String) else value }
-        val calls = LinkCalls(state, Executor { it.run() }, debug = false, decode = { audio, _ -> audio })
+        val calls = LinkCalls(state, Executor { it.run() }, debug = false, decode = { audio, _ -> audio }, now = { NOW })
         val result = try {
             calls.answer(case.method, extras, "dev.abhay.assistant")
         } catch (e: IllegalArgumentException) {
@@ -223,6 +228,8 @@ class ContractTest {
         /** A port nothing listens on. */
         const val CLOSED = "http://127.0.0.1:9"
 
+        // A fixed clock: model_state ages against it.
+        const val NOW = 1_800_000_000_000L
         val SPEECH = mapOf("bytes" to "speech")
         val SILENCE = mapOf("bytes" to "silence")
         val BY_TYPE = setOf("ms", "confidence", "first", "mean")

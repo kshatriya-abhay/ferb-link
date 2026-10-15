@@ -39,6 +39,14 @@ class LinkSettings(context: Context) : LinkState {
             if (value != audio) prefs.edit { putBoolean(KEY_AUDIO, value) }
         }
 
+    override var modelState: String
+        get() = prefs.getString(KEY_MODEL_STATE, "").orEmpty()
+        set(value) = prefs.edit { putString(KEY_MODEL_STATE, value) }
+
+    override var modelStateAt: Long
+        get() = prefs.getLong(KEY_MODEL_STATE_AT, 0)
+        set(value) = prefs.edit { putLong(KEY_MODEL_STATE_AT, value) }
+
     /** First-use hints the user has dismissed ([Hint] names). */
     var hintsSeen: Set<String>
         get() = prefs.getStringSet(KEY_HINTS_SEEN, emptySet()).orEmpty().toSet()
@@ -53,6 +61,8 @@ class LinkSettings(context: Context) : LinkState {
         private const val KEY_LAST_MODEL = "last_model"
         private const val KEY_AUDIO = "audio"
         private const val KEY_HINTS_SEEN = "hints_seen"
+        private const val KEY_MODEL_STATE = "model_state"
+        private const val KEY_MODEL_STATE_AT = "model_state_at"
 
         /**
          * Why [url] won't work, or null when it looks right. Plain HTTP is allowed only to
