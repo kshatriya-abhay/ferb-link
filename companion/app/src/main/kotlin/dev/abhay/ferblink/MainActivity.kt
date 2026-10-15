@@ -1,6 +1,7 @@
 package dev.abhay.ferblink
 
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateUtils
@@ -196,7 +197,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
         }
     }
     if (editing) ServerDialog(state, viewModel, onDone = { editing = false })
-    state.pairing?.let { PairDialog(it, replacing = state.serverUrl.takeIf { url -> state.configured && url != it.url }, viewModel) }
+    state.pairing?.let { PairDialog(it, replacing = state.replacing, viewModel) }
     state.pairingProblem?.let { problem ->
         AlertDialog(
             onDismissRequest = viewModel::dismissPairing,
@@ -227,10 +228,7 @@ private fun ConnectCard(onEnterByHand: () -> Unit, onPaste: (String) -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = {
-                    val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip
-                    onPaste(clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty())
-                }) { Text("Paste link") }
+                FilledTonalButton(onClick = { onPaste(clipboardText(context)) }) { Text("Paste link") }
                 TextButton(onClick = onEnterByHand) { Text("Enter by hand") }
                 TextButton(onClick = { uris.openUri(SETUP_GUIDE) }) { Text("Guide") }
             }
@@ -337,6 +335,12 @@ private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
             state.unloadError?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
         }
     }
+}
+
+/** The clipboard's text, or "" (Android lets only the app in front read it). */
+internal fun clipboardText(context: Context): String {
+    val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip
+    return clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
 }
 
 /** A first-use hint, until "Got it". */

@@ -34,12 +34,13 @@ Recordings go with their own prompt (`ServerClient.TRANSCRIBE`), at temperature 
 Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_config.xml`), because the tailnet already encrypts it; HTTPS anywhere. The app rejects other `http://` addresses (a raw `100.x` address or a short name like `my-laptop` won't do).
 
 ## Testing
-Four tiers. Most tests check one piece; models are evaluated only when tuning them.
+Five tiers. Most tests check one piece; models are evaluated only when tuning them.
 
 | Tier | What | When | How |
 |---|---|---|---|
 | Unit | `Amounts`, `SpeechCheck`, `Latin`, `AudioDecoder`'s steps around MediaCodec, request building and reply parsing, error kinds, timeouts and connection reuse (`ServerClient` against a fake llama-server), the provider's calls and caller check (`LinkCalls`). No model, server or phone. | Every change | `mise run companion:test` |
 | Contract | `contract/v1/`: one JSON file per case, each method's extras and result, and every error kind. `ContractTest` checks `LinkCalls` gives exactly those; Ferb's tests read a copy (`mise run link:contract-check` / `link:contract-sync` in Ferb). | Every change, in the same run | `mise run companion:test`; after a contract change, `mise run companion:contract-write`, review the diff, tell Ferb |
+| Device | What only Android does: a ferblink://pair link reaching the app, the "replaces …" warning, Paste link's clipboard read (`PairingLinkTest`, which opens the screen), hints remembered across a restart (`HintsTest`, no screen). They run inside the installed app on its real settings, and put them back. | After changing those | `mise run companion:device-test` (or `… HintsTest` while the phone is in use) |
 | Model evaluation | The transcribe prompt and schema, the complete system prompt, tool configuration: the harness, synthetic-voice clip runs, `server:chat`. | Only when tuning a prompt or tool config | `mise run companion:harness`, `mise run server:chat` |
 | End to end | `mise run server:ping`, and the ~6-case smoke checklist on the phone (in Ferb's repo). | Before an install-worthy release | by hand |
 

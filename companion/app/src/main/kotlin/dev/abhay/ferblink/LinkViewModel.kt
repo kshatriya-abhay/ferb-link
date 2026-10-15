@@ -38,7 +38,10 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         val hints: Set<Hint> = emptySet(),
         /** Whether this phone has a VPN up (Tailscale), at the last check; null when unknown. */
         val vpnActive: Boolean? = null,
-    )
+    ) {
+        /** The address a waiting pairing would replace: only when one is saved and it differs. */
+        val replacing: String? get() = pairing?.takeIf { configured && it.url != serverUrl }?.let { serverUrl }
+    }
 
     private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured, hints = unseenHints()))
     val state: StateFlow<State> = _state.asStateFlow()
