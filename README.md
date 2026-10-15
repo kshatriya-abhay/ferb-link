@@ -144,6 +144,7 @@ mise run companion:publish   # the maintainer only: asks for the version, then c
 | [LFM2.5-350M, LFM2.5-1.2B](https://huggingface.co/LiquidAI) by Liquid AI | LFM Open License | Optional models |
 | [Qwen3.5-0.8B, Qwen3.5-2B](https://huggingface.co/Qwen) by Alibaba (GGUF by Unsloth) | Apache-2.0 | Optional models |
 | [Hammer2.1-0.5b](https://huggingface.co/MadeAgents/Hammer2.1-0.5b) by MadeAgents (GGUF by mradermacher) | CC-BY-NC-4.0 | Optional model |
+| [Jev](https://docs.typesafe.ai) by TypeSafe AI | Cloud API (TypeSafe's terms), no weights | Being evaluated as a second opinion on Ferb's tool choice (`companion:harness`'s `decide`); off and unused in the app |
 | [qrencode](https://fukuchi.org/works/qrencode/) | LGPL-2.1 (library), GPL (tool) | `server:pair`'s QR code (optional, installed separately) |
 | [Tailscale](https://tailscale.com) | BSD-3-Clause (client) | The network between phone and computer (installed separately) |
 | [AndroidX](https://developer.android.com/jetpack/androidx) (Compose, Material 3, Lifecycle, Core) | Apache-2.0 | Ferb Link's interface |

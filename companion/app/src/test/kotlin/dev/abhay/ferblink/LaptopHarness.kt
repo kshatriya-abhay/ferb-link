@@ -15,8 +15,16 @@ import java.util.concurrent.TimeUnit
  * - `{"request": "...", "tools": [...] or "...", "facts": "...", "timeout_ms": 10000}` → complete,
  *   plus "sent": the request after [Amounts.forRequest];
  * - `{"audio": "/path/clip.ogg"}` → transcribe. The file is decoded with ffmpeg to 16 kHz mono WAV
- *   (the phone decodes with MediaCodec), and ICU's transliteration runs through `uconv`.
- * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}.
+ *   (the phone decodes with MediaCodec), and ICU's transliteration runs through `uconv`;
+ * - `{"method": "decide", "request": "...", "tools": [...], "timeout_ms": 10000}` → TypeSafe's Jev
+ *   ([JevClient]), plus "input_tokens", "usd" and "estimated". It costs money: every call goes in
+ *   [JevLedger], a run that could take the tests past their cap is refused before anything is sent,
+ *   and a call costing over [JevLedger.SURPRISE] times its estimate stops the run. -Pharness.limit=N
+ *   sends at most N; -Pharness.dry=true sends none and writes only the count and estimated cost.
+ *   The key is read from -Pharness.jev-key's file (default ~/.config/ferb-link/typesafe-key);
+ *   -Pharness.jev-url points it at a fake TypeSafe instead, with -Pharness.jev-ledger for its own ledger.
+ * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}; decide lines
+ * not sent give {"id", "skipped"}.
  */
 class LaptopHarness {
     @Test
@@ -28,11 +36,20 @@ class LaptopHarness {
         val key = File(System.getProperty("harness.key")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.config/ferb-link/api-key").readText().trim()
         val model = System.getProperty("harness.model")?.takeIf { it.isNotBlank() } ?: "gemma-4-e2b"
         val client = ServerClient(url, key, model = model)
+        val lines = File(input!!).readLines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
+        val jev = JevRun(lines, File(input).name)
 
         output.printWriter().use { out ->
-            File(input!!).readLines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }.forEach { line ->
+            jev.refusal()?.let { reason ->
+                out.println(reason.toString())
+                out.flush()
+                check(reason.has("dry_run")) { reason.getString("refused") }
+                return
+            }
+            for (line in lines) {
                 val reply = try {
-                    answer(client, JSONObject(line))
+                    val json = JSONObject(line)
+                    if (json.optString("method") == "decide") jev.decide(json) else answer(client, json)
                 } catch (e: Exception) {
                     JSONObject().put("harness_error", e.toString())
                 }
@@ -40,6 +57,79 @@ class LaptopHarness {
                 out.println(reply.toString())
                 out.flush()
             }
+            jev.end()
+        }
+    }
+
+    /** A run's `decide` lines: the budget checks, the calls, and the ledger. */
+    private class JevRun(lines: List<String>, private val name: String) {
+        private val limit = System.getProperty("harness.limit")?.takeIf { it.isNotBlank() }?.toInt() ?: Int.MAX_VALUE
+        private val dry = System.getProperty("harness.dry") == "true"
+        // -Pharness.jev-ledger: another ledger, for trying the harness against a fake.
+        private val ledger = JevLedger(File(System.getProperty("harness.jev-ledger")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.config/ferb-link/jev-spend.json"))
+
+        /** Each decide line's estimated input tokens, for the lines this run would send. */
+        private val estimates: List<Int> = lines.mapNotNull { line ->
+            val json = runCatching { JSONObject(line) }.getOrNull()?.takeIf { it.optString("method") == "decide" } ?: return@mapNotNull null
+            runCatching { estimate(json) }.getOrDefault(0)
+        }.take(limit)
+
+        // Twice the estimate: four characters a token is rough, and Hinglish may take more.
+        private val estimatedUsd = estimates.sum() * 2 * JevClient.USD_PER_INPUT_TOKEN
+
+        private val client by lazy {
+            val keyFile = File(System.getProperty("harness.jev-key")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.config/ferb-link/typesafe-key")
+            // -Pharness.jev-url: a fake TypeSafe, to try the harness itself without spending.
+            JevClient(keyFile.readText().trim(), System.getProperty("harness.jev-url")?.takeIf { it.isNotBlank() } ?: JevClient.BASE_URL)
+        }
+        private var sent = 0
+        private var tokens = 0L
+        private var usd = 0.0
+        private var stopped: String? = null
+
+        /** Why this run mustn't start (one line for the output), or null. */
+        fun refusal(): JSONObject? = when {
+            estimates.isEmpty() -> null
+            dry -> JSONObject().put("dry_run", true).put("decide_calls", estimates.size).put("estimated_usd", estimatedUsd)
+                .put("ledger_usd", ledger.usd).put("cap_usd", ledger.capUsd)
+            !ledger.allows(estimatedUsd) -> JSONObject().put("refused", "this run could cost \$${"%.4f".format(estimatedUsd)}; " +
+                "the tests have spent \$${"%.4f".format(ledger.usd)} of their \$${ledger.capUsd}")
+            else -> null
+        }
+
+        fun decide(line: JSONObject): JSONObject {
+            stopped?.let { return JSONObject().put("skipped", "stopped: $it") }
+            if (sent >= limit) return JSONObject().put("skipped", "limit")
+            val estimate = estimates[sent]
+            if (!ledger.allows(estimate * 2 * JevClient.USD_PER_INPUT_TOKEN)) {
+                stopped = "the tests' \$${ledger.capUsd} cap"
+                return JSONObject().put("skipped", "stopped: $stopped")
+            }
+            sent++
+            val decision = client.decide(line.getString("request"), tools(line), if (line.has("timeout_ms")) line.getInt("timeout_ms") else LinkContract.DECIDE_TIMEOUT_MS)
+            val billed = decision.billed
+            ledger.record(billed)
+            tokens += billed.inputTokens
+            usd += billed.usd
+            if (!billed.estimated && billed.inputTokens > JevLedger.SURPRISE * estimate) {
+                stopped = "a call took ${billed.inputTokens} input tokens, over ${JevLedger.SURPRISE.toInt()}× its estimate of $estimate"
+            }
+            return JSONObject(decision.toJson()).put("input_tokens", billed.inputTokens).put("usd", billed.usd).put("estimated", billed.estimated)
+        }
+
+        fun end() {
+            if (sent > 0 || stopped != null) ledger.endRun(name, sent, tokens, usd, stopped)
+        }
+
+        private fun estimate(line: JSONObject): Int {
+            val request = line.getString("request")
+            val tools = JevClient.tools(JSONArray(tools(line)))
+            return JevClient.estimateTokens(JevClient.body(request, tools.toMap(), JevClient.options(request, tools.map { it.first })))
+        }
+
+        private fun tools(line: JSONObject) = when (val value = line.get("tools")) {
+            is JSONArray -> value.toString()
+            else -> value.toString()
         }
     }
 

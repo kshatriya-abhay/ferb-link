@@ -65,7 +65,7 @@ dependencies {
 // test: it runs only with -Pharness.in=… (and friends) and is left out of other test runs.
 // -Pcontract.write=true rewrites the contract fixtures (`mise run companion:contract-write`).
 tasks.withType<Test>().configureEach {
-    listOf("harness.in", "harness.out", "harness.url", "harness.key", "harness.model", "contract.write").forEach { name ->
+    listOf("harness.in", "harness.out", "harness.url", "harness.key", "harness.model", "harness.limit", "harness.dry", "harness.jev-key", "harness.jev-url", "harness.jev-ledger", "contract.write").forEach { name ->
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
     systemProperty("contract.dir", rootProject.file("../contract/v1").path)

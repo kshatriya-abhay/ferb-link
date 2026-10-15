@@ -119,6 +119,8 @@ object LinkContract {
     const val MAX_TIMEOUT_MS = 60_000
     const val CHECK_TIMEOUT_MS = 2_000
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
+    /** Jev's answer is a second opinion: past this, Ferb goes ahead without it (not in the contract yet). */
+    const val DECIDE_TIMEOUT_MS = 3_000
     const val MAX_AUDIO_BYTES = 512 * 1024
     const val MAX_AUDIO_SECONDS = 30
 

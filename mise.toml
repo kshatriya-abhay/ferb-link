@@ -49,6 +49,8 @@ if [ ! -s "$KEY_FILE" ]; then
   (umask 077; head -c 24 /dev/urandom | base64 | tr '+/' '-_' > "$KEY_FILE")
   echo "Created the API key in $KEY_FILE (mise run server:key shows it)."
 fi
+# Never overwritten once it exists (the phone has it); only kept private.
+chmod 600 "$KEY_FILE"
 
 mise run server:unit
 echo "Next: mise run server:model $MODEL, then mise run server:start."
@@ -231,20 +233,27 @@ curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE"
 '''
 
 [tasks."companion:harness"]
-description = "Run Ferb Link's complete and transcribe on the laptop, no phone: JSON lines in, Ferb Link's replies out"
+description = "Run Ferb Link's complete, transcribe and decide (Jev, which costs money) on the laptop, no phone: JSON lines in, Ferb Link's replies out"
 usage = '''
-arg "<in>" help="JSON lines: {\"request\": …, \"tools\": […]} or {\"audio\": \"clip.ogg\"}, optional \"id\" (see LaptopHarness.kt)"
+arg "<in>" help="JSON lines: {\"request\": …, \"tools\": […]}, {\"audio\": \"clip.ogg\"} or {\"method\": \"decide\", …}, optional \"id\" (see LaptopHarness.kt)"
 arg "[out]" help="where to write the replies; without it they're printed"
+flag "--limit <n>" help="send at most n decide lines to Jev"
+flag "--dry-run" help="send nothing to Jev: print how many decide calls and their estimated cost"
 '''
 run = '''
 set -euo pipefail
 IN=$(realpath "$usage_in")
 OUT=$(realpath -m "${usage_out:-$(mktemp)}")
 # No daemons left behind: they hold gigabytes the model server needs for its page cache.
+status=0
 (cd companion && ./gradlew -q --no-daemon \
   :app:testDebugUnitTest --tests dev.abhay.ferblink.LaptopHarness --rerun \
-  -Pharness.in="$IN" -Pharness.out="$OUT")
-[ -n "${usage_out:-}" ] && echo "Replies in $OUT" || { cat "$OUT"; rm -f "$OUT"; }
+  -Pharness.in="$IN" -Pharness.out="$OUT" -Pharness.limit="${usage_limit:-}" -Pharness.dry="${usage_dry_run:-false}") || status=$?
+[ -n "${usage_out:-}" ] && [ "$status" = 0 ] && echo "Replies in $OUT" || { cat "$OUT" 2>/dev/null; [ -n "${usage_out:-}" ] || rm -f "$OUT"; }
+# Jev's spend so far (the ledger lives outside the repo).
+LEDGER=~/.config/ferb-link/jev-spend.json
+[ -f "$LEDGER" ] && jq -r '"Jev spend on the laptop: $\(.tests.usd) in \(.tests.calls) calls (\(.tests.input_tokens) input tokens), of the $\(.cap_tests_usd) cap for tests"' "$LEDGER" >&2
+exit "$status"
 '''
 
 [tasks."companion:build"]
