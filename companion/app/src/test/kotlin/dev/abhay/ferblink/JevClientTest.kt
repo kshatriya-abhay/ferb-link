@@ -105,7 +105,7 @@ class JevClientTest {
         answer = choice("none", "set_timer" to 0.1, "set_alarm" to 0.1, "none" to 0.8, usage = false)
         val decision = client().decide("hello", tools)
         assertThat(decision.billed.estimated).isTrue()
-        assertThat(decision.billed.inputTokens).isEqualTo(JevClient.estimateTokens(sentRaw))
+        assertThat(decision.billed.inputTokens).isEqualTo(JevClient.estimateTokens(sentRaw, 3))
     }
 
     @Test

@@ -74,7 +74,7 @@ class LaptopHarness {
             runCatching { estimate(json) }.getOrDefault(0)
         }.take(limit)
 
-        // Twice the estimate: four characters a token is rough, and Hinglish may take more.
+        // Twice the estimate, for safety (Hinglish may take more tokens than English).
         private val estimatedUsd = estimates.sum() * 2 * JevClient.USD_PER_INPUT_TOKEN
 
         private val client by lazy {
@@ -124,7 +124,8 @@ class LaptopHarness {
         private fun estimate(line: JSONObject): Int {
             val request = line.getString("request")
             val tools = JevClient.tools(JSONArray(tools(line)))
-            return JevClient.estimateTokens(JevClient.body(request, tools.toMap(), JevClient.options(request, tools.map { it.first })))
+            val options = JevClient.options(request, tools.map { it.first })
+            return JevClient.estimateTokens(JevClient.body(request, tools.toMap(), options), options.size)
         }
 
         private fun tools(line: JSONObject) = when (val value = line.get("tools")) {

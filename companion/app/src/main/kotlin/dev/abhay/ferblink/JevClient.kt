@@ -39,7 +39,7 @@ class JevClient(
         if (request.isBlank()) return Decision.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"))
         val options = options(request, tools.map { it.first })
         val body = body(request, tools.toMap(), options, model)
-        val estimate = estimateTokens(body)
+        val estimate = estimateTokens(body, options.size)
         var sent = false
         return try {
             val connection = URL(url).openConnection() as HttpURLConnection
@@ -176,8 +176,12 @@ class JevClient(
                 """{"type":"choice","instructions":${q(INSTRUCTIONS)},"criteria":{$criteria}}}}"""
         }
 
-        /** About four characters a token: an estimate, for when the answer has no `usage`. */
-        fun estimateTokens(body: String) = (body.length + 3) / 4
+        /**
+         * Input tokens, for when the answer has no `usage` and for a run's budget: about four
+         * characters a token, plus what Jev adds to every call (about 255) and to each option
+         * (about 8). Fitted on the smoke run of 2026-10-15: 354–871 tokens, within 5%.
+         */
+        fun estimateTokens(body: String, options: Int) = 255 + (body.length + 3) / 4 + 8 * options
 
         private fun problem(code: Int, body: String): Failure {
             val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull()
