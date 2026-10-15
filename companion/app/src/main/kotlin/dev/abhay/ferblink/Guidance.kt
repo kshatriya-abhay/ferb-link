@@ -2,14 +2,19 @@ package dev.abhay.ferblink
 
 /**
  * What to do about a failed check, in a sentence with one action, under the status card's error.
+ * Only when it adds an action the error's detail doesn't already give: never the same thing twice.
  * [vpnActive] is whether this phone has a VPN up (Tailscale is one); null when unknown.
  */
 object Guidance {
     fun of(failure: Failure?, vpnActive: Boolean?): String? = when (failure?.kind) {
         null, ErrorKind.Off, ErrorKind.NotSetUp, ErrorKind.BadRequest -> null
-        ErrorKind.Unreachable ->
-            if (vpnActive == false) "Tailscale isn't connected on this phone. Turn it on, on the same tailnet as your computer."
-            else "Check that your computer is on and awake, and that the server is on the tailnet: mise run server:status, then mise run server:tailnet on."
+        ErrorKind.Unreachable -> when {
+            // "Is Tailscale on?" with no VPN up, or "plain HTTP needs the Tailscale name": said already.
+            failure.message == ServerClient.HTTP_NEEDS_TAILSCALE_NAME -> null
+            vpnActive == false && failure.message == ServerClient.NO_NAME -> null
+            vpnActive == false -> "Tailscale isn't connected on this phone. Turn it on, on the same tailnet as your computer."
+            else -> "Check that your computer is on and awake, and that the server is on the tailnet: mise run server:status, then mise run server:tailnet on."
+        }
         ErrorKind.Timeout -> "If your computer just woke up, try again. Otherwise look at mise run server:logs on it."
         ErrorKind.Auth -> "The key doesn't match your computer's. Pair again: mise run companion:pair, or server:pair."
         ErrorKind.Server ->

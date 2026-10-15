@@ -24,6 +24,15 @@ class GuidanceTest {
     }
 
     @Test
+    fun `no line when the error's detail already says what to do`() {
+        val noName = Failure(ErrorKind.Unreachable, ServerClient.NO_NAME)
+        assertThat(Guidance.of(noName, vpnActive = false)).isNull()
+        // With Tailscale up, the name is wrong or the computer is off the tailnet: that's new.
+        assertThat(Guidance.of(noName, vpnActive = true)).contains("server:tailnet on")
+        assertThat(Guidance.of(Failure(ErrorKind.Unreachable, ServerClient.HTTP_NEEDS_TAILSCALE_NAME), vpnActive = true)).isNull()
+    }
+
+    @Test
     fun `a loading model says wait, other server errors say look at the logs`() {
         assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"), true)).isEqualTo("Try again in a few seconds.")
         assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer answered 500", "server error 500"), true)).contains("server:logs")

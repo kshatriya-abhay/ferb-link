@@ -47,7 +47,7 @@ Five tiers. Most tests check one piece; models are evaluated only when tuning th
 A miss found in a model evaluation becomes a unit test of the code that should have caught it (most are in `AmountsTest`), not a new evaluation case. Gradle runs without daemons (`--no-daemon`, and the Kotlin compiler in-process): nothing outlives a build to crowd the model server's memory, and never run `./gradlew --stop`, which stops Ferb's builds too.
 
 ## Help on the screen
-- **Connection errors:** under the status card's error, one line saying what to do (`Guidance`): Tailscale off on the phone (no VPN up), the server not on the tailnet, a refused key (pair again), a loading model (try again), the logs for other server errors.
+- **Connection errors:** under the status card's error, one line saying what to do (`Guidance`), only when the error's own detail doesn't already say it: Tailscale off on the phone (no VPN up), the server not on the tailnet, a refused key (pair again), a loading model (try again), the logs for other server errors.
 - **First-use hints** (`Hint`), each shown once until "Got it": the main switch, voice (or how to turn it on), Unload, and Try.
 - **Pairing:** a "Connect to your computer" card until an address and key are saved, with Paste link (for camera apps that show a `ferblink://` link without opening it), Enter by hand, and the setup guide.
 

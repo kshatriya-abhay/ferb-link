@@ -348,6 +348,10 @@ class ServerClient(
     private fun ms(from: Long, to: Long) = (to - from) / 1_000_000
 
     companion object {
+        /** Unreachable details that already say what to do ([Guidance] adds nothing to them). */
+        const val NO_NAME = "Can't find your computer's name. Is Tailscale on?"
+        const val HTTP_NEEDS_TAILSCALE_NAME = "Plain HTTP only works with your computer's Tailscale name (….ts.net)"
+
         /** Ferb's bench's instruction, word for word (`tool-check/bench.py`), so its results hold here. */
         const val SYSTEM = "You are Ferb, an assistant on an Android phone. When the user asks for something one of the tools does, " +
             "call that tool with the arguments in the user's words. If no tool fits, or the user isn't asking for an " +
@@ -497,9 +501,9 @@ Hindi amounts are common in these requests; listen for them and keep them: sava 
         private fun failureOf(e: IOException): Failure = when {
             e is Refused -> e.failure
             e is NotConnected -> Failure(ErrorKind.Unreachable, when (val cause = e.cause) {
-                is UnknownHostException -> "Can't find your computer's name. Is Tailscale on?"
+                is UnknownHostException -> NO_NAME
                 // Android's network security config: plain HTTP only to Tailscale names.
-                is UnknownServiceException -> "Plain HTTP only works with your computer's Tailscale name (….ts.net)"
+                is UnknownServiceException -> HTTP_NEEDS_TAILSCALE_NAME
                 is ConnectException, is SocketTimeoutException -> "Your computer doesn't answer. Is the server running?"
                 else -> cause?.message ?: e.toString()
             })
