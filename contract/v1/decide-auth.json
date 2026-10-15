@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "TypeSafe turns the key down.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "Jev key refused",
+      "error_detail": "TypeSafe turned down the API key",
+      "error_kind": "auth",
+      "model": "",
+      "ms": 41,
+      "options": ["set_alarm","none"],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

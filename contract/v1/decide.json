@@ -1,0 +1,24 @@
+{
+  "method": "decide",
+  "note": "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
+  "extras": {
+    "request": "shaam 7 baje ka alarm lagao",
+    "timeout_ms": 3000,
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "set_alarm",
+      "model": "jev-1.13.0",
+      "ms": 44,
+      "options": ["none","set_alarm"],
+      "probabilities": {
+        "none": 0.03,
+        "set_alarm": 0.97
+      },
+      "source": "jev",
+      "success": true
+    },
+    "version": 1
+  }
+}

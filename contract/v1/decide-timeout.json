@@ -1,0 +1,24 @@
+{
+  "method": "decide",
+  "note": "No answer within timeout_ms (1000, the least it takes).",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "timeout_ms": 1000,
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "Jev timed out",
+      "error_detail": "TypeSafe took too long to answer",
+      "error_kind": "timeout",
+      "model": "",
+      "ms": 1001,
+      "options": ["set_alarm","none"],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

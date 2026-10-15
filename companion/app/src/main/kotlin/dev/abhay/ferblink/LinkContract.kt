@@ -40,7 +40,7 @@ object LinkContract {
      * No network: whether Ferb Link is on and has a server, the model it last saw (empty if none
      * yet), and whether that server last said it takes audio (for [METHOD_TRANSCRIBE]). Returns
      * [RESULT_VERSION], [RESULT_ENABLED], [RESULT_CONFIGURED], [RESULT_MODEL], [RESULT_AUDIO], and
-     * [RESULT_MODEL_STATE] once a state has been seen.
+     * [RESULT_MODEL_STATE] once a state has been seen, [RESULT_JEV], and [RESULT_JEV_OFF_REASON] when it applies.
      */
     const val METHOD_STATUS = "status"
 
@@ -74,6 +74,19 @@ object LinkContract {
      * `heard` and `text`.
      */
     const val METHOD_TRANSCRIBE = "transcribe"
+
+    /**
+     * A second opinion from TypeSafe's Jev, a cloud model, on which tool [EXTRA_REQUEST] wants:
+     * one choice over [EXTRA_TOOLS] (only their names and descriptions are sent) plus "none".
+     * Off unless the user turned it on in Ferb Link and gave a key ([RESULT_JEV]). Takes
+     * [EXTRA_REQUEST], [EXTRA_TOOLS], [EXTRA_TIMEOUT_MS] ([DECIDE_TIMEOUT_MS] without it, at most
+     * [MAX_DECIDE_TIMEOUT_MS]); returns [RESULT_REPLY], [RESULT_VERSION]. The reply: `success`,
+     * `choice` (a tool's name or "none"), `probabilities` (each option's), `options` (in the
+     * order asked), `model`, `ms`, `source: "jev"`, and `error`, `error_detail`, `error_kind` on
+     * failure. Each call costs money: at its spending cap Jev turns itself off (`off`, and
+     * [RESULT_JEV_OFF_REASON] [JEV_OFF_CAP] in status).
+     */
+    const val METHOD_DECIDE = "decide"
 
     const val EXTRA_REQUEST = "request"
     const val EXTRA_TOOLS = "tools"
@@ -109,6 +122,11 @@ object LinkContract {
      * Anything but loaded can take far longer to answer (a cold load), so Ferb waits longer.
      */
     const val RESULT_MODEL_STATE = "model_state"
+    /** Boolean, in status: Jev is on and has a key, so [METHOD_DECIDE] may answer. */
+    const val RESULT_JEV = "jev"
+    /** In status, when Jev turned itself off: [JEV_OFF_CAP], it reached its spending cap. Missing otherwise. */
+    const val RESULT_JEV_OFF_REASON = "jev_off_reason"
+    const val JEV_OFF_CAP = "cap"
     const val MODEL_LOADED = "loaded"
     const val MODEL_ASLEEP = "asleep"
     const val MODEL_UNLOADED = "unloaded"
@@ -119,8 +137,9 @@ object LinkContract {
     const val MAX_TIMEOUT_MS = 60_000
     const val CHECK_TIMEOUT_MS = 2_000
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
-    /** Jev's answer is a second opinion: past this, Ferb goes ahead without it (not in the contract yet). */
+    /** Jev's answer is a second opinion: past this, Ferb goes ahead without it. */
     const val DECIDE_TIMEOUT_MS = 3_000
+    const val MAX_DECIDE_TIMEOUT_MS = 10_000
     const val MAX_AUDIO_BYTES = 512 * 1024
     const val MAX_AUDIO_SECONDS = 30
 

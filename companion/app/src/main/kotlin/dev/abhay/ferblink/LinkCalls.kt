@@ -14,6 +14,15 @@ interface LinkState {
     var modelState: String
     var modelStateAt: Long
     fun client(trace: ((String) -> Unit)? = null): ServerClient
+
+    /** Jev: the user's switch (turned off by itself at the cap, [jevOffReason] then says why), and a key. */
+    var jevOn: Boolean
+    val jevConfigured: Boolean
+    var jevOffReason: String
+    /** Dollars Jev has cost on this phone, for good, and the most it may ([LinkSettings.DEFAULT_JEV_CAP_USD]). */
+    var jevSpentUsd: Double
+    val jevCapUsd: Double
+    fun jev(trace: ((String) -> Unit)? = null): JevClient
 }
 
 /**
@@ -37,6 +46,8 @@ class LinkCalls(
             put(LinkContract.RESULT_MODEL, state.lastModel)
             put(LinkContract.RESULT_AUDIO, state.audio)
             state.modelStateNow(now())?.let { put(LinkContract.RESULT_MODEL_STATE, it) }
+            put(LinkContract.RESULT_JEV, state.jevOn && state.jevConfigured)
+            if (!state.jevOn && state.jevOffReason.isNotEmpty()) put(LinkContract.RESULT_JEV_OFF_REASON, state.jevOffReason)
         }
         LinkContract.METHOD_COMPLETE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
@@ -123,8 +134,44 @@ class LinkCalls(
             if (audio != null && audio.isNotEmpty()) RecentRequests.addVoice(caller, recording, transcript)
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to transcript.toJson())
         }
+        LinkContract.METHOD_DECIDE -> {
+            val timeout = ((extras[LinkContract.EXTRA_TIMEOUT_MS] as? Number)?.toLong() ?: LinkContract.DECIDE_TIMEOUT_MS.toLong())
+                .coerceIn(LinkContract.MIN_TIMEOUT_MS.toLong(), LinkContract.MAX_DECIDE_TIMEOUT_MS.toLong()).toInt()
+            val decision = decide((extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty(), extras[LinkContract.EXTRA_TOOLS] as? String ?: "[]", timeout)
+            mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to decision.toJson())
+        }
         else -> throw IllegalArgumentException("Unknown method $method")
     }
+
+    /** Jev's answer, if it's on, has a key and is under its cap; every call's cost goes on the counter. */
+    fun decide(request: String, toolsJson: String, timeoutMs: Int): JevClient.Decision {
+        val off = when {
+            !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
+            !state.jevOn -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
+            !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
+            state.jevSpentUsd >= state.jevCapUsd -> {
+                turnJevOff()
+                capReached()
+            }
+            else -> null
+        }
+        if (off != null) return JevClient.Decision.failed(off)
+        val decision = state.jev(trace).decide(request, toolsJson, timeoutMs)
+        synchronized(spending) {
+            state.jevSpentUsd += decision.billed.usd
+            if (state.jevSpentUsd >= state.jevCapUsd) turnJevOff()
+        }
+        return decision
+    }
+
+    private fun turnJevOff() {
+        state.jevOn = false
+        state.jevOffReason = LinkContract.JEV_OFF_CAP
+    }
+
+    private fun capReached() = Failure(
+        ErrorKind.Off, "Jev reached its spending limit (\$${"%.2f".format(java.util.Locale.ROOT, state.jevCapUsd)}). Raise it in Ferb Link to turn Jev on again.", "Jev's limit reached",
+    )
 
     /** Reads `/props` again in the background, so `status` notices the laptop switching modes. */
     private fun refreshAudio() = background.execute {
@@ -139,6 +186,8 @@ class LinkCalls(
         const val SHELL_UID = 2000
 
         private val waking = AtomicBoolean(false)
+        /** Calls run on several binder threads: one adds to the spend at a time. */
+        private val spending = Any()
 
         /** The caller's answer timeout (an Int, or a Long), clamped; null without one. */
         fun timeoutMs(extras: Map<String, Any?>): Int? {

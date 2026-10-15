@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "No request.",
+  "extras": {
+    "request": "",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "bad request: no request",
+      "error_detail": "No request",
+      "error_kind": "bad_request",
+      "model": "",
+      "ms": 0,
+      "options": [],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

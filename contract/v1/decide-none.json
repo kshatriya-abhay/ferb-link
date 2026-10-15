@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "No tool fits: Jev says none.",
+  "extras": {
+    "request": "what's the capital of France",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "none",
+      "model": "jev-1.13.0",
+      "ms": 42,
+      "options": ["set_alarm","none"],
+      "probabilities": {
+        "none": 1,
+        "set_alarm": 0
+      },
+      "source": "jev",
+      "success": true
+    },
+    "version": 1
+  }
+}

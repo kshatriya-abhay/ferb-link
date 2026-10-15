@@ -54,6 +54,33 @@ class LinkSettings(context: Context) : LinkState {
 
     override fun client(trace: ((String) -> Unit)?) = ServerClient(serverUrl, apiKey, model = lastModel, trace = trace)
 
+    /** Jev, TypeSafe's cloud model: off until the user turns it on (request text goes to TypeSafe). */
+    override var jevOn: Boolean
+        get() = prefs.getBoolean(KEY_JEV_ON, false)
+        set(value) = prefs.edit { putBoolean(KEY_JEV_ON, value) }
+
+    /** The user's TypeSafe API key: entered on this screen only, never in a pairing link, never logged. */
+    var jevKey: String
+        get() = prefs.getString(KEY_JEV_KEY, "").orEmpty()
+        set(value) = prefs.edit { putString(KEY_JEV_KEY, value.trim()) }
+
+    override val jevConfigured: Boolean get() = jevKey.isNotEmpty()
+
+    override var jevOffReason: String
+        get() = prefs.getString(KEY_JEV_OFF_REASON, "").orEmpty()
+        set(value) = prefs.edit { putString(KEY_JEV_OFF_REASON, value) }
+
+    /** Kept in billionths of a dollar: a call costs about 15,000–40,000. */
+    override var jevSpentUsd: Double
+        get() = prefs.getLong(KEY_JEV_SPENT_NANO, 0) / 1e9
+        set(value) = prefs.edit { putLong(KEY_JEV_SPENT_NANO, Math.round(value * 1e9)) }
+
+    override var jevCapUsd: Double
+        get() = prefs.getString(KEY_JEV_CAP_USD, null)?.toDoubleOrNull() ?: DEFAULT_JEV_CAP_USD
+        set(value) = prefs.edit { putString(KEY_JEV_CAP_USD, value.toString()) }
+
+    override fun jev(trace: ((String) -> Unit)?) = JevClient(jevKey, trace = trace)
+
     companion object {
         private const val KEY_URL = "server_url"
         private const val KEY_API_KEY = "api_key"
@@ -63,6 +90,14 @@ class LinkSettings(context: Context) : LinkState {
         private const val KEY_HINTS_SEEN = "hints_seen"
         private const val KEY_MODEL_STATE = "model_state"
         private const val KEY_MODEL_STATE_AT = "model_state_at"
+        private const val KEY_JEV_ON = "jev_on"
+        private const val KEY_JEV_KEY = "jev_key"
+        private const val KEY_JEV_OFF_REASON = "jev_off_reason"
+        private const val KEY_JEV_SPENT_NANO = "jev_spent_nano_usd"
+        private const val KEY_JEV_CAP_USD = "jev_cap_usd"
+
+        /** Of the user's $5 for Jev in all, $1 went to the laptop's tests. */
+        const val DEFAULT_JEV_CAP_USD = 3.0
 
         /**
          * Why [url] won't work, or null when it looks right. Plain HTTP is allowed only to

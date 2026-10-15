@@ -1,0 +1,14 @@
+{
+  "method": "status",
+  "note": "Jev is on and has a key: decide may answer.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "jev": true,
+    "model": "gemma-4-e2b",
+    "model_state": "loaded",
+    "version": 1
+  }
+}

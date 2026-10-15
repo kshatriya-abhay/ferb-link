@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "TypeSafe can't be reached.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "can't reach Jev",
+      "error_detail": "TypeSafe doesn't answer: Connection refused",
+      "error_kind": "unreachable",
+      "model": "",
+      "ms": 0,
+      "options": ["set_alarm","none"],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

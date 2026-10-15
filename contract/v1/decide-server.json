@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "TypeSafe's rate limit (HTTP 429).",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "Jev rate limited",
+      "error_detail": "TypeSafe's rate limit: try again later",
+      "error_kind": "server",
+      "model": "",
+      "ms": 1,
+      "options": ["set_alarm","none"],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

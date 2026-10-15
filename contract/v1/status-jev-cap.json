@@ -1,0 +1,15 @@
+{
+  "method": "status",
+  "note": "Jev turned itself off at its spending cap.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "jev": false,
+    "jev_off_reason": "cap",
+    "model": "gemma-4-e2b",
+    "model_state": "loaded",
+    "version": 1
+  }
+}

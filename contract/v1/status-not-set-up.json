@@ -6,6 +6,7 @@
     "audio": false,
     "configured": false,
     "enabled": true,
+    "jev": false,
     "model": "",
     "version": 1
   }

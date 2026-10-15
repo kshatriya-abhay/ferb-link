@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "Jev is on but has no key.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "Jev not set up",
+      "error_detail": "Jev has no TypeSafe key in Ferb Link",
+      "error_kind": "not_set_up",
+      "model": "",
+      "ms": 0,
+      "options": [],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

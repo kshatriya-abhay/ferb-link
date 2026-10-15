@@ -6,6 +6,7 @@
     "audio": true,
     "configured": true,
     "enabled": true,
+    "jev": false,
     "model": "gemma-4-e2b",
     "model_state": "loaded",
     "version": 1

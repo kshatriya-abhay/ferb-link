@@ -14,6 +14,12 @@ class LinkCallsTest {
         override var audio = false
         override var modelState = ""
         override var modelStateAt = 0L
+        override var jevOn = false
+        override val jevConfigured = false
+        override var jevOffReason = ""
+        override var jevSpentUsd = 0.0
+        override val jevCapUsd = 3.0
+        override fun jev(trace: ((String) -> Unit)?) = JevClient("key", "http://127.0.0.1:9")
         var clients = 0
         // A port nothing listens on: a call that reaches the network fails as unreachable.
         override fun client(trace: ((String) -> Unit)?): ServerClient { clients++; return ServerClient("http://127.0.0.1:9", "key") }

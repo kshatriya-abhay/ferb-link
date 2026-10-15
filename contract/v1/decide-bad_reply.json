@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "An answer that isn't Jev's JSON.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "bad Jev answer",
+      "error_detail": "Couldn't read TypeSafe's answer: A JSONObject text must begin with '{' at 1 [character 2 line 1]",
+      "error_kind": "bad_reply",
+      "model": "",
+      "ms": 41,
+      "options": ["set_alarm","none"],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

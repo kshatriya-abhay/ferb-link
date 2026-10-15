@@ -37,6 +37,8 @@ class ContractTest {
     private lateinit var server: HttpServer
     private var chatReply: Pair<Int, String> = 200 to ""
     private var chatDelayMs = 0L
+    private var jevReply: Pair<Int, String> = 200 to ""
+    private var jevDelayMs = 0L
 
     private val url get() = "http://127.0.0.1:${server.address.port}"
 
@@ -48,9 +50,18 @@ class ContractTest {
         override var audio: Boolean = true,
         override var modelState: String = LinkContract.MODEL_LOADED,
         override var modelStateAt: Long = NOW - 60_000,
+        override var jevOn: Boolean = false,
+        var jevKey: String = "",
+        override var jevOffReason: String = "",
+        override var jevSpentUsd: Double = 0.0,
+        override var jevCapUsd: Double = 3.0,
     ) : LinkState {
         override val configured get() = url.isNotEmpty() && key.isNotEmpty()
+        override val jevConfigured get() = jevKey.isNotEmpty()
         override fun client(trace: ((String) -> Unit)?) = ServerClient(url, key, model = lastModel, trace = trace)
+        // The fake TypeSafe is on the same test server as the fake llama-server.
+        override fun jev(trace: ((String) -> Unit)?) = JevClient(jevKey, url.ifEmpty { CLOSED }, trace = trace)
+        fun jevReady() { jevOn = true; jevKey = "ts-secret" }
     }
 
     /** One fixture: how the laptop is set up, and what Ferb sends. */
@@ -115,6 +126,36 @@ class ContractTest {
         Case("transcribe-server", "transcribe", "The server is in text mode and turns audio down.", mapOf("audio" to SPEECH, "audio_mime" to "audio/ogg")) {
             chatReply = 500 to """{"error": {"code": 500, "message": "audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj"}}"""
         },
+        Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
+        Case("status-jev-cap", "status", "Jev turned itself off at its spending cap.") { it.jevOffReason = LinkContract.JEV_OFF_CAP },
+        Case("decide", "decide", "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
+            mapOf("request" to "shaam 7 baje ka alarm lagao", "tools" to TOOLS, "timeout_ms" to 3000)) {
+            it.jevReady(); jevReply = jevAnswer("set_alarm", "set_alarm" to 0.97, "none" to 0.03)
+        },
+        Case("decide-none", "decide", "No tool fits: Jev says none.", mapOf("request" to "what's the capital of France", "tools" to TOOLS)) {
+            it.jevReady(); jevReply = jevAnswer("none", "set_alarm" to 0.0, "none" to 1.0)
+        },
+        Case("decide-off", "decide", "Jev is off in Ferb Link (its default): nothing is sent.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)),
+        Case("decide-cap", "decide", "Jev reached its spending cap and turned itself off: nothing is sent.",
+            mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) { it.jevReady(); it.jevSpentUsd = 3.0 },
+        Case("decide-not_set_up", "decide", "Jev is on but has no key.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) { it.jevOn = true },
+        Case("decide-bad_request", "decide", "No request.", mapOf("request" to "", "tools" to TOOLS)) { it.jevReady() },
+        Case("decide-auth", "decide", "TypeSafe turns the key down.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) {
+            it.jevReady(); jevReply = 401 to """{"error":{"message":"invalid key"}}"""
+        },
+        Case("decide-unreachable", "decide", "TypeSafe can't be reached.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) {
+            it.jevReady(); it.url = ""
+        },
+        Case("decide-timeout", "decide", "No answer within timeout_ms (1000, the least it takes).",
+            mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS, "timeout_ms" to 1000)) {
+            it.jevReady(); jevReply = jevAnswer("set_alarm", "set_alarm" to 1.0, "none" to 0.0); jevDelayMs = 1_500
+        },
+        Case("decide-server", "decide", "TypeSafe's rate limit (HTTP 429).", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) {
+            it.jevReady(); jevReply = 429 to """{"error":{"message":"rate limited"}}"""
+        },
+        Case("decide-bad_reply", "decide", "An answer that isn't Jev's JSON.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) {
+            it.jevReady(); jevReply = 200 to "<html>gateway</html>"
+        },
         Case("unknown-method", "summarize", "A method this Ferb Link doesn't have (an older one, for a newer Ferb)."),
     )
 
@@ -130,6 +171,11 @@ class ContractTest {
             else exchange.answer(200, """{"data":[{"id":"gemma-4-e2b","status":{"value":"loaded"}}]}""")
         }
         server.createContext("/props") { it.answer(200, """{"is_sleeping": false, "modalities": {"vision": true, "audio": true}}""") }
+        server.createContext("/v1/systemone") { exchange ->
+            exchange.requestBody.readAllBytes()
+            Thread.sleep(jevDelayMs)
+            exchange.answer(jevReply.first, jevReply.second)
+        }
         server.createContext("/v1/chat/completions") { exchange ->
             exchange.requestBody.readAllBytes()
             Thread.sleep(chatDelayMs)
@@ -148,6 +194,8 @@ class ContractTest {
         for (case in cases) {
             chatReply = 200 to ""
             chatDelayMs = 0
+            jevReply = 200 to ""
+            jevDelayMs = 0
             val state = State(url = url)
             case.setUp(this, state)
             val result = run(case, state)
@@ -247,6 +295,14 @@ class ContractTest {
                 """{"speech": true, "hindi": $hindi, "heard": "$heard", "text": "$text"}""")))).toString()
 
         /** 2 s of 16 kHz WAV: syllable-like bursts for "speech", zeros for "silence". */
+        /** What TypeSafe answers for one Choice (its API reference), with usage. */
+        fun jevAnswer(choice: String, vararg probabilities: Pair<String, Double>) = 200 to JSONObject()
+            .put("model", "jev-1.13.0")
+            .put("answers", JSONObject().put("tool", JSONObject().put("type", "choice").put("choice", choice)
+                .put("probabilities", JSONObject(probabilities.toMap())).put("confidence", 0.9)))
+            .put("usage", JSONObject().put("input_tokens", 370).put("output_tokens", 1))
+            .toString()
+
         fun recording(kind: String): ByteArray {
             val random = Random(7)
             val samples = ShortArray(32_000) { i ->

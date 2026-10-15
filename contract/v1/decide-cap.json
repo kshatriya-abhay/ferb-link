@@ -1,0 +1,23 @@
+{
+  "method": "decide",
+  "note": "Jev reached its spending cap and turned itself off: nothing is sent.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "Jev's limit reached",
+      "error_detail": "Jev reached its spending limit ($3.00). Raise it in Ferb Link to turn Jev on again.",
+      "error_kind": "off",
+      "model": "",
+      "ms": 0,
+      "options": [],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}
