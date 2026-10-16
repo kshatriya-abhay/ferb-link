@@ -238,7 +238,7 @@ usage = '''
 arg "<in>" help="JSON lines: {\"request\": …, \"tools\": […]}, {\"audio\": \"clip.ogg\"} or {\"method\": \"decide\", …}, optional \"id\" (see LaptopHarness.kt)"
 arg "[out]" help="where to write the replies; without it they're printed"
 flag "--limit <n>" help="send at most n decide lines to Jev"
-flag "--dry-run" help="send nothing to Jev: print how many decide calls and their estimated cost"
+flag "--dry-run" help="send nothing at all (no model, no Jev): print how many decide calls, their estimated cost, and the other lines"
 '''
 run = '''
 set -euo pipefail

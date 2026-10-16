@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit
  *   ([JevClient]), plus "input_tokens", "usd" and "estimated". It costs money: every call goes in
  *   [JevLedger], a run that could take the tests past their cap is refused before anything is sent,
  *   and a call costing over [JevLedger.SURPRISE] times its estimate stops the run. -Pharness.limit=N
- *   sends at most N; -Pharness.dry=true sends none and writes only the count and estimated cost.
+ *   sends at most N. -Pharness.dry=true sends nothing at all (complete and transcribe lines
+ *   included) and writes one line: the decide count, its estimated cost, and the other lines' count.
  *   The key is read from -Pharness.jev-key's file (default ~/.config/ferb-link/typesafe-key);
  *   -Pharness.jev-url points it at a fake TypeSafe instead, with -Pharness.jev-ledger for its own ledger.
  * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}; decide lines
@@ -38,13 +39,18 @@ class LaptopHarness {
         val client = ServerClient(url, key, model = model)
         val lines = File(input!!).readLines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
         val jev = JevRun(lines, File(input).name)
+        val dry = System.getProperty("harness.dry") == "true"
 
         output.printWriter().use { out ->
+            // A dry run sends nothing at all, to the laptop's model or to Jev: it only counts.
+            if (dry) {
+                out.println(jev.dryRun().put("other_lines", lines.size - jev.decideLines).toString())
+                return
+            }
             jev.refusal()?.let { reason ->
                 out.println(reason.toString())
                 out.flush()
-                check(reason.has("dry_run")) { reason.getString("refused") }
-                return
+                error(reason.getString("refused"))
             }
             for (line in lines) {
                 val reply = try {
@@ -64,7 +70,6 @@ class LaptopHarness {
     /** A run's `decide` lines: the budget checks, the calls, and the ledger. */
     private class JevRun(lines: List<String>, private val name: String) {
         private val limit = System.getProperty("harness.limit")?.takeIf { it.isNotBlank() }?.toInt() ?: Int.MAX_VALUE
-        private val dry = System.getProperty("harness.dry") == "true"
         // -Pharness.jev-ledger: another ledger, for trying the harness against a fake.
         private val ledger = JevLedger(File(System.getProperty("harness.jev-ledger")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.config/ferb-link/jev-spend.json"))
 
@@ -87,11 +92,16 @@ class LaptopHarness {
         private var usd = 0.0
         private var stopped: String? = null
 
+        /** All the decide lines in the input, sent or not. */
+        val decideLines = lines.count { line -> runCatching { JSONObject(line).optString("method") == "decide" }.getOrDefault(false) }
+
+        /** What a run would send to Jev and cost, for -Pharness.dry. */
+        fun dryRun(): JSONObject = JSONObject().put("dry_run", true).put("decide_calls", estimates.size).put("estimated_usd", estimatedUsd)
+            .put("ledger_usd", ledger.usd).put("cap_usd", ledger.capUsd)
+
         /** Why this run mustn't start (one line for the output), or null. */
         fun refusal(): JSONObject? = when {
             estimates.isEmpty() -> null
-            dry -> JSONObject().put("dry_run", true).put("decide_calls", estimates.size).put("estimated_usd", estimatedUsd)
-                .put("ledger_usd", ledger.usd).put("cap_usd", ledger.capUsd)
             !ledger.allows(estimatedUsd) -> JSONObject().put("refused", "this run could cost \$${"%.4f".format(estimatedUsd)}; " +
                 "the tests have spent \$${"%.4f".format(ledger.usd)} of their \$${ledger.capUsd}")
             else -> null
