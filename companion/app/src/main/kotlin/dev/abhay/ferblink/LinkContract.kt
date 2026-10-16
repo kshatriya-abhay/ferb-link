@@ -153,8 +153,12 @@ object LinkContract {
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
     /** Without [EXTRA_TIMEOUT_MS]; Ferb sends its own, and goes ahead without Jev past it. */
     const val DECIDE_TIMEOUT_MS = 3_000
-    /** [METHOD_REWRITE]'s prompt: v2.1 if the held-out bench confirms it (Laptop Model Server notes, "Exploration - Rewrite before Needle 3"). */
-    const val REWRITE_VARIANT = "v2.1"
+    /**
+     * [METHOD_REWRITE]'s prompt. v2: on the held-out suite v2.1 ran one wrong action ("torch band
+     * karo" muted the volume), so v2 ships until v2.2 (Laptop Model Server notes, "Exploration -
+     * Rewrite before Needle 3"). Swapping it needs no change in Ferb.
+     */
+    const val REWRITE_VARIANT = "v2"
     const val MAX_DECIDE_TIMEOUT_MS = 10_000
     const val MAX_AUDIO_BYTES = 512 * 1024
     const val MAX_AUDIO_SECONDS = 30
