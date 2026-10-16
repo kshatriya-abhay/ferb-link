@@ -151,3 +151,39 @@ class Comprehend2Test {
         assertThat(Rewrite.comprehends(Rewrite.Variant.of("c2"))).isTrue()
     }
 }
+
+class TimeFormatTest {
+    @Test
+    fun `+when asks for each command's time and reads it back in order`() {
+        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("v2+when"), emptyList()))
+        assertThat(body.getJSONObject("response_format").toString()).contains("\"when\"")
+        assertThat(body.getJSONArray("messages").getJSONObject(0).getString("content")).contains("\"kind\": \"at\"")
+        val content = """{"commands": [{"text": "Set an alarm for 7:15 am", "when": {"kind": "at", "day": {"relative": 1}, "time": {"hour": 7, "minute": 15, "meridiem": "am", "part": null}, "source": "kal subah sava saat"}}, {"text": "Turn on the flashlight", "when": null}]}"""
+        assertThat(Rewrite.parse(content)).containsExactly("Set an alarm for 7:15 am", "Turn on the flashlight").inOrder()
+        val whens = Rewrite.whens(content)
+        assertThat(whens).hasSize(2)
+        assertThat(whens[0]!!.getJSONObject("day").getInt("relative")).isEqualTo(1)
+        assertThat(whens[1]).isNull()
+        val reply = JSONObject(Rewritten(listOf("a", "b"), "x", "", "m", 1, null, whens = whens).toJson())
+        assertThat(reply.getJSONArray("when").getJSONObject(0).getInt("v")).isEqualTo(TimeFormat.VERSION)
+        assertThat(reply.getJSONArray("when").isNull(1)).isTrue()
+    }
+
+    @Test
+    fun `without +when nothing changes in the reply`() {
+        assertThat(JSONObject(Rewritten(listOf("a"), "x", "", "m", 1, null).toJson()).has("when")).isFalse()
+        assertThat(Rewrite.Variant.of("c2+when").`when`).isTrue()
+    }
+
+    @Test
+    fun `schema-call enforces one shape per tool, and reads calls with their time`() {
+        val tools = org.json.JSONArray("""[{"name": "set_alarm", "description": "Set an alarm", "parameters": {"type": "object", "properties": {"time": {"type": "string"}}, "required": ["time"]}}]""")
+        val format = SchemaCall.format(tools, rewrite = true)
+        assertThat(format).contains("\"enum\": [\"set_alarm\"]")
+        assertThat(format).contains("\"commands\"")
+        assertThat(SchemaCall.format(tools, rewrite = false)).doesNotContain("\"commands\"")
+        val reply = SchemaCall.reply("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "7:15 am"}, "when": {"kind": "at", "day": null, "time": {"hour": 7, "minute": 15, "meridiem": "am", "part": null}, "source": "7:15 am"}}]}""")
+        assertThat(reply.getJSONArray("calls").getJSONObject(0).getJSONObject("when").getInt("v")).isEqualTo(1)
+        assertThat(reply.getJSONArray("commands").length()).isEqualTo(0)
+    }
+}

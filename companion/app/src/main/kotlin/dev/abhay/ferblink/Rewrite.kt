@@ -14,13 +14,13 @@ import org.json.JSONObject
  */
 object Rewrite {
     /** A prompt version and its switches: few-shot examples, Ferb's tool names, thinking on, no schema. */
-    data class Variant(val base: String, val shots: Boolean, val tools: Boolean, val think: Boolean, val free: Boolean) {
+    data class Variant(val base: String, val shots: Boolean, val tools: Boolean, val think: Boolean, val free: Boolean, val `when`: Boolean = false) {
         companion object {
             fun of(name: String): Variant {
                 val parts = name.trim().split("+").map { it.trim().lowercase() }
-                val unknown = parts.drop(1) - setOf("shots", "tools", "think", "free")
-                require(parts.first() in PROMPTS && unknown.isEmpty()) { "unknown variant \"$name\": ${PROMPTS.keys} with +shots, +tools, +think, +free" }
-                return Variant(parts.first(), "shots" in parts, "tools" in parts, "think" in parts, "free" in parts)
+                val unknown = parts.drop(1) - setOf("shots", "tools", "think", "free", "when")
+                require(parts.first() in PROMPTS && unknown.isEmpty()) { "unknown variant \"$name\": ${PROMPTS.keys} with +shots, +tools, +think, +free, +when" }
+                return Variant(parts.first(), "shots" in parts, "tools" in parts, "think" in parts, "free" in parts, "when" in parts)
             }
         }
     }
@@ -218,13 +218,18 @@ When the user does ask:
      * with a list of strings. Left out for +free, where only the prompt asks for JSON.
      */
     private const val FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"commands": {"type": "array", "items": {"type": "string"}}}, "required": ["commands"]}}}"""
+    /** +when: each command with its time ([TimeFormat]). */
+    private const val COMMAND_WHEN = """{"type": "object", "properties": {"text": {"type": "string"}, "when": ${TimeFormat.SCHEMA}}, "required": ["text", "when"]}"""
+    private const val FORMAT_WHEN = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"commands": {"type": "array", "items": $COMMAND_WHEN}}, "required": ["commands"]}}}"""
     private const val FORMAT_SLOT = "@response_format@"
+    private const val COMPREHEND_FORMAT_WHEN = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"direct": {"type": "boolean"}, "commands": {"type": "array", "items": $COMMAND_WHEN}}, "required": ["direct", "commands"]}}}"""
     private const val COMPREHEND_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"direct": {"type": "boolean"}, "commands": {"type": "array", "items": {"type": "string"}}}, "required": ["direct", "commands"]}}}"""
 
     fun body(model: String, sent: String, now: String, variant: Variant, toolNames: List<String>): String {
         val system = buildString {
             append(PROMPTS.getValue(variant.base))
             if (variant.tools && toolNames.isNotEmpty()) append("\n\nThe assistant's actions: ${toolNames.joinToString(", ")}. A command may only ask for these.")
+            if (variant.`when`) append("\n\nWrite each command as {\"text\": \"...\", \"when\": ...}, where ${TimeFormat.PROMPT}")
             append("\n\nNow: $now.")
         }
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", system))
@@ -244,7 +249,13 @@ When the user does ask:
             .put("max_tokens", if (variant.think) 1024 else 256)
             .put("chat_template_kwargs", JSONObject().put("enable_thinking", variant.think))
         if (!variant.free) json.put("response_format", FORMAT_SLOT)
-        return json.toString().replace("\"$FORMAT_SLOT\"", if (comprehends(variant)) COMPREHEND_FORMAT else FORMAT)
+        val format = when {
+            comprehends(variant) && variant.`when` -> COMPREHEND_FORMAT_WHEN
+            comprehends(variant) -> COMPREHEND_FORMAT
+            variant.`when` -> FORMAT_WHEN
+            else -> FORMAT
+        }
+        return json.toString().replace("\"$FORMAT_SLOT\"", format)
     }
 
     /** Whether a comprehend answer says the request can go on as it is. */
@@ -256,6 +267,15 @@ When the user does ask:
         val end = content.lastIndexOf('}')
         require(start >= 0 && end > start) { "no JSON object in the answer" }
         val commands = JSONObject(content.substring(start, end + 1)).getJSONArray("commands")
-        return (0 until commands.length()).map { Amounts.englishClock(commands.getString(it).trim()) }.filter { it.isNotEmpty() }
+        // Each a string, or with +when {"text", "when"}.
+        return (0 until commands.length()).map { Amounts.englishClock((commands.optJSONObject(it)?.getString("text") ?: commands.getString(it)).trim()) }.filter { it.isNotEmpty() }
+    }
+
+    /** With +when: each command's time, in the order [parse] keeps the commands (null where none), as the model wrote it. */
+    fun whens(content: String): List<JSONObject?> {
+        val commands = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1)).getJSONArray("commands")
+        return (0 until commands.length()).mapNotNull { commands.optJSONObject(it) }
+            .filter { it.optString("text").isNotBlank() }
+            .map { it.optJSONObject("when") }
     }
 }

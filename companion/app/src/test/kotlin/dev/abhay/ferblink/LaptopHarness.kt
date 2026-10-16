@@ -152,9 +152,9 @@ class LaptopHarness {
     /** The server's address, key and model, for [timex], which sends its own request. */
     private var server = Triple("", "", "")
 
-    /** [TimexProbe]: the model's time expressions for a request, as it wrote them, plus its time. */
-    private fun timex(line: JSONObject): JSONObject {
-        val (url, key, model) = server
+    /** Sends [body] to the server's chat endpoint as is; the answer's message text and the time it took. */
+    private fun post(body: String): Pair<String, Long> {
+        val (url, key, _) = server
         val started = System.nanoTime()
         val connection = java.net.URL("$url/v1/chat/completions").openConnection() as java.net.HttpURLConnection
         connection.requestMethod = "POST"
@@ -162,13 +162,25 @@ class LaptopHarness {
         connection.readTimeout = 60_000
         connection.setRequestProperty("Authorization", "Bearer $key")
         connection.setRequestProperty("Content-Type", "application/json")
-        connection.outputStream.use { it.write(TimexProbe.body(model, line.getString("request"), line.getString("now"), line.optString("variant", "t1")).toByteArray()) }
+        connection.outputStream.use { it.write(body.toByteArray()) }
         val code = connection.responseCode
         val text = (if (code == 200) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
         val ms = (System.nanoTime() - started) / 1_000_000
-        if (code != 200) return JSONObject().put("success", false).put("error", "HTTP $code: $text").put("ms", ms)
-        val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+        check(code == 200) { "HTTP $code: $text" }
+        return JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content") to ms
+    }
+
+    /** [TimexProbe]: the model's time expressions for a request, as it wrote them, plus its time. */
+    private fun timex(line: JSONObject): JSONObject {
+        val (content, ms) = post(TimexProbe.body(server.third, line.getString("request"), line.getString("now"), line.optString("variant", "t1")))
         return JSONObject().put("success", true).put("expressions", JSONObject(content).getJSONArray("expressions")).put("ms", ms)
+    }
+
+    /** [SchemaCall]: B's call as enforced JSON, calls with "when", or rewritten commands with "rewrite". */
+    private fun schemaCall(line: JSONObject): JSONObject {
+        val tools = line.optJSONArray("tools") ?: JSONArray(line.getString("tools"))
+        val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite")))
+        return SchemaCall.reply(content).put("success", true).put("raw", content).put("ms", ms)
     }
 
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {
@@ -176,6 +188,7 @@ class LaptopHarness {
         return when {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
             line.optString("method") == "timex" -> timex(line)
+            line.optString("method") == "schema-call" -> schemaCall(line)
             line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
             line.optString("method") in setOf("rewrite", "comprehend") -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
