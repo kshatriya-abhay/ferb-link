@@ -66,7 +66,25 @@ When the user does ask:
 - Write dates as dates: work out "today", "tomorrow", "kal", "parson", weekdays and "next week" from Now below, and write the day ("on Saturday 17 October"). Keep times as written. Add am or pm only if the request says which: subah is am, dopahar and shaam are pm, raat is pm from 7 to 11 and otherwise am.
 - Asking to see the phone's own things is a command: alarms, lists, notes, the calendar, directions ("Show my agenda for tomorrow")."""
 
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v3" to V3)
+    /**
+     * v2.1: v2 plus three lessons from the audio bench (2026-10-16): amounts as numbers ("half
+     * volume" as 50 percent), short commands kept as commands ("next", "stop"), and "aawaz band"
+     * as mute rather than "Turn off the sound".
+     */
+    const val V21 = V2 + """
+- Write amounts as numbers: half is 50 percent, a quarter 25 percent, full or max 100 percent ("half volume" → "Set the volume to 50 percent").
+- A short request of one or two words is still a command when it is an action word, like a media button: "next", "stop", "pause", "louder" ("Play the next track", "Stop", "Pause", "Turn the volume up"). Naming a thing is not an action: "my torch is broken" asks for nothing.
+- Silencing is muting: "aawaz band karo", "sound off", "chup karo" → "Mute the volume" (volume to 0), not "Turn off the sound"."""
+
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v3" to V3)
+
+    /** Numbers a request holds as words: v2.1 writes them as digits, which isn't inventing them. */
+    private val numberWords: Map<String, Int> = Amounts.numbers + mapOf(
+        "half" to 50, "aadha" to 50, "aadhi" to 50, "quarter" to 25, "full" to 100, "max" to 100, "maximum" to 100, "poora" to 100, "poori" to 100,
+        "mute" to 0, "band" to 0, "zero" to 0,
+    ) + listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+        "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty").withIndex().associate { (i, word) -> word to i + 1 } +
+        mapOf("thirty" to 30, "forty" to 40, "fifty" to 50, "sixty" to 60, "hundred" to 100)
 
     private val months = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
     private val weekdays = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -82,7 +100,8 @@ When the user does ask:
     fun invented(request: String, sent: String, commands: List<String>): List<String> {
         val given = (request + " " + sent).lowercase()
         val givenWords = given.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
-        val givenNumbers = Regex("\\d+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet()
+        val givenNumbers = Regex("\\d+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet() +
+            givenWords.mapNotNull { numberWords[it]?.toString() }
         return commands.flatMap { command ->
             // Split as the request is, so "I'll" is "I" and "ll", neither of them a fact.
             val words = command.split(Regex("[^\\p{L}\\p{N}:]+")).flatMap { it.split(":") }.filter { it.isNotEmpty() }

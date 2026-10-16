@@ -10,7 +10,7 @@ object Amounts {
     /** A time of day ("7:15") or a length ("1 hour 15 minutes"), as Ferb's readers take them. */
     data class Amount(val english: String, val isTime: Boolean)
 
-    private val numbers = mapOf(
+    internal val numbers = mapOf(
         "ek" to 1, "do" to 2, "teen" to 3, "chaar" to 4, "char" to 4, "paanch" to 5, "panch" to 5,
         "chhe" to 6, "chhah" to 6, "chah" to 6, "chahe" to 6, "che" to 6, "saat" to 7, "aath" to 8, "nau" to 9,
         "das" to 10, "gyarah" to 11, "barah" to 12, "pandrah" to 15, "bees" to 20, "pachchees" to 25,

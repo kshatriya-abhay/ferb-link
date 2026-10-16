@@ -246,7 +246,7 @@ IN=$(realpath "$usage_in")
 OUT=$(realpath -m "${usage_out:-$(mktemp)}")
 # No daemons left behind: they hold gigabytes the model server needs for its page cache.
 status=0
-(cd companion && ./gradlew -q --no-daemon \
+(cd companion && flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon \
   :app:testDebugUnitTest --tests dev.abhay.ferblink.LaptopHarness --rerun \
   -Pharness.in="$IN" -Pharness.out="$OUT" -Pharness.limit="${usage_limit:-}" -Pharness.dry="${usage_dry_run:-false}") || status=$?
 [ -n "${usage_out:-}" ] && [ "$status" = 0 ] && echo "Replies in $OUT" || { cat "$OUT" 2>/dev/null; [ -n "${usage_out:-}" ] || rm -f "$OUT"; }
@@ -256,16 +256,18 @@ LEDGER=~/.config/ferb-link/jev-spend.json
 exit "$status"
 '''
 
+# Every Gradle run in this repo takes /tmp/ferb-link-gradle.lock: companion:test and a harness run
+# share the build folder (and the test task), and two at once broke each other (2026-10-16).
 [tasks."companion:build"]
 description = "Build the companion app's debug APK"
 dir = "companion"
-run = "./gradlew --no-daemon assembleDebug"
+run = "flock /tmp/ferb-link-gradle.lock ./gradlew --no-daemon assembleDebug"
 
 [tasks."companion:test"]
 description = "The companion app's unit and contract tests: no model, server or phone (see README, Testing)"
 dir = "companion"
 # No daemons left behind: they hold gigabytes the model server needs for its page cache.
-run = "./gradlew -q --no-daemon :app:testDebugUnitTest"
+run = "flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:testDebugUnitTest"
 
 [tasks."companion:device-test"]
 description = "The companion app's device tests (pairing links, Paste link, hints) on the connected phone; it stays installed and paired"
@@ -274,7 +276,7 @@ usage = 'arg "[class]" help="Only this test class, e.g. HintsTest (no screen: fi
 run = """
 set -euo pipefail
 # Not connectedDebugAndroidTest: that uninstalls Ferb Link afterwards, and with it the pairing.
-./gradlew -q --no-daemon :app:installDebug :app:installDebugAndroidTest
+flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:installDebug :app:installDebugAndroidTest
 OUT=$(adb shell am instrument -w ${usage_class:+-e class dev.abhay.ferblink.$usage_class} dev.abhay.ferblink.test/androidx.test.runner.AndroidJUnitRunner)
 echo "$OUT"
 grep -q '^OK (' <<<"$OUT"
@@ -283,12 +285,12 @@ grep -q '^OK (' <<<"$OUT"
 [tasks."companion:contract-write"]
 description = "Rewrite contract/v1's fixtures from what Ferb Link answers; review the diff, and tell Ferb (link:contract-sync)"
 dir = "companion"
-run = "./gradlew -q --no-daemon :app:testDebugUnitTest --tests dev.abhay.ferblink.ContractTest --rerun -Pcontract.write=true"
+run = "flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:testDebugUnitTest --tests dev.abhay.ferblink.ContractTest --rerun -Pcontract.write=true"
 
 [tasks."companion:install"]
 description = "Install the companion app on the connected phone"
 dir = "companion"
-run = "./gradlew --no-daemon installDebug"
+run = "flock /tmp/ferb-link-gradle.lock ./gradlew --no-daemon installDebug"
 
 [tasks."companion:release"]
 description = "Build the release APK and sign it with the release key (asks for what isn't set); dist/ferb-link-<version>.apk"

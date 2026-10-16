@@ -80,3 +80,23 @@ class RewriteInventedWordsTest {
         assertThat(Rewrite.invented("set an alarm for 7", "set an alarm for 7", listOf("Set an alarm for 7:30"))).containsExactly("30")
     }
 }
+
+class RewriteV21Test {
+    private fun invented(request: String, vararg commands: String) = Rewrite.invented(request, Amounts.forRequest(request), commands.toList())
+
+    @Test
+    fun `v2_1 is v2 plus amounts, short commands and muting`() {
+        assertThat(Rewrite.Variant.of("v2.1+shots").base).isEqualTo("v2.1")
+        assertThat(Rewrite.V21).startsWith(Rewrite.V2)
+        assertThat(Rewrite.V21).contains("50 percent")
+    }
+
+    @Test
+    fun `numbers said as words aren't invented`() {
+        assertThat(invented("half volume", "Set the volume to 50 percent")).isEmpty()
+        assertThat(invented("aawaz band karo", "Set the volume to 0")).isEmpty()
+        assertThat(invented("timer for das minute", "Set a timer for 10 minutes")).isEmpty()
+        assertThat(invented("set a timer for ten minutes", "Set a timer for 10 minutes")).isEmpty()
+        assertThat(invented("half volume", "Set the volume to 60 percent")).containsExactly("60")
+    }
+}
