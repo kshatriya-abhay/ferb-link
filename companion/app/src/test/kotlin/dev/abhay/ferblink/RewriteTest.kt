@@ -49,3 +49,24 @@ class RewriteTest {
         assertThrows(IllegalArgumentException::class.java) { Rewrite.parse("no json") }
     }
 }
+
+class RewriteInventedTest {
+    private fun invented(request: String, vararg commands: String) = Rewrite.invented(request, Amounts.forRequest(request), commands.toList())
+
+    @Test
+    fun `facts from the request, its amounts and worked-out dates are fine`() {
+        assertThat(invented("what's the weather like in Delhi", "Show the weather in Delhi")).isEmpty()
+        assertThat(invented("kal subah sava saat baje ka alarm laga do", "Set an alarm for 7:15 am on Saturday 17 October")).isEmpty()
+        assertThat(invented("mummy ko call karo", "Call Mummy")).isEmpty()
+        assertThat(invented("torch on karo aur volume badhao", "Turn on the flashlight", "Turn the volume up")).isEmpty()
+        assertThat(invented("remind me to pay rent on Monday", "Remind me to pay rent on Monday 19 October 2026")).isEmpty()
+    }
+
+    @Test
+    fun `a place, name, number or time the request didn't hold is flagged`() {
+        assertThat(invented("what's the weather like", "Show the weather in Delhi")).containsExactly("Delhi")
+        assertThat(invented("call my sister", "Call Priya")).containsExactly("Priya")
+        assertThat(invented("set an alarm", "Set an alarm for 7 am")).containsExactly("7")
+        assertThat(invented("set a timer for 5 minutes", "Set a timer for 15 minutes")).containsExactly("15")
+    }
+}

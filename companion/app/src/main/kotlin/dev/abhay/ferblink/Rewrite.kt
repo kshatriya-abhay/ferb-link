@@ -38,7 +38,47 @@ object Rewrite {
 - Asking to see the phone's own things is a command: alarms, lists, notes, the calendar, directions ("Show my agenda for tomorrow").
 - If the request doesn't ask the assistant to do anything, reply {"commands": []}. That includes questions about the world, opinions, chat, greetings and thanks, statements about the past or about yourself ("I set an alarm yesterday", "alarms are annoying"), and wishes or plans not addressed to the assistant ("I should call mom")."""
 
-    private val PROMPTS = mapOf("v1" to V1)
+    /**
+     * v2: v1 plus ferb-manager's hard rule after the first look, never add a fact the request
+     * doesn't hold, and questions no tool answers (the weather) give no command, not "Tell me…".
+     */
+    const val V2 = V1 + """
+- Never add anything the request doesn't say: no name, contact, place, app, number, time, date or length that isn't in the request, except dates you work out from Now. If something needed is missing, leave it out ("Set an alarm", not "Set an alarm for 7 am").
+- A question only words can answer (the weather, news, facts, maths, advice) is not a command, even when it's phrased as one: reply {"commands": []}. Don't write "Tell me …" commands."""
+
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2)
+
+    private val months = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+    private val weekdays = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    private val clockWords = setOf("am", "pm")
+
+    /**
+     * Facts in [commands] that [request] doesn't hold: numbers, and capitalised words after a
+     * command's first (names, places, apps), compared case-blind with the request as typed and as
+     * [sent]. Dates are allowed (weekdays, months, and day numbers up to 31 when a month or weekday
+     * is there), and so are numbers from [Amounts]' own work on the request. English words a
+     * translation brings ("Set an alarm" for "alarm laga do") aren't facts and aren't flagged.
+     */
+    fun invented(request: String, sent: String, commands: List<String>): List<String> {
+        val given = (request + " " + sent).lowercase()
+        val givenWords = given.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
+        val givenNumbers = Regex("\\d+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet()
+        return commands.flatMap { command ->
+            val words = command.split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotEmpty() }
+            val dated = words.any { it.lowercase() in months || it.lowercase() in weekdays }
+            words.drop(1).filter { word ->
+                val lower = word.lowercase()
+                when {
+                    word.first().isDigit() -> {
+                        val number = Regex("\\d+").find(word)!!.value.trimStart('0').ifEmpty { "0" }
+                        number !in givenNumbers && !(dated && number.toInt() in 1..31) && !(number.length == 4 && dated)
+                    }
+                    word.first().isUpperCase() -> lower !in givenWords && lower !in months && lower !in weekdays && lower !in clockWords && word != "I"
+                    else -> false
+                }
+            }
+        }.distinct()
+    }
 
     /** For +shots: a few requests and their commands, near misses and several actions among them. */
     val SHOTS = listOf(

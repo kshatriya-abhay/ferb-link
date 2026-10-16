@@ -120,10 +120,20 @@ enum class ModelState(val words: String) {
 data class Props(val state: ModelState, val audio: Boolean?)
 
 /** [ServerClient.rewrite]'s answer: the commands (empty: no action asked), what was [sent], and the model's [raw] text. */
-data class Rewritten(val commands: List<String>, val sent: String, val raw: String, val model: String, val ms: Long, val failure: Failure?) {
+data class Rewritten(
+    val commands: List<String>,
+    val sent: String,
+    val raw: String,
+    val model: String,
+    val ms: Long,
+    val failure: Failure?,
+    /** Facts in [commands] the request didn't hold ([Rewrite.invented]): ferb-manager's hard rule, counted apart on the bench. */
+    val invented: List<String> = emptyList(),
+) {
     fun toJson(): String = JSONObject()
         .put("success", failure == null)
         .put("commands", JSONArray(commands))
+        .put("invented", JSONArray(invented))
         .put("sent", sent)
         .put("raw", raw)
         .put("model", model)
@@ -323,7 +333,8 @@ class ServerClient(
             if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
             val reply = JSONObject(text)
             raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-            Rewritten(Rewrite.parse(raw), sent, raw, reply.optString("model"), ms, null)
+            val commands = Rewrite.parse(raw)
+            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands))
         } catch (e: IOException) {
             Rewritten.failed(failureOf(e), sent, msSince(started))
         } catch (e: Exception) {
