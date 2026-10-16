@@ -112,3 +112,29 @@ class RewriteRespelledTest {
         assertThat(invented("open maps", "Open Uber")).containsExactly("Uber")
     }
 }
+
+class ComprehendTest {
+    @Test
+    fun `c1 decides first, then rewrites with v2_2's rules, nothing-asked said once`() {
+        val c1 = Rewrite.C1
+        println(c1)
+        assertThat(c1.indexOf("1. If the request doesn't ask")).isLessThan(c1.indexOf("2. If it is already one clear command"))
+        assertThat(c1).contains("torch band karo")
+        assertThat(c1).contains("already written out")
+        assertThat(Regex("doesn't ask the assistant to do anything").findAll(c1).count()).isEqualTo(1)
+        assertThat(c1).doesNotContain("You turn a request")
+        assertThat(Rewrite.comprehends(Rewrite.Variant.of("c1"))).isTrue()
+        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c1"))).isTrue()
+    }
+
+    @Test
+    fun `c1 asks for direct and commands, and a direct answer has no commands`() {
+        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("c1"), emptyList()))
+        assertThat(body.getJSONObject("response_format").toString()).contains("direct")
+        assertThat(Rewrite.direct("""{"direct": true, "commands": []}""")).isTrue()
+        assertThat(Rewrite.direct("""{"direct": false, "commands": ["Call Priya"]}""")).isFalse()
+        val rewritten = Rewritten(listOf("a"), "x", "", "m", 1, null, direct = false)
+        assertThat(JSONObject(rewritten.toJson()).getBoolean("direct")).isFalse()
+        assertThat(JSONObject(Rewritten(emptyList(), "x", "", "m", 1, null).toJson()).has("direct")).isFalse()
+    }
+}

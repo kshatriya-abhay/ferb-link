@@ -90,10 +90,26 @@ When the user does ask:
 - A short request of one or two words is still a command when it is an action word, like a media button: "next", "stop", "pause", "louder" ("Play the next track", "Stop", "Pause", "Turn the volume up"). Naming a thing is not an action.
 - "band karo" (or "band kar do", "off karo") turns off the thing it follows, and only that: "torch band karo" → "Turn off the flashlight", "gaana band karo" → "Stop the music", "wifi band karo" → "Turn off Wi-Fi", "aawaz band karo" → "Mute the volume"."""
 
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3)
+    /**
+     * c1, "comprehend" (ferb-manager, 2026-10-16): every typed request goes to Gemma first, which
+     * says whether it can go on as it is ({"direct": true}: already a clean English command), or
+     * gives v2.2's commands, or none when nothing is asked. The "nothing asked" question comes
+     * first, so an English statement isn't passed on as direct. Dates are worked out in code.
+     */
+    val C1 = """You read a request typed to a phone assistant and decide how it goes on. Reply with JSON only: {"direct": true or false, "commands": [...]}. Decide in this order:
+1. If the request doesn't ask the assistant to do anything, reply {"direct": false, "commands": []}. That includes questions about the world, opinions, chat, greetings and thanks, statements about things, the past or yourself ("I set an alarm yesterday", "my torch is broken"), and wishes or plans not addressed to the assistant ("I should call mom"). A question only words can answer (the weather, news, facts, maths, advice) is not a request either.
+2. If it is already one clear command in plain English, with its action and its values written out, reply {"direct": true, "commands": []}: "Set an alarm for 6:45 am", "Call Priya", "Turn on the flashlight", "Add milk to the shopping list". It is not direct if it has Hindi or Hinglish words, typos, slang, several actions, an amount in words ("half volume"), or is vague or indirect ("can you wake me up early").
+3. Otherwise reply {"direct": false, "commands": [...]}, the request written as plain English commands with these rules:
+""" +
+        V22.substringAfter("\n").replace(Regex("- If the request doesn't ask the assistant to do anything,[^\n]*\n?"), "").replace(Regex("- A question only words can answer[^\n]*\n?"), "")
 
-    /** Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 on. */
-    fun datesInCode(variant: Variant) = variant.base == "v2.2"
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3, "c1" to C1)
+
+    /** Whether [variant] is a comprehend prompt (c1 on): its answer has "direct" too. */
+    fun comprehends(variant: Variant) = variant.base.startsWith("c")
+
+    /** Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 and comprehend. */
+    fun datesInCode(variant: Variant) = variant.base == "v2.2" || comprehends(variant)
 
     /** Numbers a request holds as words: v2.1 writes them as digits, which isn't inventing them. */
     private val numberWords: Map<String, Int> = Amounts.numbers + mapOf(
@@ -182,6 +198,7 @@ When the user does ask:
      */
     private const val FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"commands": {"type": "array", "items": {"type": "string"}}}, "required": ["commands"]}}}"""
     private const val FORMAT_SLOT = "@response_format@"
+    private const val COMPREHEND_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"direct": {"type": "boolean"}, "commands": {"type": "array", "items": {"type": "string"}}}, "required": ["direct", "commands"]}}}"""
 
     fun body(model: String, sent: String, now: String, variant: Variant, toolNames: List<String>): String {
         val system = buildString {
@@ -206,8 +223,11 @@ When the user does ask:
             .put("max_tokens", if (variant.think) 1024 else 256)
             .put("chat_template_kwargs", JSONObject().put("enable_thinking", variant.think))
         if (!variant.free) json.put("response_format", FORMAT_SLOT)
-        return json.toString().replace("\"$FORMAT_SLOT\"", FORMAT)
+        return json.toString().replace("\"$FORMAT_SLOT\"", if (comprehends(variant)) COMPREHEND_FORMAT else FORMAT)
     }
+
+    /** Whether a comprehend answer says the request can go on as it is. */
+    fun direct(content: String): Boolean = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1)).optBoolean("direct", false)
 
     /** The commands in the model's answer (a JSON object; in +free, the first one in its text), clocks made plain. */
     fun parse(content: String): List<String> {

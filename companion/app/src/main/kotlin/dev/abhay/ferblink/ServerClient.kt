@@ -129,9 +129,12 @@ data class Rewritten(
     val failure: Failure?,
     /** Facts in [commands] the request didn't hold ([Rewrite.invented]): ferb-manager's hard rule, counted apart on the bench. */
     val invented: List<String> = emptyList(),
+    /** Comprehend only: the request can go on as it is (no commands). Null for a rewrite. */
+    val direct: Boolean? = null,
 ) {
     fun toJson(): String = JSONObject()
         .put("success", failure == null)
+        .apply { direct?.let { put("direct", it) } }
         .put("commands", JSONArray(commands))
         .put("invented", JSONArray(invented))
         .put("sent", sent)
@@ -358,8 +361,10 @@ class ServerClient(
             if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
             val reply = JSONObject(text)
             raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-            val commands = Rewrite.parse(raw)
-            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands))
+            val direct = if (Rewrite.comprehends(variant)) Rewrite.direct(raw) else null
+            // A direct answer has no commands to run, whatever else the model wrote.
+            val commands = if (direct == true) emptyList() else Rewrite.parse(raw)
+            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands), direct)
         } catch (e: IOException) {
             Rewritten.failed(failureOf(e), sent, msSince(started))
         } catch (e: Exception) {

@@ -153,13 +153,15 @@ class LaptopHarness {
         return when {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
             line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
-            line.optString("method") == "rewrite" -> {
+            line.optString("method") in setOf("rewrite", "comprehend") -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
                 val tools = line.optJSONArray("tools")
                 val names = (0 until (tools?.length() ?: 0)).map { i -> tools!!.optJSONObject(i)?.getString("name") ?: tools.getString(i) }
-                val variant = Rewrite.Variant.of(line.optString("variant").ifBlank { "v1" })
+                val name = line.optString("variant").ifBlank { if (line.optString("method") == "comprehend") "c1" else "v1" }
+                val variant = Rewrite.Variant.of(name)
+                require(Rewrite.comprehends(variant) == (line.optString("method") == "comprehend")) { "variant $name doesn't fit method ${line.optString("method")}" }
                 JSONObject(client.rewrite(line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
-                    .put("variant", line.optString("variant").ifBlank { "v1" })
+                    .put("variant", name)
             }
             line.has("audio") -> {
                 val wav = decode(File(line.getString("audio")))
