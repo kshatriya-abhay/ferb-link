@@ -370,7 +370,7 @@ private fun Pill(text: String) {
 }
 
 /**
- * Jev, TypeSafe's cloud model, as a second opinion on Ferb's tool choice: off by default, with what
+ * Jev, TypeSafe's cloud model, which picks the tool for Ferb (Ferb's "Use Jev to select the tool"): off by default, with what
  * leaves the phone said plainly, the key, the spend against its cap, and a Test.
  */
 private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onEdit: () -> Unit) {
@@ -379,7 +379,7 @@ private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkView
         val status = when {
             jev.capped -> "Off: it reached its spending limit"
             !jev.keySet -> "Off. Needs a TypeSafe key"
-            jev.on -> "On: Ferb asks Jev when it's unsure"
+            jev.on -> "On: Ferb can use Jev to pick the tool"
             else -> "Off"
         }
         SegmentedListItem(
@@ -388,7 +388,7 @@ private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkView
             colors = rowColors(),
             supportingContent = { Text(status) },
             trailingContent = { Switch(checked = jev.on, onCheckedChange = null) },
-        ) { Text("Second opinion from Jev") }
+        ) { Text("Let Ferb use Jev") }
     }
     item {
         SegmentedListItem(
@@ -418,8 +418,9 @@ private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkView
         val uris = LocalUriHandler.current
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                "When it's on and Ferb is unsure, what you type or say to Ferb, and the names and descriptions of Ferb's tools, " +
-                    "go to TypeSafe's servers in the US. Not your contacts, notes or other app data. TypeSafe doesn't train on it.",
+                "When this is on and Ferb's \"Use Jev to select the tool\" is on, the text of every request you make to Ferb, " +
+                    "and the names and descriptions of Ferb's tools, go to TypeSafe's servers in the US. Not your contacts, notes " +
+                    "or other app data. TypeSafe doesn't train on it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

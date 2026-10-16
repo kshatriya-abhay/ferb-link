@@ -11,7 +11,7 @@ import kotlin.random.Random
 
 /**
  * TypeSafe's Jev, a cloud decision model (docs.typesafe.ai, "API reference"): one Choice over the
- * tools Ferb routed a request to, plus [NONE], as a second opinion on Ferb's tool choice. It never
+ * tools Ferb routed a request to, plus [NONE], to pick the tool for Ferb. It never
  * fills arguments (Jev is weak with times and numbers): those stay with Needle 3 or Gemma.
  *
  * Only the request and each tool's name and description are sent, never parameters or facts. The

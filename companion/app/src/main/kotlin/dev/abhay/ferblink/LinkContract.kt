@@ -76,7 +76,7 @@ object LinkContract {
     const val METHOD_TRANSCRIBE = "transcribe"
 
     /**
-     * A second opinion from TypeSafe's Jev, a cloud model, on which tool [EXTRA_REQUEST] wants:
+     * TypeSafe's Jev, a cloud model, picks which tool [EXTRA_REQUEST] wants (Ferb's "Use Jev to select the tool"):
      * one choice over [EXTRA_TOOLS] (only their names and descriptions are sent) plus "none".
      * Off unless the user turned it on in Ferb Link and gave a key ([RESULT_JEV]). Takes
      * [EXTRA_REQUEST], [EXTRA_TOOLS], [EXTRA_TIMEOUT_MS] ([DECIDE_TIMEOUT_MS] without it, at most
@@ -137,7 +137,7 @@ object LinkContract {
     const val MAX_TIMEOUT_MS = 60_000
     const val CHECK_TIMEOUT_MS = 2_000
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
-    /** Jev's answer is a second opinion: past this, Ferb goes ahead without it. */
+    /** Without [EXTRA_TIMEOUT_MS]; Ferb sends its own, and goes ahead without Jev past it. */
     const val DECIDE_TIMEOUT_MS = 3_000
     const val MAX_DECIDE_TIMEOUT_MS = 10_000
     const val MAX_AUDIO_BYTES = 512 * 1024
