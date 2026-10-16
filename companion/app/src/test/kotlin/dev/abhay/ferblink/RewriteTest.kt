@@ -138,3 +138,16 @@ class ComprehendTest {
         assertThat(JSONObject(Rewritten(emptyList(), "x", "", "m", 1, null).toJson()).has("direct")).isFalse()
     }
 }
+
+class Comprehend2Test {
+    @Test
+    fun `c2 is c1 with the phone's own questions, messages and notes, and media words`() {
+        val c2 = Rewrite.C2
+        assertThat(c2).isNotEqualTo(Rewrite.C1)
+        assertThat(c2).contains("A question about the user's own phone is a request")
+        assertThat(c2).contains("A message or a note keeps its action")
+        assertThat(c2).contains("\"resume\" means the music")
+        assertThat(c2).contains("Get directions to the station")
+        assertThat(Rewrite.comprehends(Rewrite.Variant.of("c2"))).isTrue()
+    }
+}

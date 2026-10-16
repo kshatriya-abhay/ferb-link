@@ -103,7 +103,28 @@ When the user does ask:
 """ +
         V22.substringAfter("\n").replace(Regex("- If the request doesn't ask the assistant to do anything,[^\n]*\n?"), "").replace(Regex("- A question only words can answer[^\n]*\n?"), "")
 
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3, "c1" to C1)
+    /**
+     * c2: c1 after its bench on requests.txt (2026-10-16), which lost 25 to "nothing asked".
+     * Questions about the user's own calendar, alarms, lists, notes or phone are requests to the
+     * phone; only questions about the world give none. Messages and notes keep their action, with
+     * the content as typed; one-word media verbs stay as typed ("resume" is the music); "how far
+     * is …" is directions. Its examples are its own, not the bench's lines.
+     */
+    val C2 = C1
+        .replace(
+            "1. If the request doesn't ask the assistant to do anything, reply {\"direct\": false, \"commands\": []}. That includes questions about the world,",
+            "1. If the request doesn't ask the assistant to do anything, reply {\"direct\": false, \"commands\": []}. A question about the user's own phone is a request, not this: their calendar and plans (\"anything on Thursday?\", \"am I busy tonight\"), alarms (\"when does my alarm ring\"), lists and notes, settings (\"how much battery is left\"), and how far a place is. Nothing asked means questions about the world,",
+        )
+        .replace(
+            "- If the request asks for several things, write one command for each, in the order asked.",
+            "- If the request asks for several things, write one command for each, in the order asked.\n- A message or a note keeps its action, with its content exactly as typed: \"text Ravi are you coming\" → \"Send a text to Ravi: are you coming\", \"note: gate code 4521\" → \"Make a note: gate code 4521\". Never turn the content of a message or note into a command of its own.\n- A question about the user's own phone becomes the command that shows it: \"anything on Thursday?\" → \"Show my agenda for Thursday\", \"when does my alarm ring\" → \"Show my alarms\", \"how far is the station\" → \"Get directions to the station\".",
+        )
+        .replace(
+            "A short request of one or two words is still a command when it is an action word, like a media button: \"next\", \"stop\", \"pause\", \"louder\" (\"Play the next track\", \"Stop\", \"Pause\", \"Turn the volume up\"). Naming a thing is not an action.",
+            "A short request of one or two words is still a command when it is an action word, like a media button: \"next\", \"stop\", \"pause\", \"resume\", \"louder\". Keep a media word as typed (\"resume\" means the music, not a document). Naming a thing is not an action.",
+        )
+
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3, "c1" to C1, "c2" to C2)
 
     /** Whether [variant] is a comprehend prompt (c1 on): its answer has "direct" too. */
     fun comprehends(variant: Variant) = variant.base.startsWith("c")
