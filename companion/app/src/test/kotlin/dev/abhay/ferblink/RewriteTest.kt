@@ -1,0 +1,51 @@
+package dev.abhay.ferblink
+
+import com.google.common.truth.Truth.assertThat
+import org.json.JSONObject
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+/** The rewrite experiment's request and parsing; the prompt itself is judged on the bench. */
+class RewriteTest {
+    @Test
+    fun `variants are a version and switches`() {
+        assertThat(Rewrite.Variant.of("v1")).isEqualTo(Rewrite.Variant("v1", shots = false, tools = false, think = false, free = false))
+        assertThat(Rewrite.Variant.of("v1+shots+tools+think+free")).isEqualTo(Rewrite.Variant("v1", shots = true, tools = true, think = true, free = true))
+        assertThrows(IllegalArgumentException::class.java) { Rewrite.Variant.of("v9") }
+        assertThrows(IllegalArgumentException::class.java) { Rewrite.Variant.of("v1+magic") }
+    }
+
+    @Test
+    fun `v1 is constrained JSON at temperature 0 with thinking off, and now in the prompt`() {
+        val body = JSONObject(Rewrite.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)", Rewrite.Variant.of("v1"), listOf("set_timer")))
+        assertThat(body.getInt("temperature")).isEqualTo(0)
+        assertThat(body.getJSONObject("chat_template_kwargs").getBoolean("enable_thinking")).isFalse()
+        assertThat(body.getJSONObject("response_format").getString("type")).isEqualTo("json_schema")
+        val messages = body.getJSONArray("messages")
+        assertThat(messages.length()).isEqualTo(2)
+        val system = messages.getJSONObject(0).getString("content")
+        assertThat(system).contains("Now: 2026-10-16T09:00 (Friday).")
+        assertThat(system).doesNotContain("set_timer")
+        assertThat(messages.getJSONObject(1).getString("content")).isEqualTo("set a timer")
+    }
+
+    @Test
+    fun `switches add examples, tool names, thinking, or drop the schema`() {
+        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("v1+shots+tools+think+free"), listOf("set_timer", "make_call")))
+        assertThat(body.has("response_format")).isFalse()
+        assertThat(body.getJSONObject("chat_template_kwargs").getBoolean("enable_thinking")).isTrue()
+        val messages = body.getJSONArray("messages")
+        assertThat(messages.getJSONObject(0).getString("content")).contains("set_timer, make_call")
+        assertThat(messages.length()).isEqualTo(2 + 1 + 2 * Rewrite.SHOTS.size)
+        // The examples' requests are sent as the bench's are: Hindi hours already as times.
+        assertThat(messages.getJSONObject(2).getString("content")).isEqualTo(Amounts.forRequest(Rewrite.SHOTS.first().first))
+    }
+
+    @Test
+    fun `the commands are read from the answer, an empty list kept empty`() {
+        assertThat(Rewrite.parse("""{"commands": ["Set an alarm for quarter past 7", " Call Priya "]}""")).containsExactly("Set an alarm for 7:15", "Call Priya").inOrder()
+        assertThat(Rewrite.parse("""{"commands": []}""")).isEmpty()
+        assertThat(Rewrite.parse("Sure! {\"commands\": [\"Turn on the flashlight\"]} Done.")).containsExactly("Turn on the flashlight")
+        assertThrows(IllegalArgumentException::class.java) { Rewrite.parse("no json") }
+    }
+}

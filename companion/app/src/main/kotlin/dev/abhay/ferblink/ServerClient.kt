@@ -119,6 +119,29 @@ enum class ModelState(val words: String) {
 /** What the server says about its model without loading it. [audio] is null when it can't tell (unloaded). */
 data class Props(val state: ModelState, val audio: Boolean?)
 
+/** [ServerClient.rewrite]'s answer: the commands (empty: no action asked), what was [sent], and the model's [raw] text. */
+data class Rewritten(val commands: List<String>, val sent: String, val raw: String, val model: String, val ms: Long, val failure: Failure?) {
+    fun toJson(): String = JSONObject()
+        .put("success", failure == null)
+        .put("commands", JSONArray(commands))
+        .put("sent", sent)
+        .put("raw", raw)
+        .put("model", model)
+        .put("ms", ms)
+        .apply {
+            failure?.let {
+                put("error", it.short)
+                put("error_detail", it.message)
+                put("error_kind", it.kind.wire)
+            }
+        }
+        .toString()
+
+    companion object {
+        fun failed(failure: Failure, sent: String, ms: Long = 0, raw: String = "") = Rewritten(emptyList(), sent, raw, "", ms, failure)
+    }
+}
+
 /**
  * A spoken request written down: [heard] is what was said (Hindi in Latin letters), [text] the
  * same request as a plain English command (the same as [heard] when it was said in English).
@@ -285,6 +308,26 @@ class ServerClient(
             failureOf(e).let { Transcript.failed(it, msSince(started)) }
         } catch (e: Exception) {
             Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
+        }
+    }
+
+    /** [Rewrite]'s experiment: [request] as plain English commands, with dates worked out from [now]. */
+    fun rewrite(request: String, now: String, variant: Rewrite.Variant, toolNames: List<String> = emptyList(), timeoutMs: Int? = null): Rewritten {
+        val started = System.nanoTime()
+        val sent = Amounts.forRequest(request)
+        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
+        var raw = ""
+        return try {
+            val (code, text) = send("POST", "/v1/chat/completions", Rewrite.body(modelName(timeoutMs), sent, now, variant, toolNames), auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
+            val reply = JSONObject(text)
+            raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+            Rewritten(Rewrite.parse(raw), sent, raw, reply.optString("model"), ms, null)
+        } catch (e: IOException) {
+            Rewritten.failed(failureOf(e), sent, msSince(started))
+        } catch (e: Exception) {
+            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, msSince(started), raw)
         }
     }
 

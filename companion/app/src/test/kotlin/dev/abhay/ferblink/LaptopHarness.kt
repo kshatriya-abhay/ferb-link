@@ -24,6 +24,10 @@ import java.util.concurrent.TimeUnit
  *   included) and writes one line: the decide count, its estimated cost, and the other lines' count.
  *   The key is read from -Pharness.jev-key's file (default ~/.config/ferb-link/typesafe-key);
  *   -Pharness.jev-url points it at a fake TypeSafe instead, with -Pharness.jev-ledger for its own ledger.
+ * - `{"method": "rewrite", "request": "...", "now": "2026-10-16T09:00 (Friday)", "variant": "v1+shots",
+ *   "tools": [...]}` → the rewrite experiment ([Rewrite]): `commands` (empty when nothing is asked),
+ *   `sent` (after [Amounts.forRequest]), `raw` (the model's text), `variant`. "tools" (names or
+ *   schemas) is only used by +tools. Gemma on the laptop: free, one model at a time, under the lock.
  * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}; decide lines
  * not sent give {"id", "skipped"}.
  */
@@ -147,6 +151,14 @@ class LaptopHarness {
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {
         val timeout = if (line.has("timeout_ms")) line.getInt("timeout_ms") else null
         return when {
+            line.optString("method") == "rewrite" -> {
+                // "tools": names, or schemas as for complete; only their names are used (+tools).
+                val tools = line.optJSONArray("tools")
+                val names = (0 until (tools?.length() ?: 0)).map { i -> tools!!.optJSONObject(i)?.getString("name") ?: tools.getString(i) }
+                val variant = Rewrite.Variant.of(line.optString("variant").ifBlank { "v1" })
+                JSONObject(client.rewrite(line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
+                    .put("variant", line.optString("variant").ifBlank { "v1" })
+            }
             line.has("audio") -> {
                 val wav = decode(File(line.getString("audio")))
                 JSONObject(Voice.transcribe(client, wav, timeout ?: LinkContract.TRANSCRIBE_TIMEOUT_MS, ::latin).toJson())
