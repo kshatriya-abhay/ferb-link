@@ -88,9 +88,23 @@ object LinkContract {
      */
     const val METHOD_DECIDE = "decide"
 
+    /**
+     * A typed request (Hinglish, as Ferb sends it) as plain English commands, one per action, for
+     * Needle 3, or none when it asks for nothing. The laptop's model writes them with [Rewrite]'s
+     * prompt ([REWRITE_VARIANT]); Hindi amounts are worked out in code first. Takes
+     * [EXTRA_REQUEST], [EXTRA_NOW] (optional: the phone's clock without it), [EXTRA_TIMEOUT_MS];
+     * returns [RESULT_REPLY], [RESULT_VERSION]. The reply: `success`, `commands` (a list of
+     * strings, empty when nothing is asked), `invented` (numbers and names in the commands that
+     * the request didn't hold: don't run those), `model`, `ms`, `source: "laptop"`, and `error`,
+     * `error_detail`, `error_kind` on failure, as for [METHOD_COMPLETE].
+     */
+    const val METHOD_REWRITE = "rewrite"
+
     const val EXTRA_REQUEST = "request"
     const val EXTRA_TOOLS = "tools"
     const val EXTRA_FACTS = "facts"
+    /** For [METHOD_REWRITE]: when "now" is, to work out "kal" and weekdays, as "2026-10-16T09:00 (Friday)". */
+    const val EXTRA_NOW = "now"
     /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */
     const val EXTRA_TIMEOUT_MS = "timeout_ms"
     /**
@@ -139,6 +153,8 @@ object LinkContract {
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
     /** Without [EXTRA_TIMEOUT_MS]; Ferb sends its own, and goes ahead without Jev past it. */
     const val DECIDE_TIMEOUT_MS = 3_000
+    /** [METHOD_REWRITE]'s prompt: v2.1 if the held-out bench confirms it (Laptop Model Server notes, "Exploration - Rewrite before Needle 3"). */
+    const val REWRITE_VARIANT = "v2.1"
     const val MAX_DECIDE_TIMEOUT_MS = 10_000
     const val MAX_AUDIO_BYTES = 512 * 1024
     const val MAX_AUDIO_SECONDS = 30

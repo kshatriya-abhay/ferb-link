@@ -126,6 +126,35 @@ class ContractTest {
         Case("transcribe-server", "transcribe", "The server is in text mode and turns audio down.", mapOf("audio" to SPEECH, "audio_mime" to "audio/ogg")) {
             chatReply = 500 to """{"error": {"code": 500, "message": "audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj"}}"""
         },
+        Case("rewrite", "rewrite", "Typed Hinglish as one English command; sava saat worked out as 7:15 before the model.",
+            mapOf("request" to "kal subah sava saat baje ka alarm laga do", "now" to "2026-10-16T09:00 (Friday)", "timeout_ms" to 10_000)) {
+            chatReply = 200 to commands("Set an alarm for 7:15 am on Saturday 17 October")
+        },
+        Case("rewrite-two", "rewrite", "Two things asked: two commands, in order.", mapOf("request" to "torch on karo aur volume badhao", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 200 to commands("Turn on the flashlight", "Turn the volume up")
+        },
+        Case("rewrite-none", "rewrite", "Nothing asked: no commands.", mapOf("request" to "aaj mausam kaisa hai", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 200 to commands()
+        },
+        Case("rewrite-invented", "rewrite", "A time the request didn't hold: listed in invented, so Ferb doesn't run it.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 200 to commands("Set an alarm for 7 am")
+        },
+        Case("rewrite-off", "rewrite", "Turned off in Ferb Link: no network.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.enabled = false },
+        Case("rewrite-not_set_up", "rewrite", "No server set up.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.url = "" },
+        Case("rewrite-bad_request", "rewrite", "No request.", mapOf("request" to "", "now" to "2026-10-16T09:00 (Friday)")),
+        Case("rewrite-unreachable", "rewrite", "Nothing answers at the laptop's address.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.url = CLOSED },
+        Case("rewrite-timeout", "rewrite", "No answer within timeout_ms (1000, the least it takes).", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)", "timeout_ms" to 1000)) {
+            chatReply = 200 to commands("Set an alarm"); chatDelayMs = 1_500
+        },
+        Case("rewrite-auth", "rewrite", "The laptop turns the API key down.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 401 to """{"error": {"code": 401, "message": "Invalid API Key"}}"""
+        },
+        Case("rewrite-server", "rewrite", "The model is still loading (HTTP 503).", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 503 to """{"error": {"code": 503, "message": "Loading model"}}"""
+        },
+        Case("rewrite-bad_reply", "rewrite", "An answer that isn't the commands' JSON.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+            chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, I'll set it."}}]}"""
+        },
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
         Case("status-jev-cap", "status", "Jev turned itself off at its spending cap.") { it.jevOffReason = LinkContract.JEV_OFF_CAP },
         Case("decide", "decide", "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
@@ -295,6 +324,12 @@ class ContractTest {
                 """{"speech": true, "hindi": $hindi, "heard": "$heard", "text": "$text"}""")))).toString()
 
         /** 2 s of 16 kHz WAV: syllable-like bursts for "speech", zeros for "silence". */
+        /** What the laptop's model answers to a rewrite: {"commands": [...]} as the message's text. */
+        fun commands(vararg commands: String) = JSONObject()
+            .put("model", "gemma-4-e2b")
+            .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", JSONObject().put("commands", JSONArray(commands.toList())).toString()))))
+            .toString()
+
         /** What TypeSafe answers for one Choice (its API reference), with usage. */
         fun jevAnswer(choice: String, vararg probabilities: Pair<String, Double>) = 200 to JSONObject()
             .put("model", "jev-1.13.0")

@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "No request.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": ""
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "bad request: no request",
+      "error_detail": "No request",
+      "error_kind": "bad_request",
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

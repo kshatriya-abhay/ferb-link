@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "The model is still loading (HTTP 503).",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "model loading",
+      "error_detail": "Your computer is loading the model",
+      "error_kind": "server",
+      "invented": [],
+      "model": "",
+      "ms": 41,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

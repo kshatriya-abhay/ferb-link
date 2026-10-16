@@ -134,6 +134,21 @@ class LinkCalls(
             if (audio != null && audio.isNotEmpty()) RecentRequests.addVoice(caller, recording, transcript)
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to transcript.toJson())
         }
+        LinkContract.METHOD_REWRITE -> {
+            val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
+            val at = (extras[LinkContract.EXTRA_NOW] as? String)?.takeIf { it.isNotBlank() } ?: nowText(now())
+            val rewritten = when {
+                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request)
+                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request)
+                else -> state.client(trace).rewrite(request, at, Rewrite.Variant.of(LinkContract.REWRITE_VARIANT), timeoutMs = timeoutMs(extras)).also {
+                    if (it.failure == null && it.model.isNotEmpty()) {
+                        state.lastModel = it.model
+                        state.saw(ModelState.Loaded, now())
+                    }
+                }
+            }
+            mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to rewritten.toReplyJson())
+        }
         LinkContract.METHOD_DECIDE -> {
             val timeout = ((extras[LinkContract.EXTRA_TIMEOUT_MS] as? Number)?.toLong() ?: LinkContract.DECIDE_TIMEOUT_MS.toLong())
                 .coerceIn(LinkContract.MIN_TIMEOUT_MS.toLong(), LinkContract.MAX_DECIDE_TIMEOUT_MS.toLong()).toInt()
@@ -182,6 +197,13 @@ class LinkCalls(
     }
 
     companion object {
+        /** "2026-10-16T09:00 (Friday)", the phone's local time, as [Rewrite]'s prompt takes "now". */
+        fun nowText(millis: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+            val time = java.time.Instant.ofEpochMilli(millis).atZone(zone).toLocalDateTime().withSecond(0).withNano(0)
+            val day = time.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+            return "${time.toLocalDate()}T${"%02d:%02d".format(java.util.Locale.ROOT, time.hour, time.minute)} ($day)"
+        }
+
         /** Debug builds only: the recording as base64 text, for trying `transcribe` from `adb shell`. */
         const val DEBUG_AUDIO_BASE64 = "audio_base64"
 

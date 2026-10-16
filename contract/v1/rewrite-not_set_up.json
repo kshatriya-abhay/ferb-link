@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "No server set up.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "not set up",
+      "error_detail": "Ferb Link has no server set up",
+      "error_kind": "not_set_up",
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

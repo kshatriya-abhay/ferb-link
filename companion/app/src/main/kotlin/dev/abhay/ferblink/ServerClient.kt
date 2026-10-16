@@ -147,6 +147,13 @@ data class Rewritten(
         }
         .toString()
 
+    /** What `rewrite` gives Ferb: the commands and `invented`, without the harness's `sent` and `raw`. */
+    fun toReplyJson(): String = JSONObject(toJson()).apply {
+        remove("sent")
+        remove("raw")
+        put("source", "laptop")
+    }.toString()
+
     companion object {
         fun failed(failure: Failure, sent: String, ms: Long = 0, raw: String = "") = Rewritten(emptyList(), sent, raw, "", ms, failure)
     }

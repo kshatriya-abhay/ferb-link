@@ -1,0 +1,19 @@
+{
+  "method": "rewrite",
+  "note": "A time the request didn't hold: listed in invented, so Ferb doesn't run it.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": ["Set an alarm for 7 am"],
+      "invented": ["7"],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "An answer that isn't the commands' JSON.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "unexpected answer",
+      "error_detail": "Couldn't read the commands: no JSON object in the answer",
+      "error_kind": "bad_reply",
+      "invented": [],
+      "model": "",
+      "ms": 41,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

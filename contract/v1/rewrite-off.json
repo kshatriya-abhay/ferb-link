@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "Turned off in Ferb Link: no network.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "turned off",
+      "error_detail": "Ferb Link is off",
+      "error_kind": "off",
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

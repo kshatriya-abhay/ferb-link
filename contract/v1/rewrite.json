@@ -1,0 +1,20 @@
+{
+  "method": "rewrite",
+  "note": "Typed Hinglish as one English command; sava saat worked out as 7:15 before the model.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "kal subah sava saat baje ka alarm laga do",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "commands": ["Set an alarm for 7:15 am on Saturday 17 October"],
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 42,
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

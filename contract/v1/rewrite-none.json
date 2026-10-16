@@ -1,0 +1,19 @@
+{
+  "method": "rewrite",
+  "note": "Nothing asked: no commands.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "aaj mausam kaisa hai"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

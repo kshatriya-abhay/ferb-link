@@ -1,0 +1,23 @@
+{
+  "method": "rewrite",
+  "note": "No answer within timeout_ms (1000, the least it takes).",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do",
+    "timeout_ms": 1000
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "timed out",
+      "error_detail": "Your computer took too long to answer",
+      "error_kind": "timeout",
+      "invented": [],
+      "model": "",
+      "ms": 1001,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

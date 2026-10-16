@@ -48,6 +48,12 @@ class LinkCallsTest {
     }
 
     @Test
+    fun `rewrite's now, without Ferb's, is the phone's local time as the prompt takes it`() {
+        val millis = java.time.ZonedDateTime.of(2026, 10, 16, 9, 5, 42, 0, java.time.ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+        assertThat(LinkCalls.nowText(millis, java.time.ZoneId.of("Asia/Kolkata"))).isEqualTo("2026-10-16T09:05 (Friday)")
+    }
+
+    @Test
     fun `the timeout is clamped, and an Int or a Long is taken`() {
         assertThat(LinkCalls.timeoutMs(emptyMap())).isNull()
         assertThat(LinkCalls.timeoutMs(mapOf("timeout_ms" to 10))).isEqualTo(LinkContract.MIN_TIMEOUT_MS)

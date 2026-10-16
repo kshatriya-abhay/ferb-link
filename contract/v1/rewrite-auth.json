@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "The laptop turns the API key down.",
+  "extras": {
+    "now": "2026-10-16T09:00 (Friday)",
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "key refused",
+      "error_detail": "Your computer turned down the API key",
+      "error_kind": "auth",
+      "invented": [],
+      "model": "",
+      "ms": 1,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}
