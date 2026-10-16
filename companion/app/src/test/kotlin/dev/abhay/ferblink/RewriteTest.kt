@@ -70,3 +70,13 @@ class RewriteInventedTest {
         assertThat(invented("set a timer for 5 minutes", "Set a timer for 15 minutes")).containsExactly("15")
     }
 }
+
+class RewriteInventedWordsTest {
+    @Test
+    fun `I, I'll and other words of the request aren't facts`() {
+        val request = "sms dad I'll be home by 9"
+        assertThat(Rewrite.invented(request, Amounts.forRequest(request), listOf("Text Dad: I'll be home by 9"))).isEmpty()
+        assertThat(Rewrite.invented("set an alarm for 7:15", "set an alarm for 7:15", listOf("Set an alarm for 7:15 am"))).isEmpty()
+        assertThat(Rewrite.invented("set an alarm for 7", "set an alarm for 7", listOf("Set an alarm for 7:30"))).containsExactly("30")
+    }
+}

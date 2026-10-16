@@ -46,7 +46,27 @@ object Rewrite {
 - Never add anything the request doesn't say: no name, contact, place, app, number, time, date or length that isn't in the request, except dates you work out from Now. If something needed is missing, leave it out ("Set an alarm", not "Set an alarm for 7 am").
 - A question only words can answer (the weather, news, facts, maths, advice) is not a command, even when it's phrased as one: reply {"commands": []}. Don't write "Tell me …" commands."""
 
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2)
+    /**
+     * v3: v2 with the near-miss rule stated first, after the v1/v2 bench on requests.txt
+     * (2026-10-16): statements turned into commands were the main loss ("my flashlight is broken"
+     * became "Fix my flashlight" and ran set_flashlight). Rewrite only a request to the phone;
+     * a statement, a complaint or a sentence that merely uses a tool's word gives none; never add
+     * a verb; keep "my" and the user's own words. Examples here are not the bench's lines.
+     */
+    const val V3 = """You turn a request typed to a phone assistant into plain English commands for the assistant. Reply with JSON only: {"commands": [...]}.
+First decide whether the user is asking the phone to do something now. Only then write commands. Reply {"commands": []} for everything else:
+- statements and complaints about things, even about the phone's own things: "my torch stopped working", "the alarm was too loud today", "this list is getting long", "I missed my reminder";
+- things about the user or the past: "I'm tired", "I already called him", "I woke up early", "I forgot my umbrella";
+- sentences that only use a word an action also uses: "time flies", "the list of countries in Europe", "directions in a board game", "the calendar of the cricket season";
+- questions only words can answer (the weather, news, facts, maths, advice), even phrased as a command; wishes, plans and opinions not addressed to the assistant ("I should call mom"); greetings and thanks.
+When the user does ask:
+- Write one short sentence per thing asked, in plain English, in the order asked: "Set an alarm for 7:15 am", "Call Priya".
+- Use the request's own action. Never add a verb or a goal it doesn't imply (no "Fix", "Check", "Find", "Report", "Tell me").
+- Translate Hindi and Hinglish into English. Keep every name, contact, app, place, number, time and length exactly as written, and keep the user's own words for notes and messages, with "my" and "I" as they are. Never add a name, place, app, number, time or length the request doesn't have; leave out what's missing ("Set an alarm", not "Set an alarm for 7 am").
+- Write dates as dates: work out "today", "tomorrow", "kal", "parson", weekdays and "next week" from Now below, and write the day ("on Saturday 17 October"). Keep times as written. Add am or pm only if the request says which: subah is am, dopahar and shaam are pm, raat is pm from 7 to 11 and otherwise am.
+- Asking to see the phone's own things is a command: alarms, lists, notes, the calendar, directions ("Show my agenda for tomorrow")."""
+
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v3" to V3)
 
     private val months = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
     private val weekdays = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -64,7 +84,8 @@ object Rewrite {
         val givenWords = given.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
         val givenNumbers = Regex("\\d+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet()
         return commands.flatMap { command ->
-            val words = command.split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotEmpty() }
+            // Split as the request is, so "I'll" is "I" and "ll", neither of them a fact.
+            val words = command.split(Regex("[^\\p{L}\\p{N}:]+")).flatMap { it.split(":") }.filter { it.isNotEmpty() }
             val dated = words.any { it.lowercase() in months || it.lowercase() in weekdays }
             words.drop(1).filter { word ->
                 val lower = word.lowercase()
