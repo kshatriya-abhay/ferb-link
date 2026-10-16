@@ -41,6 +41,7 @@ class LaptopHarness {
         val key = File(System.getProperty("harness.key")?.takeIf { it.isNotBlank() } ?: "${System.getProperty("user.home")}/.config/ferb-link/api-key").readText().trim()
         val model = System.getProperty("harness.model")?.takeIf { it.isNotBlank() } ?: "gemma-4-e2b"
         val client = ServerClient(url, key, model = model)
+        server = Triple(url, key, model)
         val lines = File(input!!).readLines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
         val jev = JevRun(lines, File(input).name)
         val dry = System.getProperty("harness.dry") == "true"
@@ -148,10 +149,33 @@ class LaptopHarness {
         }
     }
 
+    /** The server's address, key and model, for [timex], which sends its own request. */
+    private var server = Triple("", "", "")
+
+    /** [TimexProbe]: the model's time expressions for a request, as it wrote them, plus its time. */
+    private fun timex(line: JSONObject): JSONObject {
+        val (url, key, model) = server
+        val started = System.nanoTime()
+        val connection = java.net.URL("$url/v1/chat/completions").openConnection() as java.net.HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.readTimeout = 60_000
+        connection.setRequestProperty("Authorization", "Bearer $key")
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.outputStream.use { it.write(TimexProbe.body(model, line.getString("request"), line.getString("now"), line.optString("variant", "t1")).toByteArray()) }
+        val code = connection.responseCode
+        val text = (if (code == 200) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
+        val ms = (System.nanoTime() - started) / 1_000_000
+        if (code != 200) return JSONObject().put("success", false).put("error", "HTTP $code: $text").put("ms", ms)
+        val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+        return JSONObject().put("success", true).put("expressions", JSONObject(content).getJSONArray("expressions")).put("ms", ms)
+    }
+
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {
         val timeout = if (line.has("timeout_ms")) line.getInt("timeout_ms") else null
         return when {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
+            line.optString("method") == "timex" -> timex(line)
             line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
             line.optString("method") in setOf("rewrite", "comprehend") -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
