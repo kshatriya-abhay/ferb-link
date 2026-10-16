@@ -328,10 +328,28 @@ class ServerClient(
         }
     }
 
+    /** [transcribe]'s prompt on text in place of audio, then the same steps as [Voice.transcribe] (bench only). */
+    fun transcribeText(heard: String, timeoutMs: Int? = null): Transcript {
+        val started = System.nanoTime()
+        return try {
+            val (code, text) = send("POST", "/v1/chat/completions", transcribeTextBody(modelName(timeoutMs), heard), auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) return Transcript.failed(problem(code, text), ms)
+            val transcript = parseTranscript(JSONObject(text), ms)
+            transcript.copy(text = Amounts.normalize(transcript.heard, transcript.text))
+        } catch (e: IOException) {
+            failureOf(e).let { Transcript.failed(it, msSince(started)) }
+        } catch (e: Exception) {
+            Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
+        }
+    }
+
     /** [Rewrite]'s experiment: [request] as plain English commands, with dates worked out from [now]. */
     fun rewrite(request: String, now: String, variant: Rewrite.Variant, toolNames: List<String> = emptyList(), timeoutMs: Int? = null): Rewritten {
         val started = System.nanoTime()
-        val sent = Amounts.forRequest(request)
+        val amounts = Amounts.forRequest(request)
+        val today = Dates.dateOf(now)
+        val sent = if (Rewrite.datesInCode(variant) && today != null) Dates.forRequest(amounts, today) else amounts
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
         var raw = ""
         return try {
@@ -434,7 +452,8 @@ class ServerClient(
 - "hindi": true if any word said was Hindi (Hinglish counts), false if every word was English.
 - "heard": the words that were said, in Latin letters. Write Hindi words the way people type Hinglish ("subah 5 baje ka alarm laga do"), never in Devanagari. Write English words in English. Write numbers as digits. Empty when "speech" is false.
 - "text": the same request as a short, plain English command, for example "Set an alarm for 5 am". Translate only: keep every name, app, place, number, time and date exactly as in "heard", don't add, drop or guess anything, and don't answer the request. Keep a word you aren't sure of as it is in "heard" rather than replacing it with a word you know. Empty when "speech" is false.
-Hindi amounts are common in these requests; listen for them and keep them: sava (a quarter more: sava saat = 7:15, sava ghanta = 1 hour 15 minutes), saade (a half more: saade paanch = 5:30), paune (a quarter less: paune aath = 7:45, paune do ghante = 1 hour 45 minutes), dedh (one and a half: dedh ghanta = 1 hour 30 minutes), dhai (two and a half: dhai minute = 2 minutes 30 seconds, dhai baje = 2:30). In "heard" write the amount word as said ("sava 7 baje"). In "text" write the exact time or length ("Wake me up at 7:15", "Set a timer for 2 minutes 30 seconds"). If you aren't sure which amount word was said, keep it as said in "text" too ("Set a timer for dhai minutes") rather than guessing a number."""
+Hindi amounts are common in these requests; listen for them and keep them: sava (a quarter more: sava saat = 7:15, sava ghanta = 1 hour 15 minutes), saade (a half more: saade paanch = 5:30), paune (a quarter less: paune aath = 7:45, paune do ghante = 1 hour 45 minutes), dedh (one and a half: dedh ghanta = 1 hour 30 minutes), dhai (two and a half: dhai minute = 2 minutes 30 seconds, dhai baje = 2:30). In "heard" write the amount word as said ("sava 7 baje"). In "text" write the exact time or length ("Wake me up at 7:15", "Set a timer for 2 minutes 30 seconds"). If you aren't sure which amount word was said, keep it as said in "text" too ("Set a timer for dhai minutes") rather than guessing a number.
+In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 percent, full or max 100 percent ("aadhi aawaz" → "Set the volume to 50 percent"). A request of one or two action words is still a command: "next", "stop", "pause", "louder" stay as said ("Play the next track", "Stop", "Pause", "Turn the volume up")."""
 
         /**
          * Common Hindi words in Latin letters, as a second opinion on the model's "hindi", which
@@ -503,6 +522,23 @@ Hindi amounts are common in these requests; listen for them and keep them: sava 
         }
 
         private const val FORMAT_SLOT = "@response_format@"
+
+        /**
+         * [transcribeBody] with [heard] typed in place of a recording: for checking the prompt's
+         * "text" rules on the audio bench's heard lines (`companion:harness`'s `transcribe-text`;
+         * the audio wasn't kept). Not what the phone sends.
+         */
+        fun transcribeTextBody(model: String, heard: String): String = JSONObject()
+            .put("model", model)
+            .put("messages", JSONArray()
+                .put(JSONObject().put("role", "system").put("content", TRANSCRIBE))
+                .put(JSONObject().put("role", "user").put("content", "(The recording, as heard:) $heard")))
+            .put("temperature", 0)
+            .put("max_tokens", 300)
+            .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+            .put("response_format", FORMAT_SLOT)
+            .toString()
+            .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_FORMAT)
 
         fun parseTranscript(reply: JSONObject, ms: Long): Transcript {
             val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")

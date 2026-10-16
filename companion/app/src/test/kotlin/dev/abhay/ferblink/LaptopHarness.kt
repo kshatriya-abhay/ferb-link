@@ -151,6 +151,8 @@ class LaptopHarness {
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {
         val timeout = if (line.has("timeout_ms")) line.getInt("timeout_ms") else null
         return when {
+            // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
+            line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
             line.optString("method") == "rewrite" -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
                 val tools = line.optJSONArray("tools")

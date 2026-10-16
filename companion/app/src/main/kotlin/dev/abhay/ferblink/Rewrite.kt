@@ -76,7 +76,24 @@ When the user does ask:
 - A short request of one or two words is still a command when it is an action word, like a media button: "next", "stop", "pause", "louder" ("Play the next track", "Stop", "Pause", "Turn the volume up"). Naming a thing is not an action: "my torch is broken" asks for nothing.
 - Silencing is muting: "aawaz band karo", "sound off", "chup karo" → "Mute the volume" (volume to 0), not "Turn off the sound"."""
 
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v3" to V3)
+    /**
+     * v2.2: v2 with v2.1's lessons that held up, after the held-out check (2026-10-16). Its
+     * "aawaz band karo" → mute example made "torch band karo" mute the volume, so "band karo"
+     * now turns off whatever it follows. Dates are worked out in code before the model
+     * ([Dates.forRequest]), so the prompt only says to keep them.
+     */
+    val V22 = V2.replace(
+        Regex("- Write dates as dates:[^\n]*\n"),
+        "- Dates in the request are already written out (\"on Saturday 17 October\"): copy them exactly as they are, never change a day or date. Keep times as written. Add am or pm only if the request says which: subah is am, dopahar and shaam are pm, raat is pm from 7 to 11 and otherwise am.\n",
+    ) + """
+- Write amounts as numbers: half is 50 percent, a quarter 25 percent, full or max 100 percent ("half volume" → "Set the volume to 50 percent").
+- A short request of one or two words is still a command when it is an action word, like a media button: "next", "stop", "pause", "louder" ("Play the next track", "Stop", "Pause", "Turn the volume up"). Naming a thing is not an action.
+- "band karo" (or "band kar do", "off karo") turns off the thing it follows, and only that: "torch band karo" → "Turn off the flashlight", "gaana band karo" → "Stop the music", "wifi band karo" → "Turn off Wi-Fi", "aawaz band karo" → "Mute the volume"."""
+
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3)
+
+    /** Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 on. */
+    fun datesInCode(variant: Variant) = variant.base == "v2.2"
 
     /** Numbers a request holds as words: v2.1 writes them as digits, which isn't inventing them. */
     private val numberWords: Map<String, Int> = Amounts.numbers + mapOf(
@@ -113,11 +130,35 @@ When the user does ask:
                         val number = Regex("\\d+").find(word)!!.value.trimStart('0').ifEmpty { "0" }
                         number !in givenNumbers && !(dated && number.toInt() in 1..31) && !(number.length == 4 && dated)
                     }
-                    word.first().isUpperCase() -> lower !in givenWords && lower !in months && lower !in weekdays && lower !in clockWords && word != "I"
+                    word.first().isUpperCase() -> lower !in givenWords && lower !in months && lower !in weekdays && lower !in clockWords && word != "I" &&
+                        !respelled(lower, givenWords, given)
                     else -> false
                 }
             }
         }.distinct()
+    }
+
+    /**
+     * Whether [word] is a request's word respelled, as recognition and typing garble app names
+     * ("swiggi" → Swiggy, "phone pay" → PhonePe): within two letters of a word, or of two
+     * neighbouring words run together. A different name ("sister" → Priya) is not.
+     */
+    private fun respelled(word: String, givenWords: Set<String>, given: String): Boolean {
+        val words = given.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val candidates = givenWords + words.zipWithNext { a, b -> a + b }
+        return word.length >= 4 && candidates.any { kotlin.math.abs(it.length - word.length) <= 2 && distance(it, word) <= 2 }
+    }
+
+    /** Levenshtein distance. */
+    private fun distance(a: String, b: String): Int {
+        var previous = IntArray(b.length + 1) { it }
+        for (i in a.indices) {
+            val current = IntArray(b.length + 1)
+            current[0] = i + 1
+            for (j in b.indices) current[j + 1] = minOf(previous[j + 1] + 1, current[j] + 1, previous[j] + if (a[i] == b[j]) 0 else 1)
+            previous = current
+        }
+        return previous[b.length]
     }
 
     /** For +shots: a few requests and their commands, near misses and several actions among them. */

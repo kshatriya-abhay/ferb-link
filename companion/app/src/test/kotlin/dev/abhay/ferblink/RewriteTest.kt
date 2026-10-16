@@ -100,3 +100,15 @@ class RewriteV21Test {
         assertThat(invented("half volume", "Set the volume to 60 percent")).containsExactly("60")
     }
 }
+
+class RewriteRespelledTest {
+    private fun invented(request: String, vararg commands: String) = Rewrite.invented(request, request, commands.toList())
+
+    @Test
+    fun `an app name respelled isn't invented, another name is`() {
+        assertThat(invented("open phone pay", "Open PhonePe")).isEmpty()
+        assertThat(invented("swiggi kholo", "Open Swiggy")).isEmpty()
+        assertThat(invented("call my sister", "Call Priya")).containsExactly("Priya")
+        assertThat(invented("open maps", "Open Uber")).containsExactly("Uber")
+    }
+}
