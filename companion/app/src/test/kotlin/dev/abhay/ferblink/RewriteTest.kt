@@ -187,3 +187,17 @@ class TimeFormatTest {
         assertThat(reply.getJSONArray("commands").length()).isEqualTo(0)
     }
 }
+
+class TimedShapeTest {
+    @Test
+    fun `timed puts a trimmed when only in the timed tools`() {
+        val tools = org.json.JSONArray("""[{"name": "set_timer", "description": "t", "parameters": {"type": "object", "properties": {}}}, {"name": "set_flashlight", "description": "f", "parameters": {"type": "object", "properties": {}}}]""")
+        val format = SchemaCall.format(tools, rewrite = false, timed = true)
+        assertThat(format).contains(TimeFormat.TIMER)
+        assertThat(format).contains(""""enum": ["set_flashlight"]}, "arguments": {"type":"object","properties":{}}}, "required": ["tool", "arguments"]""")
+        assertThat(TimeFormat.forTool("set_alarm")).doesNotContain("part")
+        assertThat(TimeFormat.forTool("open_app")).isNull()
+        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2+when"))).isFalse()
+        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2"))).isTrue()
+    }
+}

@@ -46,6 +46,39 @@ object TimeFormat {
 Clock words: "sava saat" is 7:15, "saade paanch" 5:30, "paune aath" 7:45, "quarter to 8" 7:45, "half past 6" 6:30.
 Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": {"hour": 5, "minute": 0, "meridiem": "pm", "part": "evening"}, "source": "kal shaam 5 baje"}; "alarm for 6" → {"kind": "at", "day": null, "time": {"hour": 6, "minute": 0, "meridiem": null, "part": null}, "source": "6"}; "call mom tonight" → {"kind": "at", "day": {"relative": 0}, "time": {"hour": null, "minute": null, "meridiem": null, "part": "night"}, "source": "tonight"}."""
 
+    // --- Trimmed shapes for one tool each (ferb-manager's option c): only the fields that tool uses. ---
+
+    private const val CLOCK = """{"type": "object", "properties": {"hour": {"type": "integer"}, "minute": {"type": "integer"}, "meridiem": {"enum": ["am", "pm", null]}}, "required": ["hour", "minute", "meridiem"]}"""
+    private const val SHORT = """"source": {"type": "string", "maxLength": 40}"""
+
+    /** An alarm: a clock time, and the day only if one is said (Clock can't take a date; Ferb checks it). */
+    const val ALARM = """{"type": "object", "properties": {"kind": {"enum": ["at"]}, "day": $DAY, "time": $CLOCK, $SHORT}, "required": ["kind", "day", "time", "source"]}"""
+    /** A timer: a length only. */
+    const val TIMER = """{"type": "object", "properties": {"kind": {"enum": ["duration"]}, "length": $LENGTH, $SHORT}, "required": ["kind", "length", "source"]}"""
+    /** An event: a day and a time, which may be only a part of the day. */
+    const val EVENT = """{"type": "object", "properties": {"kind": {"enum": ["at"]}, "day": $DAY, "time": $TIME, $SHORT}, "required": ["kind", "day", "time", "source"]}"""
+    /** A reminder: a moment, after a length, or a repeat. */
+    const val REMINDER = """{"anyOf": [$EVENT, """ +
+        """{"type": "object", "properties": {"kind": {"enum": ["in"]}, "length": $LENGTH, $SHORT}, "required": ["kind", "length", "source"]}, """ +
+        """{"type": "object", "properties": {"kind": {"enum": ["every"]}, "period": {"enum": ["day", "week", "weekdays", "month", "year"]}, "on": {"type": "array", "items": $WEEKDAY}, "time": $TIME, $SHORT}, "required": ["kind", "period", "on", "time", "source"]}]}"""
+
+    /** The trimmed "when" for a tool that takes a time, by Ferb's tool names; null for one that doesn't. */
+    fun forTool(name: String): String? = when (name) {
+        "set_alarm" -> ALARM
+        "set_timer" -> TIMER
+        "add_event" -> EVENT
+        "add_reminder" -> REMINDER
+        else -> null
+    }
+
+    /** For the trimmed shapes: shorter than [PROMPT], with the examples the full probe missed (parso, next Friday). */
+    const val PROMPT_TIMED = """For an alarm, timer, reminder or event, also give "when": the time as said, as structure. Never calculate a date or time; null for what isn't said. "source" is the 2 to 5 words it came from.
+- day: {"relative": 0} today, aaj, tonight; {"relative": 1} tomorrow, kal; {"relative": 2} the day after tomorrow, parso; {"weekday": "friday", "which": "this", "next" or null} (next for next or agle; somvar monday, mangalvar tuesday, budhvar wednesday, guruvar thursday, shukravar friday, shanivar saturday, ravivar sunday); {"day": 20, "month": 10 or null, "year": null}; {"span": "weekend"}; or null.
+- time: hour and minute as said, meridiem "am" or "pm" only when said or from subah (am), dopahar, shaam, raat (pm). For events and reminders, part "morning", "afternoon", "evening" or "night" only when named ("tonight" is night), with hour and minute null if no clock time is said. sava saat is 7:15, saade paanch 5:30, paune aath 7:45, quarter to 8 is 7:45.
+- length (timers, "in …" reminders): days, hours, minutes, seconds, 0 when not said; dedh ghanta is 1 hour 30 minutes, dhai minute 2 minutes 30 seconds.
+- every (reminders): period day, week, weekdays, month or year, on [weekdays], and time.
+Examples: "parso shaam 6 baje" → {"kind": "at", "day": {"relative": 2}, "time": {"hour": 6, "minute": 0, "meridiem": "pm", "part": "evening"}, "source": "parso shaam 6 baje"}; "next Friday at 3" → {"kind": "at", "day": {"weekday": "friday", "which": "next"}, "time": {"hour": 3, "minute": 0, "meridiem": null, "part": null}, "source": "next Friday at 3"}; "alarm for 6" → {"kind": "at", "day": null, "time": {"hour": 6, "minute": 0, "meridiem": null}, "source": "6"}."""
+
     /** [expression] as passed on in a reply: with "v", or JSON null. */
     fun versioned(expression: JSONObject?): Any = expression?.let { JSONObject(it.toString()).put("v", VERSION) } ?: JSONObject.NULL
 }

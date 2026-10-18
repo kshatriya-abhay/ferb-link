@@ -129,8 +129,12 @@ When the user does ask:
     /** Whether [variant] is a comprehend prompt (c1 on): its answer has "direct" too. */
     fun comprehends(variant: Variant) = variant.base.startsWith("c")
 
-    /** Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 and comprehend. */
-    fun datesInCode(variant: Variant) = variant.base == "v2.2" || comprehends(variant)
+    /**
+     * Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 and
+     * comprehend, but not with +when, where the model writes the time itself from the words said
+     * (code-written dates confused it: "parso" came back as tomorrow next to "Sunday 18 October").
+     */
+    fun datesInCode(variant: Variant) = (variant.base == "v2.2" || comprehends(variant)) && !variant.`when`
 
     /** Numbers a request holds as words: v2.1 writes them as digits, which isn't inventing them. */
     private val numberWords: Map<String, Int> = Amounts.numbers + mapOf(
