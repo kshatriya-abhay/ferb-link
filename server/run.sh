@@ -11,14 +11,16 @@ source "$ROOT/server/server.conf"
 
 [ -n "$MODEL" ] || { echo "Set MODEL in server/server.conf to a name from server/models.txt" >&2; exit 1; }
 read -r _ _ _ FILE _ < <(grep "^$MODEL " "$ROOT/server/models.txt") || { echo "No model $MODEL in server/models.txt" >&2; exit 1; }
-MODEL_PATH="$ROOT/server/build/models/$FILE"
+# MODELS_DIR (the SSD), or where files were before it existed.
+model_file() { if [ -f "$MODELS_DIR/$1" ] || [ ! -f "$ROOT/server/build/models/$1" ]; then echo "$MODELS_DIR/$1"; else echo "$ROOT/server/build/models/$1"; fi; }
+MODEL_PATH=$(model_file "$FILE")
 [ -f "$MODEL_PATH" ] || { echo "$FILE is missing: mise run server:model $MODEL" >&2; exit 1; }
 [ -x "$ROOT/server/build/llama/llama-server" ] || { echo "llama-server is missing: mise run server:install" >&2; exit 1; }
 [ -s "$KEY_FILE" ] || { echo "No API key in $KEY_FILE: mise run server:install" >&2; exit 1; }
 PROJECTOR=
 if [ "${CAPABILITIES:-text}" = full ]; then
   read -r _ _ _ PFILE _ < <(grep "^$MODEL " "$ROOT/server/projectors.txt") || { echo "No projector for $MODEL in server/projectors.txt" >&2; exit 1; }
-  PROJECTOR="$ROOT/server/build/models/$MODEL-$PFILE"
+  PROJECTOR=$(model_file "$MODEL-$PFILE")
   [ -f "$PROJECTOR" ] || { echo "The projector is missing: mise run server:mode full" >&2; exit 1; }
 fi
 [ "${1:-}" = check ] && exit 0  # `run.sh check`: only check that everything is in place

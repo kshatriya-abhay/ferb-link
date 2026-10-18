@@ -13,7 +13,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 
 ## What you need
 
-- **A Linux computer** with an NVIDIA GPU with at least 4 GB of memory (the CUDA build), or another GPU that runs Vulkan (the Vulkan build). Gemma 4 E2B with its audio and image encoder takes about 3 GB of GPU memory and 4 GB of disk.
+- **A Linux computer** with an NVIDIA GPU with at least 4 GB of memory (the CUDA build), or another GPU that runs Vulkan (the Vulkan build). Gemma 4 E2B with its audio and image encoder takes about 3 GB of GPU memory and 4 GB of disk, in `~/.local/share/ferb-link/models` (`MODELS_DIR` in `server/server.conf`). Put it on an SSD: from a spinning disk, a load after long idle takes about a minute.
 - **[Tailscale](https://tailscale.com)** on the computer and the phone, on the same tailnet, with MagicDNS on (the default).
 - **[mise](https://mise.jdx.dev)**, plus `curl` and `jq`. mise installs Java 21 for the app's build.
 - **The Android SDK** in `~/Android/Sdk` (Android Studio installs it there), with its licences accepted (`sdkmanager --licenses`) so Gradle can fetch the platform it needs, and `adb`.
@@ -107,7 +107,7 @@ Ferb Link's screens, its contract with Ferb, and its tests are in [companion/REA
 
 **Capabilities.** `CAPABILITIES=full` is the default, because Ferb's voice input needs it (`transcribe` in Ferb Link). `full` adds the model's projector, Gemma 4 E2B's vision and audio encoder, so requests can carry `image_url` and `input_audio` parts. `text` is what Ferb's bench measured. `full` costs about 1.15 GB more GPU memory: 3.0 GB idle, and up to 3.45 GB while reading a large image (a 30 s recording peaks at 3.03 GB). llama.cpp calls its audio input experimental. Text requests are as fast as in `text` mode.
 
-**On demand.** The server process stays up, but frees the model after 5 minutes without a request (`SLEEP_IDLE`) and loads it again on the next one. That takes about 2 s with the model file in the page cache and 10–30 s from disk. Asleep, it holds 0.2 GB of GPU memory and the card idles (about 10 W, against 15.6 W with the model loaded). `/health` and `/v1/models` don't wake it. Ferb asks Ferb Link to wake it when you start recording, so the load hides behind your speech.
+**On demand.** The server process stays up, but frees the model after 5 minutes without a request (`SLEEP_IDLE`) and loads it again on the next one. That takes about 2 s with the files in the page cache, and about 4 s when they have to be read from an SSD (from a spinning disk it took 48 s). Asleep, it holds 0.2 GB of GPU memory and the card idles (about 10 W, against 15.6 W with the model loaded). `/health` and `/v1/models` don't wake it. Ferb asks Ferb Link to wake it when you start recording, so the load hides behind your speech.
 
 **Unloading.** llama-server runs as a router. `--models-preset` is written from `server.conf` to `server/build/preset.ini` on each start. The router answers on the port and runs the model in a child process, started by the first request. `mise run server:unload`, or Unload in Ferb Link, stops that process at once and frees all of it (0.1 GB of GPU memory left, against 0.2 GB asleep). The next request starts it again, like a wake. Because of the router, every request names the model (`"model": "gemma-4-e2b"`; without it the router answers 400), and `/props` takes `?model=gemma-4-e2b&autoload=false`.
 
