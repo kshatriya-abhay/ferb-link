@@ -194,7 +194,7 @@ class TimedShapeTest {
         val tools = org.json.JSONArray("""[{"name": "set_timer", "description": "t", "parameters": {"type": "object", "properties": {}}}, {"name": "set_flashlight", "description": "f", "parameters": {"type": "object", "properties": {}}}]""")
         val format = SchemaCall.format(tools, rewrite = false, timed = true)
         assertThat(format).contains(TimeFormat.TIMER)
-        assertThat(format).contains(""""enum": ["set_flashlight"]}, "arguments": {"type":"object","properties":{}}}, "required": ["tool", "arguments"]""")
+        assertThat(format).contains(""""enum": ["set_flashlight"]}, "arguments": {"type":"object","properties":{}}, "when": {"type": "null"}}, "required": ["tool", "arguments", "when"]""")
         assertThat(TimeFormat.forTool("set_alarm")).doesNotContain("part")
         assertThat(TimeFormat.forTool("open_app")).isNull()
         assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2+when"))).isFalse()
@@ -217,5 +217,16 @@ class TimeAsksTest {
         assertThat(SchemaCall.asks("every Monday at 8 remind me", "add_reminder", at(null))).containsExactly("a repeat was asked for but not given")
         assertThat(SchemaCall.asks("har roz 8 baje yaad dilana", "add_reminder", org.json.JSONObject().put("kind", "every"))).isEmpty()
         assertThat(SchemaCall.asks("remind me daily", "set_alarm", at(null))).isEmpty()
+    }
+}
+
+class LeakedClosingTest {
+    @Test
+    fun `a string argument holding the answer's closing is cut there, and says so`() {
+        val (arguments, trimmed) = SchemaCall.clean(org.json.JSONObject().put("app_name", "Maps}}]}```").put("on", true))
+        assertThat(arguments.getString("app_name")).isEqualTo("Maps")
+        assertThat(arguments.getBoolean("on")).isTrue()
+        assertThat(trimmed).isTrue()
+        assertThat(SchemaCall.clean(org.json.JSONObject().put("name", "pizza hut")).second).isFalse()
     }
 }

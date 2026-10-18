@@ -16,7 +16,7 @@ object SchemaCall {
         append("You are Ferb, an assistant on an Android phone. Reply with JSON only: {\"calls\": [...]")
         if (rewrite) append(", \"commands\": [...]")
         append("}.\n")
-        append("- \"calls\": one call for each thing the user asks the phone to do, in order: {\"tool\": its name, \"arguments\": its arguments in the user's words, \"when\": its time}. ")
+        append("- \"calls\": one call for each thing the user asks the phone to do, in order: {\"tool\": its name, \"arguments\": its arguments in the user's words, \"when\": its time, or null for a tool that takes none}. ")
         append("An empty list when no tool fits, or when the user isn't asking for an action (a question about the world, chat, a statement about something, the past or themselves).\n")
         if (rewrite) {
             append("- \"commands\": when the request is Hinglish, vague or needs more than the tools' words, leave \"calls\" empty and instead write each thing asked as a plain English command (\"Set an alarm for 7:15 am tomorrow\"); otherwise [].\n")
@@ -35,7 +35,9 @@ object SchemaCall {
             val name = tool.getString("name")
             val parameters = tool.optJSONObject("parameters") ?: JSONObject().put("type", "object").put("properties", JSONObject())
             val shape = if (timed) TimeFormat.forTool(name) else TimeFormat.SCHEMA
-            if (shape == null) """{"type": "object", "properties": {"tool": {"enum": [${JSONObject.quote(name)}]}, "arguments": $parameters}, "required": ["tool", "arguments"]}"""
+            // A tool without a time still ends with "when": null. Ending at "arguments" let the model
+            // write the answer's closing JSON inside a string argument ("Calculator}}]}```").
+            if (shape == null) """{"type": "object", "properties": {"tool": {"enum": [${JSONObject.quote(name)}]}, "arguments": $parameters, "when": {"type": "null"}}, "required": ["tool", "arguments", "when"]}"""
             else """{"type": "object", "properties": {"tool": {"enum": [${JSONObject.quote(name)}]}, "arguments": $parameters, "when": $shape}, "required": ["tool", "arguments", "when"]}"""
         }
         val items = if (tools.length() == 0) """{"type": "object"}""" else """{"anyOf": [$calls]}"""
@@ -71,13 +73,34 @@ object SchemaCall {
         if (repeat.containsMatchIn(request) && tool == "add_reminder" && `when`?.optString("kind") != "every") add("a repeat was asked for but not given")
     }
 
+    private val leaked = Regex("\\}\\}|```")
+
+    /**
+     * A string argument with the answer's own closing written into it ("Maps}}]}```"): Gemma
+     * sometimes closes the JSON before the string, and the grammar lets it stay inside. No real
+     * name holds "}}" or "```", so the string is cut there, and [trimmed] says so.
+     */
+    fun clean(arguments: JSONObject): Pair<JSONObject, Boolean> {
+        var trimmed = false
+        val out = JSONObject()
+        for (key in arguments.keys()) {
+            val value = arguments.get(key)
+            if (value is String && leaked.containsMatchIn(value)) {
+                out.put(key, value.substring(0, leaked.find(value)!!.range.first).trimEnd())
+                trimmed = true
+            } else out.put(key, value)
+        }
+        return out to trimmed
+    }
+
     /** The answer as the harness writes it: calls with each "when" versioned, and commands. */
     fun reply(content: String, request: String = ""): JSONObject {
         val answer = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1))
         val calls = answer.getJSONArray("calls")
         val out = JSONArray((0 until calls.length()).map { i ->
             val call = calls.getJSONObject(i)
-            JSONObject().put("tool", call.getString("tool")).put("arguments", call.optJSONObject("arguments") ?: JSONObject())
+            val (arguments, trimmed) = clean(call.optJSONObject("arguments") ?: JSONObject())
+            JSONObject().put("tool", call.getString("tool")).put("arguments", arguments).put("trimmed", trimmed)
                 .put("when", TimeFormat.versioned(call.optJSONObject("when")))
                 .put("asks", JSONArray(asks(request, call.getString("tool"), call.optJSONObject("when"))))
         })

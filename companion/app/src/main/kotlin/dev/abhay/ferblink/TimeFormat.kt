@@ -72,7 +72,7 @@ Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": 
     }
 
     /** For the trimmed shapes: shorter than [PROMPT], with the examples the full probe missed (parso, next Friday). */
-    const val PROMPT_TIMED = """For an alarm, timer, reminder or event, also give "when": the time as said, as structure. Never calculate a date or time; null for what isn't said.
+    const val PROMPT_TIMED = """For an alarm, timer, reminder or event, "when" is the time as said, as structure. Never calculate a date or time; null for what isn't said.
 - day: {"relative": 0} today, aaj, tonight; {"relative": 1} tomorrow, kal; {"relative": 2} the day after tomorrow, parso; {"weekday": "friday", "which": "this", "next" or null} (next for next or agle; somvar monday, mangalvar tuesday, budhvar wednesday, guruvar thursday, shukravar friday, shanivar saturday, ravivar sunday); {"day": 20, "month": 10 or null, "year": null}; {"span": "weekend"}; or null.
 - time: hour and minute as said, meridiem "am" or "pm" only when said or from subah (am), dopahar, shaam, raat (pm). For events and reminders, part "morning", "afternoon", "evening" or "night" only when named ("tonight" is night), with hour and minute null if no clock time is said. sava saat is 7:15, saade paanch 5:30, paune aath 7:45, quarter to 8 is 7:45.
 - length (timers, "in …" reminders): days, hours, minutes, seconds, 0 when not said; dedh ghanta is 1 hour 30 minutes, dhai minute 2 minutes 30 seconds.
