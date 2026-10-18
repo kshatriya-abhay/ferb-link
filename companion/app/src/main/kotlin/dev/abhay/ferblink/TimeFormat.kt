@@ -62,9 +62,13 @@ Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": 
         """{"type": "object", "properties": {"kind": {"enum": ["in"]}, "length": $LENGTH}, "required": ["kind", "length"]}, """ +
         """{"type": "object", "properties": {"kind": {"enum": ["every"]}, "period": {"enum": ["day", "week", "weekdays", "month", "year"]}, "on": {"type": "array", "items": $WEEKDAY}, "time": $TIME}, "required": ["kind", "period", "on", "time"]}]}"""
 
+    private const val IN = """{"type": "object", "properties": {"kind": {"enum": ["in"]}, "length": $LENGTH}, "required": ["kind", "length"]}"""
+    /** t4: an alarm may also be after a length ("alarm in 20 minutes"), which t3 turned into a clock time. */
+    const val ALARM_T4 = """{"anyOf": [$ALARM, $IN]}"""
+
     /** The trimmed "when" for a tool that takes a time, by Ferb's tool names; null for one that doesn't. */
-    fun forTool(name: String): String? = when (name) {
-        "set_alarm" -> ALARM
+    fun forTool(name: String, version: String = "t3"): String? = when (name) {
+        "set_alarm" -> if (version == "t4") ALARM_T4 else ALARM
         "set_timer" -> TIMER
         "add_event" -> EVENT
         "add_reminder" -> REMINDER
@@ -78,6 +82,21 @@ Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": 
 - length (timers, "in …" reminders): days, hours, minutes, seconds, 0 when not said; dedh ghanta is 1 hour 30 minutes, dhai minute 2 minutes 30 seconds.
 - every (reminders): period day, week, weekdays, month or year, on [weekdays], and time.
 Examples: "parso shaam 6 baje" → {"kind": "at", "day": {"relative": 2}, "time": {"hour": 6, "minute": 0, "meridiem": "pm", "part": "evening"}}; "next Friday at 3" → {"kind": "at", "day": {"weekday": "friday", "which": "next"}, "time": {"hour": 3, "minute": 0, "meridiem": null, "part": null}}; "alarm for 6" → {"kind": "at", "day": null, "time": {"hour": 6, "minute": 0, "meridiem": null}}."""
+
+    /**
+     * t4, after times.txt's tune half (2026-10-18): "in N" was worked out into a clock time, repeats
+     * never used "every", the examples' dates were copied into unrelated ones, a month, year or
+     * this-Friday was added when not said, named days became +1, and Hindi numbers slipped. The
+     * examples now use values that appear in no request (27 March, 45 minutes).
+     */
+    const val PROMPT_T4 = """For an alarm, timer, reminder or event, "when" is the time exactly as said, as structure. You never calculate: no clock time from "in an hour", no date from a weekday, no month or year that wasn't said. Anything not said is null.
+- "in", "after", "mein" or "baad" with a length ("in 20 minutes", "aadhe ghante mein", "2 ghante baad") is always {"kind": "in", "length": ...}, for alarms too. Never turn it into a clock time.
+- "every", "har", "roz", "daily", "each" is always {"kind": "every", ...}: "roz" or "daily" is period day; "every Monday" or "har somvar" is period week with on ["monday"]; "weekdays" is period weekdays.
+- day: {"relative": 0} only for today, aaj or tonight; {"relative": 1} only for tomorrow or kal; {"relative": 2} only for the day after tomorrow or parso. A named weekday stays a weekday: {"weekday": ..., "which": "this", "next" or null}. A date stays as said: {"day": n, "month": m or null if no month is said, "year": null unless a year is said}. Null when no day is said: never add today or this weekday.
+- time: hour and minute as said. meridiem only when am or pm is said, or from subah (am), dopahar, shaam or raat (pm); otherwise null. part only when a part of the day is named; never for a bare clock time.
+- length: days, hours, minutes, seconds as said, 0 for the rest.
+- Hindi numbers: ek 1, do 2, teen 3, chaar 4, paanch 5, chhe 6, saat 7, aath 8, nau 9, das 10, gyarah 11, barah 12, pandrah 15, bees 20, pachchees 25, tees 30, paintalees 45. sava is a quarter more (sava aath 8:15), saade a half more (saade saat 7:30), paune a quarter less (paune aath 7:45, paune ghanta 45 minutes), dedh one and a half, dhai two and a half, aadha half.
+Examples: "on the 27th of March at 4" → {"kind": "at", "day": {"day": 27, "month": 3, "year": null}, "time": {"hour": 4, "minute": 0, "meridiem": null, "part": null}}; "in 45 minutes" → {"kind": "in", "length": {"days": 0, "hours": 0, "minutes": 45, "seconds": 0}}; "har mangalvar shaam 9 baje" → {"kind": "every", "period": "week", "on": ["tuesday"], "time": {"hour": 9, "minute": 0, "meridiem": "pm", "part": "evening"}}; "on Wednesday" → {"kind": "at", "day": {"weekday": "wednesday", "which": null}, "time": null}."""
 
     /** [expression] as passed on in a reply: with "v", or JSON null. */
     fun versioned(expression: JSONObject?): Any = expression?.let { JSONObject(it.toString()).put("v", VERSION) } ?: JSONObject.NULL

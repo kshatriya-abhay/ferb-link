@@ -12,7 +12,7 @@ import org.json.JSONObject
  * "when" ([TimeFormat]) is beside them, for Ferb's resolver.
  */
 object SchemaCall {
-    fun prompt(tools: JSONArray, rewrite: Boolean, timed: Boolean = false) = buildString {
+    fun prompt(tools: JSONArray, rewrite: Boolean, timed: Boolean = false, version: String = "t3") = buildString {
         append("You are Ferb, an assistant on an Android phone. Reply with JSON only: {\"calls\": [...]")
         if (rewrite) append(", \"commands\": [...]")
         append("}.\n")
@@ -23,18 +23,18 @@ object SchemaCall {
         }
         append("Never add a name, place, number, time or date the request doesn't have.\n")
         // timed (option c): "when" only in the timed tools' shapes, trimmed; otherwise every call has one.
-        append(if (timed) TimeFormat.PROMPT_TIMED else TimeFormat.PROMPT)
+        append(if (!timed) TimeFormat.PROMPT else if (version == "t4") TimeFormat.PROMPT_T4 else TimeFormat.PROMPT_TIMED)
         append("\n\nThe tools:\n")
         for (i in 0 until tools.length()) append(tools.getJSONObject(i).toString()).append('\n')
     }
 
     /** The answer's schema: each call's tool name, that tool's arguments schema, and a "when". */
-    fun format(tools: JSONArray, rewrite: Boolean, timed: Boolean = false): String {
+    fun format(tools: JSONArray, rewrite: Boolean, timed: Boolean = false, version: String = "t3"): String {
         val calls = (0 until tools.length()).joinToString(", ") { i ->
             val tool = tools.getJSONObject(i)
             val name = tool.getString("name")
             val parameters = tool.optJSONObject("parameters") ?: JSONObject().put("type", "object").put("properties", JSONObject())
-            val shape = if (timed) TimeFormat.forTool(name) else TimeFormat.SCHEMA
+            val shape = if (timed) TimeFormat.forTool(name, version) else TimeFormat.SCHEMA
             // A tool without a time still ends with "when": null. Ending at "arguments" let the model
             // write the answer's closing JSON inside a string argument ("Calculator}}]}```").
             if (shape == null) """{"type": "object", "properties": {"tool": {"enum": [${JSONObject.quote(name)}]}, "arguments": $parameters, "when": {"type": "null"}}, "required": ["tool", "arguments", "when"]}"""
@@ -46,10 +46,10 @@ object SchemaCall {
         return """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {$properties}, "required": $required}}}"""
     }
 
-    fun body(model: String, request: String, now: String, tools: JSONArray, rewrite: Boolean, timed: Boolean = false): String = JSONObject()
+    fun body(model: String, request: String, now: String, tools: JSONArray, rewrite: Boolean, timed: Boolean = false, version: String = "t3"): String = JSONObject()
         .put("model", model)
         .put("messages", JSONArray()
-            .put(JSONObject().put("role", "system").put("content", prompt(tools, rewrite, timed) + "\nNow: $now."))
+            .put(JSONObject().put("role", "system").put("content", prompt(tools, rewrite, timed, version) + "\nNow: $now."))
             // timed: the words as said, no code-worked amounts or dates; the model writes the time.
             .put(JSONObject().put("role", "user").put("content", if (timed) request else Amounts.forRequest(request))))
         .put("temperature", 0)
@@ -57,7 +57,7 @@ object SchemaCall {
         .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         .put("response_format", "@format@")
         .toString()
-        .replace("\"@format@\"", format(tools, rewrite, timed))
+        .replace("\"@format@\"", format(tools, rewrite, timed, version))
 
     private val parso = Regex("\\b(parso|parson|parsoon)\\b", RegexOption.IGNORE_CASE)
     private val repeat = Regex("\\b(every|har|daily)\\b", RegexOption.IGNORE_CASE)
@@ -71,7 +71,44 @@ object SchemaCall {
         val day = `when`?.optJSONObject("day")
         if (parso.containsMatchIn(request) && `when` != null && day?.optInt("relative", -1) != 2) add("parso is not the day after tomorrow")
         if (repeat.containsMatchIn(request) && tool == "add_reminder" && `when`?.optString("kind") != "every") add("a repeat was asked for but not given")
+        if (`when` != null) amountDisagrees(request, `when`)?.let { add(it) }
     }
+
+    private val hindiCount = Regex("\\b(${Amounts.numbers.keys.joinToString("|")})\\s+(minute|minut|mint|min|ghante|ghanta|second|sekand)\\b", RegexOption.IGNORE_CASE)
+
+    /**
+     * A Hindi amount or count in the request (worked out by [Amounts], code that is already tested)
+     * that the structure disagrees with: an ask, never a correction. Gemma wrote pandrah as 19,
+     * bees as 2 and sava aath as 7:45 in times.txt's first run.
+     */
+    fun amountDisagrees(request: String, `when`: JSONObject): String? {
+        val time = `when`.optJSONObject("time")
+        val length = `when`.optJSONObject("length")
+        Amounts.parse(request)?.let { amount ->
+            if (amount.isTime && time != null && !time.isNull("hour")) {
+                val (h, m) = amount.english.split(":").map { it.toInt() }
+                val hour = time.optInt("hour") % 12
+                if (hour != h % 12 || time.optInt("minute") != m) return "the Hindi time (${amount.english}) doesn't match"
+            }
+            if (!amount.isTime && length != null && seconds(length) != secondsOf(amount.english)) return "the Hindi length (${amount.english}) doesn't match"
+            return null
+        }
+        hindiCount.find(request)?.let { match ->
+            val n = Amounts.numbers.getValue(match.groupValues[1].lowercase())
+            val unit = match.groupValues[2].lowercase()
+            val want = when { unit.startsWith("ghant") -> n * 3600; unit.startsWith("s") -> n; else -> n * 60 }
+            if (length != null && seconds(length) != want) return "the Hindi number (${match.value}) doesn't match"
+        }
+        return null
+    }
+
+    /** "1 hour 15 minutes", as Amounts writes a length, in seconds. */
+    private fun secondsOf(english: String): Int = Regex("(\\d+)\\s*(hour|minute|second)").findAll(english).sumOf { m ->
+        val n = m.groupValues[1].toInt()
+        when (m.groupValues[2]) { "hour" -> n * 3600; "minute" -> n * 60; else -> n }
+    }
+
+    private fun seconds(length: JSONObject) = length.optInt("days") * 86400 + length.optInt("hours") * 3600 + length.optInt("minutes") * 60 + length.optInt("seconds")
 
     private val leaked = Regex("\\}\\}|```")
 

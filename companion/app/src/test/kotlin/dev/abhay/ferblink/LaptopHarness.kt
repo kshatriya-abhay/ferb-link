@@ -179,7 +179,7 @@ class LaptopHarness {
     /** [SchemaCall]: B's call as enforced JSON, calls with "when", or rewritten commands with "rewrite". */
     private fun schemaCall(line: JSONObject): JSONObject {
         val tools = line.optJSONArray("tools") ?: JSONArray(line.getString("tools"))
-        val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite"), line.optBoolean("timed")))
+        val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite"), line.optBoolean("timed"), line.optString("time_prompt", "t3")))
         return SchemaCall.reply(content, line.getString("request")).put("success", true).put("raw", content).put("ms", ms)
     }
 
