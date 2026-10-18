@@ -201,3 +201,21 @@ class TimedShapeTest {
         assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2"))).isTrue()
     }
 }
+
+class TimeAsksTest {
+    private fun at(relative: Int?) = org.json.JSONObject().put("kind", "at").put("day", relative?.let { org.json.JSONObject().put("relative", it) } ?: org.json.JSONObject.NULL)
+
+    @Test
+    fun `parso asks unless it came back as the day after tomorrow, and never corrects`() {
+        assertThat(SchemaCall.asks("parso shaam 6 baje", "add_reminder", at(1))).containsExactly("parso is not the day after tomorrow")
+        assertThat(SchemaCall.asks("parso shaam 6 baje", "add_reminder", at(2))).isEmpty()
+        assertThat(SchemaCall.asks("kal shaam 6 baje", "add_reminder", at(1))).isEmpty()
+    }
+
+    @Test
+    fun `a reminder asked to repeat asks when it came back without one`() {
+        assertThat(SchemaCall.asks("every Monday at 8 remind me", "add_reminder", at(null))).containsExactly("a repeat was asked for but not given")
+        assertThat(SchemaCall.asks("har roz 8 baje yaad dilana", "add_reminder", org.json.JSONObject().put("kind", "every"))).isEmpty()
+        assertThat(SchemaCall.asks("remind me daily", "set_alarm", at(null))).isEmpty()
+    }
+}

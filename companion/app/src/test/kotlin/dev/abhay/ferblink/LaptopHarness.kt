@@ -180,7 +180,7 @@ class LaptopHarness {
     private fun schemaCall(line: JSONObject): JSONObject {
         val tools = line.optJSONArray("tools") ?: JSONArray(line.getString("tools"))
         val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite"), line.optBoolean("timed")))
-        return SchemaCall.reply(content).put("success", true).put("raw", content).put("ms", ms)
+        return SchemaCall.reply(content, line.getString("request")).put("success", true).put("raw", content).put("ms", ms)
     }
 
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {

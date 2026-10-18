@@ -57,14 +57,29 @@ object SchemaCall {
         .toString()
         .replace("\"@format@\"", format(tools, rewrite, timed))
 
+    private val parso = Regex("\\b(parso|parson|parsoon)\\b", RegexOption.IGNORE_CASE)
+    private val repeat = Regex("\\b(every|har|daily)\\b", RegexOption.IGNORE_CASE)
+
+    /**
+     * Ask-only checks on a call's time, after the model (ferb-manager): they never correct, only
+     * make the call ask, and in the app they belong in Ferb's grounding check, not its resolver.
+     * Gemma 4 E2B wrote "parso" as tomorrow every time, and dropped a reminder's repeat quietly.
+     */
+    fun asks(request: String, tool: String, `when`: JSONObject?): List<String> = buildList {
+        val day = `when`?.optJSONObject("day")
+        if (parso.containsMatchIn(request) && `when` != null && day?.optInt("relative", -1) != 2) add("parso is not the day after tomorrow")
+        if (repeat.containsMatchIn(request) && tool == "add_reminder" && `when`?.optString("kind") != "every") add("a repeat was asked for but not given")
+    }
+
     /** The answer as the harness writes it: calls with each "when" versioned, and commands. */
-    fun reply(content: String): JSONObject {
+    fun reply(content: String, request: String = ""): JSONObject {
         val answer = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1))
         val calls = answer.getJSONArray("calls")
         val out = JSONArray((0 until calls.length()).map { i ->
             val call = calls.getJSONObject(i)
             JSONObject().put("tool", call.getString("tool")).put("arguments", call.optJSONObject("arguments") ?: JSONObject())
                 .put("when", TimeFormat.versioned(call.optJSONObject("when")))
+                .put("asks", JSONArray(asks(request, call.getString("tool"), call.optJSONObject("when"))))
         })
         return JSONObject().put("calls", out).put("commands", answer.optJSONArray("commands") ?: JSONArray())
     }
