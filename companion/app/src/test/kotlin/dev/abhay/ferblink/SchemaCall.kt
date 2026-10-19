@@ -85,6 +85,9 @@ object SchemaCall {
         val time = `when`.optJSONObject("time")
         val length = `when`.optJSONObject("length")
         Amounts.parse(request)?.let { amount ->
+            // A clock time said ("paune aath baje") written as a length, or a length as a moment.
+            if (amount.isTime && `when`.optString("kind") in setOf("in", "duration")) return "the Hindi time (${amount.english}) came back as a length"
+            if (!amount.isTime && `when`.optString("kind") == "at") return "the Hindi length (${amount.english}) came back as a moment"
             if (amount.isTime && time != null && !time.isNull("hour")) {
                 val (h, m) = amount.english.split(":").map { it.toInt() }
                 val hour = time.optInt("hour") % 12

@@ -230,3 +230,15 @@ class LeakedClosingTest {
         assertThat(SchemaCall.clean(org.json.JSONObject().put("name", "pizza hut")).second).isFalse()
     }
 }
+
+class AmountKindTest {
+    @Test
+    fun `a Hindi clock time that came back as a length asks, and a length as a moment`() {
+        val asLength = org.json.JSONObject("""{"kind": "in", "length": {"days": 1, "hours": 0, "minutes": 45, "seconds": 0}}""")
+        assertThat(SchemaCall.amountDisagrees("paune aath baje ka alarm lagao", asLength)).contains("came back as a length")
+        val asMoment = org.json.JSONObject("""{"kind": "at", "day": null, "time": {"hour": 2, "minute": 30, "meridiem": null}}""")
+        assertThat(SchemaCall.amountDisagrees("dhai minute ka timer", asMoment)).contains("came back as a moment")
+        val right = org.json.JSONObject("""{"kind": "at", "day": null, "time": {"hour": 7, "minute": 45, "meridiem": null}}""")
+        assertThat(SchemaCall.amountDisagrees("paune aath baje ka alarm lagao", right)).isNull()
+    }
+}
