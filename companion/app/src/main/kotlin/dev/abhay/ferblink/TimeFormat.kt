@@ -66,6 +66,10 @@ Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": 
     /** t4: an alarm may also be after a length ("alarm in 20 minutes"), which t3 turned into a clock time. */
     const val ALARM_T4 = """{"anyOf": [$ALARM, $IN]}"""
 
+    /** Any trimmed shape, or null: for a command without a tool yet (transcribe's comprehend answer). */
+    const val ANY_T4 = """{"anyOf": [{"type": "null"}, $EVENT, $IN, $TIMER, """ +
+        """{"type": "object", "properties": {"kind": {"enum": ["every"]}, "period": {"enum": ["day", "week", "weekdays", "month", "year"]}, "on": {"type": "array", "items": $WEEKDAY}, "time": $TIME}, "required": ["kind", "period", "on", "time"]}]}"""
+
     /** The trimmed "when" for a tool that takes a time, by Ferb's tool names; null for one that doesn't. */
     fun forTool(name: String, version: String = "t3"): String? = when (name) {
         "set_alarm" -> if (version == "t4" || version == "t5") ALARM_T4 else ALARM

@@ -189,7 +189,9 @@ class LaptopHarness {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
             line.optString("method") == "timex" -> timex(line)
             line.optString("method") == "schema-call" -> schemaCall(line)
-            line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
+            line.optString("method") == "transcribe-text" ->
+                if (line.optBoolean("comprehend")) client.transcribeComprehendText(line.getString("heard"), timeout)
+                else JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
             line.optString("method") in setOf("rewrite", "comprehend") -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
                 val tools = line.optJSONArray("tools")

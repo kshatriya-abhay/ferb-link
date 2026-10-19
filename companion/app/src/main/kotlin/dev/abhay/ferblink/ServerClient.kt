@@ -399,6 +399,16 @@ class ServerClient(
         }
     }
 
+    /** The comprehend-style transcribe on text (bench only): the model's fields as they came, plus ms. */
+    fun transcribeComprehendText(heard: String, timeoutMs: Int? = null): JSONObject {
+        val started = System.nanoTime()
+        val (code, text) = send("POST", "/v1/chat/completions", transcribeComprehendTextBody(modelName(timeoutMs), heard), auth = true, timeoutMs)
+        val ms = msSince(started)
+        check(code == 200) { "HTTP $code: $text" }
+        val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+        return JSONObject(content).put("ms", ms).put("success", true)
+    }
+
     /** [Rewrite]'s experiment: [request] as plain English commands, with dates worked out from [now]. */
     fun rewrite(request: String, now: String, variant: Rewrite.Variant, toolNames: List<String> = emptyList(), timeoutMs: Int? = null): Rewritten {
         val started = System.nanoTime()
@@ -580,6 +590,37 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
         }
 
         private const val FORMAT_SLOT = "@response_format@"
+
+        /**
+         * Transcribe answering as comprehend does, in its one call (follow-up 1, bench only for
+         * now): after the four fields, whether "text" can go on as it is ("direct", with its
+         * time), or the request as commands with their times, or none. Comprehend did best on the
+         * heard voice lines (61 right, 2 wrong runs) but as a second Gemma call.
+         */
+        val TRANSCRIBE_COMPREHEND = TRANSCRIBE + """
+
+Then three more fields, after "text":
+- "direct": true when "text" is already one clear command in plain English with its action and values written out ("Set an alarm for 6:45 am", "Call Priya", "Turn on the flashlight"). Then "commands" is [].
+- "when": when "direct" is true, the time "text" names, as below, or null; null when "direct" is false.
+- "commands": when "direct" is false, each thing asked as a short plain English command, in the order asked, each {"text": "...", "when": its time or null}. An empty list when nothing is asked: no speech, a question about the world, chat, thanks, or a statement about something, the past or the speaker. A question about the user's own phone (calendar, alarms, lists, notes, settings) is a request ("Show my agenda for tomorrow"). Never add a name, place, app, number, time or date that wasn't said.
+""" + TimeFormat.PROMPT_T4.replaceFirst("For an alarm, timer, reminder or event, \"when\" is", "A \"when\" is")
+
+        private val TRANSCRIBE_COMPREHEND_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"speech": {"type": "boolean"}, "hindi": {"type": "boolean"}, "heard": {"type": "string"}, "text": {"type": "string"}, """ +
+            """"direct": {"type": "boolean"}, "when": ${TimeFormat.ANY_T4}, "commands": {"type": "array", "items": {"type": "object", "properties": {"text": {"type": "string"}, "when": ${TimeFormat.ANY_T4}}, "required": ["text", "when"]}}}, """ +
+            """"required": ["speech", "hindi", "heard", "text", "direct", "when", "commands"]}}}"""
+
+        /** [transcribeTextBody] with the comprehend answer ([TRANSCRIBE_COMPREHEND]). */
+        fun transcribeComprehendTextBody(model: String, heard: String): String = JSONObject()
+            .put("model", model)
+            .put("messages", JSONArray()
+                .put(JSONObject().put("role", "system").put("content", TRANSCRIBE_COMPREHEND))
+                .put(JSONObject().put("role", "user").put("content", "(The recording, as heard:) $heard")))
+            .put("temperature", 0)
+            .put("max_tokens", 600)
+            .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+            .put("response_format", FORMAT_SLOT)
+            .toString()
+            .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_COMPREHEND_FORMAT)
 
         /**
          * [transcribeBody] with [heard] typed in place of a recording: for checking the prompt's
