@@ -1,0 +1,24 @@
+{
+  "method": "complete",
+  "note": "time_format 1: a repeat, period and weekdays.",
+  "extras": {
+    "request": "remind me every Monday at 8 to take out the bins",
+    "time_format": 1,
+    "timeout_ms": 6000,
+    "tools": "[{\"name\": \"add_reminder\", \"description\": \"Remind the user of something at a time\", \"parameters\": {\"type\": \"object\", \"properties\": {\"text\": {\"type\": \"string\", \"description\": \"What to remind about\"}}, \"required\": [\"text\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "first": 0,
+      "function_calls": [{"asks":[],"name":"add_reminder","arguments":{"text":"take out the bins"},"trimmed":false,"when":{"period":"week","kind":"every","v":1,"time":{"hour":8,"part":null,"meridiem":null,"minute":0},"on":["monday"]}}],
+      "mean": 0,
+      "model": "gemma-4-e2b",
+      "ms": 44,
+      "source": "laptop",
+      "success": true,
+      "text": ""
+    },
+    "version": 1
+  }
+}

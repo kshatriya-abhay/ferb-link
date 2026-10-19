@@ -57,6 +57,14 @@ class LinkCalls(
                 !state.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
                 !state.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
                 request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
+                // Timed: the words as typed, and the model writes the time as structure (t4).
+                (extras[LinkContract.EXTRA_TIME_FORMAT] as? Number)?.toInt() == TimeFormat.VERSION -> state.client(trace).completeTimed(request, tools, nowText(now()), timeoutMs(extras)).also {
+                    if (it.failure == null) {
+                        state.lastModel = it.model
+                        state.saw(ModelState.Loaded, now())
+                    }
+                    RecentRequests.add(caller, request, it)
+                }
                 // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
                 else -> state.client(trace).complete(Amounts.forRequest(request), tools, facts, timeoutMs(extras)).also {
                     if (it.failure == null) {

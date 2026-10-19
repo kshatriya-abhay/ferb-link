@@ -1,0 +1,24 @@
+{
+  "method": "complete",
+  "note": "time_format 1: the alarm's time as structure (time v1), as said: no day said, no am/pm.",
+  "extras": {
+    "request": "wake me up at 6:45",
+    "time_format": 1,
+    "timeout_ms": 6000,
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "first": 0,
+      "function_calls": [{"asks":[],"name":"set_alarm","arguments":{"time":"6:45"},"trimmed":false,"when":{"kind":"at","v":1,"time":{"hour":6,"meridiem":null,"minute":45},"day":null}}],
+      "mean": 0,
+      "model": "gemma-4-e2b",
+      "ms": 51,
+      "source": "laptop",
+      "success": true,
+      "text": ""
+    },
+    "version": 1
+  }
+}

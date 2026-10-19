@@ -103,6 +103,13 @@ object LinkContract {
     const val EXTRA_REQUEST = "request"
     const val EXTRA_TOOLS = "tools"
     const val EXTRA_FACTS = "facts"
+    /**
+     * Int, for [METHOD_COMPLETE]: 1 answers as enforced JSON (prompt t4), so each call carries
+     * "when" (time version 1, or null), "asks" and "trimmed"; any ask or trimmed means Ferb asks
+     * first. Ferb sends Jev's pick when it's a timed tool. An older Ferb Link ignores it and answers
+     * as usual, without "when" (Ferb then reads the time from the string, as before).
+     */
+    const val EXTRA_TIME_FORMAT = "time_format"
     /** For [METHOD_REWRITE]: when "now" is, to work out "kal" and weekdays, as "2026-10-16T09:00 (Friday)". */
     const val EXTRA_NOW = "now"
     /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */

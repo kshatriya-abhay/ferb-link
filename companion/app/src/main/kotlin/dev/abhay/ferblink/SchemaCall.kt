@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * B's call as JSON the server enforces (harness `schema-call`, bench only): Gemma's native tool
+ * B's call as JSON the server enforces (`complete` with `time_format` 1, and the harness's `schema-call`): Gemma's native tool
  * calls get no grammar in llama-server, so a nested time parameter came back as free strings
  * ("day": "kal"). Here the whole answer is a json_schema: {"calls": [{"tool", "arguments",
  * "when"}...]}, one shape per routed tool, empty for no tool. With [rewrite], it may give plain

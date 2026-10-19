@@ -155,6 +155,37 @@ class ContractTest {
         Case("rewrite-bad_reply", "rewrite", "An answer that isn't the commands' JSON.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
             chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, I'll set it."}}]}"""
         },
+        Case("complete-timed", "complete", "time_format 1: the alarm's time as structure (time v1), as said: no day said, no am/pm.",
+            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "6:45"}, "when": {"kind": "at", "day": null, "time": {"hour": 6, "minute": 45, "meridiem": null}}}]}""")
+        },
+        Case("complete-timed-in", "complete", "time_format 1: after a length, never a worked-out clock time.",
+            mapOf("request" to "alarm in 20 minutes", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "in 20 minutes"}, "when": {"kind": "in", "length": {"days": 0, "hours": 0, "minutes": 20, "seconds": 0}}}]}""")
+        },
+        Case("complete-timed-every", "complete", "time_format 1: a repeat, period and weekdays.",
+            mapOf("request" to "remind me every Monday at 8 to take out the bins", "tools" to REMINDER_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "add_reminder", "arguments": {"text": "take out the bins"}, "when": {"kind": "every", "period": "week", "on": ["monday"], "time": {"hour": 8, "minute": 0, "meridiem": null, "part": null}}}]}""")
+        },
+        Case("complete-timed-asks", "complete", "time_format 1: parso came back as tomorrow; Ferb Link's check asks (it never corrects).",
+            mapOf("request" to "parso shaam 6 baje doctor ki yaad dilana", "tools" to REMINDER_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "add_reminder", "arguments": {"text": "doctor"}, "when": {"kind": "at", "day": {"relative": 1}, "time": {"hour": 6, "minute": 0, "meridiem": "pm", "part": "evening"}}}]}""")
+        },
+        Case("complete-timed-trimmed", "complete", "time_format 1: the answer's closing leaked into a string argument; it's cut there and trimmed is true, so Ferb asks.",
+            mapOf("request" to "open maps", "tools" to APP_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "open_app", "arguments": {"app_name": "Maps}}]}```"}, "when": null}]}""")
+        },
+        Case("complete-timed-none", "complete", "time_format 1: no tool fits.", mapOf("request" to "what's the capital of Peru", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to timedAnswer("""{"calls": []}""")
+        },
+        Case("complete-timed-timeout", "complete", "time_format 1: no answer within timeout_ms (1000, the least it takes).",
+            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 1000)) {
+            chatReply = 200 to timedAnswer("""{"calls": []}"""); chatDelayMs = 1_500
+        },
+        Case("complete-timed-bad_reply", "complete", "time_format 1: an answer that isn't the enforced JSON.",
+            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
+            chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, alarm set."}}]}"""
+        },
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
         Case("status-jev-cap", "status", "Jev turned itself off at its spending cap.") { it.jevOffReason = LinkContract.JEV_OFF_CAP },
         Case("decide", "decide", "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
@@ -324,6 +355,13 @@ class ContractTest {
                 """{"speech": true, "hindi": $hindi, "heard": "$heard", "text": "$text"}""")))).toString()
 
         /** 2 s of 16 kHz WAV: syllable-like bursts for "speech", zeros for "silence". */
+        /** The laptop's model answering a time_format call: [content] (the enforced JSON) as the message's text. */
+        fun timedAnswer(content: String) = JSONObject().put("model", "gemma-4-e2b")
+            .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content)))).toString()
+
+        const val REMINDER_TOOLS = """[{"name": "add_reminder", "description": "Remind the user of something at a time", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to remind about"}}, "required": ["text"]}}]"""
+        const val APP_TOOLS = """[{"name": "open_app", "description": "Open an app by its name", "parameters": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}}]"""
+
         /** What the laptop's model answers to a rewrite: {"commands": [...]} as the message's text. */
         fun commands(vararg commands: String) = JSONObject()
             .put("model", "gemma-4-e2b")

@@ -1,0 +1,24 @@
+{
+  "method": "complete",
+  "note": "time_format 1: parso came back as tomorrow; Ferb Link's check asks (it never corrects).",
+  "extras": {
+    "request": "parso shaam 6 baje doctor ki yaad dilana",
+    "time_format": 1,
+    "timeout_ms": 6000,
+    "tools": "[{\"name\": \"add_reminder\", \"description\": \"Remind the user of something at a time\", \"parameters\": {\"type\": \"object\", \"properties\": {\"text\": {\"type\": \"string\", \"description\": \"What to remind about\"}}, \"required\": [\"text\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "confidence": 0,
+      "first": 0,
+      "function_calls": [{"asks":["parso is not the day after tomorrow"],"name":"add_reminder","arguments":{"text":"doctor"},"trimmed":false,"when":{"kind":"at","v":1,"time":{"hour":6,"part":"evening","meridiem":"pm","minute":0},"day":{"relative":1}}}],
+      "mean": 0,
+      "model": "gemma-4-e2b",
+      "ms": 43,
+      "source": "laptop",
+      "success": true,
+      "text": ""
+    },
+    "version": 1
+  }
+}

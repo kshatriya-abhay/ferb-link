@@ -14,7 +14,16 @@ import java.util.Base64
 import kotlin.math.exp
 
 /** One call the model asked for: a tool name and its arguments. */
-data class Call(val name: String, val arguments: JSONObject) {
+data class Call(
+    val name: String,
+    val arguments: JSONObject,
+    /** A timed call only ([ServerClient.completeTimed]): its time as structure (time v1, with "v"), or null. */
+    val time: JSONObject? = null,
+    /** A timed call only: Ferb Link's ask-only checks that fired ([SchemaCall.asks]); any makes Ferb ask. */
+    val asks: List<String>? = null,
+    /** A timed call only: a leaked closing was cut from a string argument ([SchemaCall.clean]); Ferb asks. */
+    val trimmed: Boolean? = null,
+) {
     /** `name(key = value, …)` with strings quoted, for display. */
     fun signature(): String = arguments.keys().asSequence().joinToString(prefix = "$name(", postfix = ")") { key ->
         val value = arguments.get(key)
@@ -48,7 +57,12 @@ data class Reply(
     /** Shaped like Needle 3's reply, so Ferb reads it with the same parser. */
     fun toJson(): String = JSONObject()
         .put("success", error == null)
-        .put("function_calls", JSONArray(calls.map { JSONObject().put("name", it.name).put("arguments", it.arguments) }))
+        .put("function_calls", JSONArray(calls.map { call ->
+            JSONObject().put("name", call.name).put("arguments", call.arguments).apply {
+                // Only on timed calls, so other replies keep their shape.
+                if (call.asks != null) put("when", call.time ?: JSONObject.NULL).put("asks", JSONArray(call.asks)).put("trimmed", call.trimmed == true)
+            }
+        }))
         .put("confidence", confidence)
         .put("first", first)
         .put("mean", mean)
@@ -347,6 +361,41 @@ class ServerClient(
             failureOf(e).let { Transcript.failed(it, msSince(started)) }
         } catch (e: Exception) {
             Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
+        }
+    }
+
+    /**
+     * `complete` with `time_format` 1: the answer as JSON the server enforces ([SchemaCall], prompt t4),
+     * so each timed tool's call carries its time as structure. Gemma's native tool calls get no
+     * grammar in llama-server, and a time parameter came back as free strings. [request] goes as
+     * typed: the model writes the time itself, with [now] as context.
+     */
+    fun completeTimed(request: String, toolsJson: String, now: String, timeoutMs: Int? = null): Reply {
+        val started = System.nanoTime()
+        val tools = try {
+            JSONArray(toolsJson)
+        } catch (e: Exception) {
+            return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
+        }
+        return try {
+            val body = SchemaCall.body(modelName(timeoutMs), request, now, tools, rewrite = false, timed = true, version = "t4")
+            val (code, text) = send("POST", "/v1/chat/completions", body, auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) return Reply.failed(problem(code, text), ms)
+            val reply = JSONObject(text)
+            val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+            val parsed = SchemaCall.reply(content, request).getJSONArray("calls")
+            val calls = (0 until parsed.length()).map { i ->
+                val call = parsed.getJSONObject(i)
+                val asks = call.getJSONArray("asks")
+                Call(call.getString("tool"), call.getJSONObject("arguments"), call.optJSONObject("when"),
+                    (0 until asks.length()).map { asks.getString(it) }, call.getBoolean("trimmed"))
+            }
+            Reply(calls, "", 0.0, 0.0, 0.0, reply.optString("model"), ms, null)
+        } catch (e: IOException) {
+            Reply.failed(failureOf(e), msSince(started))
+        } catch (e: Exception) {
+            Reply.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
         }
     }
 
