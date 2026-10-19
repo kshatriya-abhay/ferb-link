@@ -23,7 +23,7 @@ object SchemaCall {
         }
         append("Never add a name, place, number, time or date the request doesn't have.\n")
         // timed (option c): "when" only in the timed tools' shapes, trimmed; otherwise every call has one.
-        append(if (!timed) TimeFormat.PROMPT else if (version == "t4") TimeFormat.PROMPT_T4 else TimeFormat.PROMPT_TIMED)
+        append(if (!timed) TimeFormat.PROMPT else when (version) { "t5" -> TimeFormat.PROMPT_T5; "t4" -> TimeFormat.PROMPT_T4; else -> TimeFormat.PROMPT_TIMED })
         append("\n\nThe tools:\n")
         for (i in 0 until tools.length()) append(tools.getJSONObject(i).toString()).append('\n')
     }

@@ -68,7 +68,7 @@ Examples: "kal shaam 5 baje" → {"kind": "at", "day": {"relative": 1}, "time": 
 
     /** The trimmed "when" for a tool that takes a time, by Ferb's tool names; null for one that doesn't. */
     fun forTool(name: String, version: String = "t3"): String? = when (name) {
-        "set_alarm" -> if (version == "t4") ALARM_T4 else ALARM
+        "set_alarm" -> if (version == "t4" || version == "t5") ALARM_T4 else ALARM
         "set_timer" -> TIMER
         "add_event" -> EVENT
         "add_reminder" -> REMINDER
@@ -97,6 +97,21 @@ Examples: "parso shaam 6 baje" → {"kind": "at", "day": {"relative": 2}, "time"
 - length: days, hours, minutes, seconds as said, 0 for the rest.
 - Hindi numbers: ek 1, do 2, teen 3, chaar 4, paanch 5, chhe 6, saat 7, aath 8, nau 9, das 10, gyarah 11, barah 12, pandrah 15, bees 20, pachchees 25, tees 30, paintalees 45. sava is a quarter more (sava aath 8:15), saade a half more (saade saat 7:30), paune a quarter less (paune aath 7:45, paune ghanta 45 minutes), dedh one and a half, dhai two and a half, aadha half. With baje it is always a clock time, kind "at", never "in": "paune aath baje" is hour 7, minute 45; "saade paanch baje" is hour 5, minute 30.
 Examples: "on the 27th of March at 4" → {"kind": "at", "day": {"day": 27, "month": 3, "year": null}, "time": {"hour": 4, "minute": 0, "meridiem": null, "part": null}}; "in 45 minutes" → {"kind": "in", "length": {"days": 0, "hours": 0, "minutes": 45, "seconds": 0}}; "har mangalvar shaam 9 baje" → {"kind": "every", "period": "week", "on": ["tuesday"], "time": {"hour": 9, "minute": 0, "meridiem": "pm", "part": "evening"}}; "on Wednesday" → {"kind": "at", "day": {"weekday": "wednesday", "which": null}, "time": null}."""
+
+    /**
+     * t5: t4 after its tune-half misses (2026-10-19), which matched the held-out ones: day words
+     * came back as "in N days" ("kal subah 6 baje" as in 1 day), named days as relative days ("on
+     * Sunday" as today, "the 2nd" as +1), "tonight" lost its part, "raat 2 baje" became pm, and
+     * Hindi amounts slipped. Its examples use values in neither half of times.txt.
+     */
+    val PROMPT_T5 = PROMPT_T4 + """
+More rules:
+- A day word with a clock time is a moment, never "in": "kal subah 6 baje" is {"kind": "at", "day": {"relative": 1}, "time": {"hour": 6, "minute": 0, "meridiem": "am", "part": "morning"}}. "in" is only for "in", "after", "mein" or "baad" with a length.
+- Only today, aaj, tonight, tomorrow, kal, the day after tomorrow and parso are relative. A weekday, in English or Hindi, is always {"weekday": ...}, even when it is today or tomorrow: "on Thursday" is {"weekday": "thursday", "which": null}. A number of the month alone ("the 9th") is {"day": 9, "month": null, "year": null}.
+- "tonight" and "aaj raat" are {"relative": 0} with part night and hour null when no clock time is said.
+- With raat, meridiem is null and part night: "raat 3 baje" is hour 3, part night; Ferb works out am or pm.
+- Hindi amounts, exactly: "sava nau" is hour 9, minute 15; "paune das" is hour 9, minute 45; "dhai ghante" is hours 2, minutes 30; "dhai minute" is minutes 2, seconds 30.
+Examples: "parso subah sava nau baje" → {"kind": "at", "day": {"relative": 2}, "time": {"hour": 9, "minute": 15, "meridiem": "am", "part": "morning"}}; "dhai ghante ka timer" → {"kind": "duration", "length": {"days": 0, "hours": 2, "minutes": 30, "seconds": 0}}."""
 
     /** [expression] as passed on in a reply: with "v", or JSON null. */
     fun versioned(expression: JSONObject?): Any = expression?.let { JSONObject(it.toString()).put("v", VERSION) } ?: JSONObject.NULL
