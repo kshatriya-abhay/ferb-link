@@ -14,13 +14,13 @@ import org.json.JSONObject
  */
 object Rewrite {
     /** A prompt version and its switches: few-shot examples, Ferb's tool names, thinking on, no schema. */
-    data class Variant(val base: String, val shots: Boolean, val tools: Boolean, val think: Boolean, val free: Boolean, val `when`: Boolean = false) {
+    data class Variant(val base: String, val shots: Boolean, val tools: Boolean, val think: Boolean, val free: Boolean) {
         companion object {
             fun of(name: String): Variant {
                 val parts = name.trim().split("+").map { it.trim().lowercase() }
-                val unknown = parts.drop(1) - setOf("shots", "tools", "think", "free", "when")
-                require(parts.first() in PROMPTS && unknown.isEmpty()) { "unknown variant \"$name\": ${PROMPTS.keys} with +shots, +tools, +think, +free, +when" }
-                return Variant(parts.first(), "shots" in parts, "tools" in parts, "think" in parts, "free" in parts, "when" in parts)
+                val unknown = parts.drop(1) - setOf("shots", "tools", "think", "free")
+                require(parts.first() in PROMPTS && unknown.isEmpty()) { "unknown variant \"$name\": ${PROMPTS.keys} with +shots, +tools, +think, +free" }
+                return Variant(parts.first(), "shots" in parts, "tools" in parts, "think" in parts, "free" in parts)
             }
         }
     }
@@ -77,64 +77,11 @@ When the user does ask:
 - Silencing is muting: "aawaz band karo", "sound off", "chup karo" → "Mute the volume" (volume to 0), not "Turn off the sound"."""
 
     /**
-     * v2.2: v2 with v2.1's lessons that held up, after the held-out check (2026-10-16). Its
-     * "aawaz band karo" → mute example made "torch band karo" mute the volume, so "band karo"
-     * now turns off whatever it follows. Dates are worked out in code before the model
-     * ([Dates.forRequest]), so the prompt only says to keep them.
+     * Retired with Ferb Link's code dates (2026-10-24): v2.2 (dates worked out in code before the
+     * model) and comprehend c1/c2, which built on it. Their prompts and results are in git history
+     * and "Exploration - Rewrite before Needle 3".
      */
-    val V22 = V2.replace(
-        Regex("- Write dates as dates:[^\n]*\n"),
-        "- Dates in the request are already written out (\"on Saturday 17 October\"): copy them exactly as they are, never change a day or date. Keep times as written. Add am or pm only if the request says which: subah is am, dopahar and shaam are pm, raat is pm from 7 to 11 and otherwise am.\n",
-    ) + """
-- Write amounts as numbers: half is 50 percent, a quarter 25 percent, full or max 100 percent ("half volume" → "Set the volume to 50 percent").
-- A short request of one or two words is still a command when it is an action word, like a media button: "next", "stop", "pause", "louder" ("Play the next track", "Stop", "Pause", "Turn the volume up"). Naming a thing is not an action.
-- "band karo" (or "band kar do", "off karo") turns off the thing it follows, and only that: "torch band karo" → "Turn off the flashlight", "gaana band karo" → "Stop the music", "wifi band karo" → "Turn off Wi-Fi", "aawaz band karo" → "Mute the volume"."""
-
-    /**
-     * c1, "comprehend" (ferb-manager, 2026-10-16): every typed request goes to Gemma first, which
-     * says whether it can go on as it is ({"direct": true}: already a clean English command), or
-     * gives v2.2's commands, or none when nothing is asked. The "nothing asked" question comes
-     * first, so an English statement isn't passed on as direct. Dates are worked out in code.
-     */
-    val C1 = """You read a request typed to a phone assistant and decide how it goes on. Reply with JSON only: {"direct": true or false, "commands": [...]}. Decide in this order:
-1. If the request doesn't ask the assistant to do anything, reply {"direct": false, "commands": []}. That includes questions about the world, opinions, chat, greetings and thanks, statements about things, the past or yourself ("I set an alarm yesterday", "my torch is broken"), and wishes or plans not addressed to the assistant ("I should call mom"). A question only words can answer (the weather, news, facts, maths, advice) is not a request either.
-2. If it is already one clear command in plain English, with its action and its values written out, reply {"direct": true, "commands": []}: "Set an alarm for 6:45 am", "Call Priya", "Turn on the flashlight", "Add milk to the shopping list". It is not direct if it has Hindi or Hinglish words, typos, slang, several actions, an amount in words ("half volume"), or is vague or indirect ("can you wake me up early").
-3. Otherwise reply {"direct": false, "commands": [...]}, the request written as plain English commands with these rules:
-""" +
-        V22.substringAfter("\n").replace(Regex("- If the request doesn't ask the assistant to do anything,[^\n]*\n?"), "").replace(Regex("- A question only words can answer[^\n]*\n?"), "")
-
-    /**
-     * c2: c1 after its bench on requests.txt (2026-10-16), which lost 25 to "nothing asked".
-     * Questions about the user's own calendar, alarms, lists, notes or phone are requests to the
-     * phone; only questions about the world give none. Messages and notes keep their action, with
-     * the content as typed; one-word media verbs stay as typed ("resume" is the music); "how far
-     * is …" is directions. Its examples are its own, not the bench's lines.
-     */
-    val C2 = C1
-        .replace(
-            "1. If the request doesn't ask the assistant to do anything, reply {\"direct\": false, \"commands\": []}. That includes questions about the world,",
-            "1. If the request doesn't ask the assistant to do anything, reply {\"direct\": false, \"commands\": []}. A question about the user's own phone is a request, not this: their calendar and plans (\"anything on Thursday?\", \"am I busy tonight\"), alarms (\"when does my alarm ring\"), lists and notes, settings (\"how much battery is left\"), and how far a place is. Nothing asked means questions about the world,",
-        )
-        .replace(
-            "- If the request asks for several things, write one command for each, in the order asked.",
-            "- If the request asks for several things, write one command for each, in the order asked.\n- A message or a note keeps its action, with its content exactly as typed: \"text Ravi are you coming\" → \"Send a text to Ravi: are you coming\", \"note: gate code 4521\" → \"Make a note: gate code 4521\". Never turn the content of a message or note into a command of its own.\n- A question about the user's own phone becomes the command that shows it: \"anything on Thursday?\" → \"Show my agenda for Thursday\", \"when does my alarm ring\" → \"Show my alarms\", \"how far is the station\" → \"Get directions to the station\".",
-        )
-        .replace(
-            "A short request of one or two words is still a command when it is an action word, like a media button: \"next\", \"stop\", \"pause\", \"louder\" (\"Play the next track\", \"Stop\", \"Pause\", \"Turn the volume up\"). Naming a thing is not an action.",
-            "A short request of one or two words is still a command when it is an action word, like a media button: \"next\", \"stop\", \"pause\", \"resume\", \"louder\". Keep a media word as typed (\"resume\" means the music, not a document). Naming a thing is not an action.",
-        )
-
-    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v2.2" to V22, "v3" to V3, "c1" to C1, "c2" to C2)
-
-    /** Whether [variant] is a comprehend prompt (c1 on): its answer has "direct" too. */
-    fun comprehends(variant: Variant) = variant.base.startsWith("c")
-
-    /**
-     * Whether [variant] has its dates worked out in code ([Dates]) before the model: v2.2 and
-     * comprehend, but not with +when, where the model writes the time itself from the words said
-     * (code-written dates confused it: "parso" came back as tomorrow next to "Sunday 18 October").
-     */
-    fun datesInCode(variant: Variant) = (variant.base == "v2.2" || comprehends(variant)) && !variant.`when`
+    private val PROMPTS = mapOf("v1" to V1, "v2" to V2, "v2.1" to V21, "v3" to V3)
 
     /** Numbers a request holds as words: v2.1 writes them as digits, which isn't inventing them. */
     private val numberWords: Map<String, Int> = Amounts.numbers + mapOf(
@@ -222,18 +169,12 @@ When the user does ask:
      * with a list of strings. Left out for +free, where only the prompt asks for JSON.
      */
     private const val FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"commands": {"type": "array", "items": {"type": "string"}}}, "required": ["commands"]}}}"""
-    /** +when: each command with its time ([TimeFormat]). */
-    private const val COMMAND_WHEN = """{"type": "object", "properties": {"text": {"type": "string"}, "when": ${TimeFormat.SCHEMA}}, "required": ["text", "when"]}"""
-    private const val FORMAT_WHEN = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"commands": {"type": "array", "items": $COMMAND_WHEN}}, "required": ["commands"]}}}"""
     private const val FORMAT_SLOT = "@response_format@"
-    private const val COMPREHEND_FORMAT_WHEN = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"direct": {"type": "boolean"}, "commands": {"type": "array", "items": $COMMAND_WHEN}}, "required": ["direct", "commands"]}}}"""
-    private const val COMPREHEND_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"direct": {"type": "boolean"}, "commands": {"type": "array", "items": {"type": "string"}}}, "required": ["direct", "commands"]}}}"""
 
     fun body(model: String, sent: String, now: String, variant: Variant, toolNames: List<String>): String {
         val system = buildString {
             append(PROMPTS.getValue(variant.base))
             if (variant.tools && toolNames.isNotEmpty()) append("\n\nThe assistant's actions: ${toolNames.joinToString(", ")}. A command may only ask for these.")
-            if (variant.`when`) append("\n\nWrite each command as {\"text\": \"...\", \"when\": ...}, where ${TimeFormat.PROMPT}")
             append("\n\nNow: $now.")
         }
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", system))
@@ -253,17 +194,8 @@ When the user does ask:
             .put("max_tokens", if (variant.think) 1024 else 256)
             .put("chat_template_kwargs", JSONObject().put("enable_thinking", variant.think))
         if (!variant.free) json.put("response_format", FORMAT_SLOT)
-        val format = when {
-            comprehends(variant) && variant.`when` -> COMPREHEND_FORMAT_WHEN
-            comprehends(variant) -> COMPREHEND_FORMAT
-            variant.`when` -> FORMAT_WHEN
-            else -> FORMAT
-        }
-        return json.toString().replace("\"$FORMAT_SLOT\"", format)
+        return json.toString().replace("\"$FORMAT_SLOT\"", FORMAT)
     }
-
-    /** Whether a comprehend answer says the request can go on as it is. */
-    fun direct(content: String): Boolean = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1)).optBoolean("direct", false)
 
     /** The commands in the model's answer (a JSON object; in +free, the first one in its text), clocks made plain. */
     fun parse(content: String): List<String> {
@@ -271,15 +203,6 @@ When the user does ask:
         val end = content.lastIndexOf('}')
         require(start >= 0 && end > start) { "no JSON object in the answer" }
         val commands = JSONObject(content.substring(start, end + 1)).getJSONArray("commands")
-        // Each a string, or with +when {"text", "when"}.
-        return (0 until commands.length()).map { Amounts.englishClock((commands.optJSONObject(it)?.getString("text") ?: commands.getString(it)).trim()) }.filter { it.isNotEmpty() }
-    }
-
-    /** With +when: each command's time, in the order [parse] keeps the commands (null where none), as the model wrote it. */
-    fun whens(content: String): List<JSONObject?> {
-        val commands = JSONObject(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1)).getJSONArray("commands")
-        return (0 until commands.length()).mapNotNull { commands.optJSONObject(it) }
-            .filter { it.optString("text").isNotBlank() }
-            .map { it.optJSONObject("when") }
+        return (0 until commands.length()).map { Amounts.englishClock(commands.getString(it).trim()) }.filter { it.isNotEmpty() }
     }
 }

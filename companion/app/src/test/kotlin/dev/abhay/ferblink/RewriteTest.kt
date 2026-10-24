@@ -113,68 +113,7 @@ class RewriteRespelledTest {
     }
 }
 
-class ComprehendTest {
-    @Test
-    fun `c1 decides first, then rewrites with v2_2's rules, nothing-asked said once`() {
-        val c1 = Rewrite.C1
-        println(c1)
-        assertThat(c1.indexOf("1. If the request doesn't ask")).isLessThan(c1.indexOf("2. If it is already one clear command"))
-        assertThat(c1).contains("torch band karo")
-        assertThat(c1).contains("already written out")
-        assertThat(Regex("doesn't ask the assistant to do anything").findAll(c1).count()).isEqualTo(1)
-        assertThat(c1).doesNotContain("You turn a request")
-        assertThat(Rewrite.comprehends(Rewrite.Variant.of("c1"))).isTrue()
-        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c1"))).isTrue()
-    }
-
-    @Test
-    fun `c1 asks for direct and commands, and a direct answer has no commands`() {
-        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("c1"), emptyList()))
-        assertThat(body.getJSONObject("response_format").toString()).contains("direct")
-        assertThat(Rewrite.direct("""{"direct": true, "commands": []}""")).isTrue()
-        assertThat(Rewrite.direct("""{"direct": false, "commands": ["Call Priya"]}""")).isFalse()
-        val rewritten = Rewritten(listOf("a"), "x", "", "m", 1, null, direct = false)
-        assertThat(JSONObject(rewritten.toJson()).getBoolean("direct")).isFalse()
-        assertThat(JSONObject(Rewritten(emptyList(), "x", "", "m", 1, null).toJson()).has("direct")).isFalse()
-    }
-}
-
-class Comprehend2Test {
-    @Test
-    fun `c2 is c1 with the phone's own questions, messages and notes, and media words`() {
-        val c2 = Rewrite.C2
-        assertThat(c2).isNotEqualTo(Rewrite.C1)
-        assertThat(c2).contains("A question about the user's own phone is a request")
-        assertThat(c2).contains("A message or a note keeps its action")
-        assertThat(c2).contains("\"resume\" means the music")
-        assertThat(c2).contains("Get directions to the station")
-        assertThat(Rewrite.comprehends(Rewrite.Variant.of("c2"))).isTrue()
-    }
-}
-
-class TimeFormatTest {
-    @Test
-    fun `+when asks for each command's time and reads it back in order`() {
-        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("v2+when"), emptyList()))
-        assertThat(body.getJSONObject("response_format").toString()).contains("\"when\"")
-        assertThat(body.getJSONArray("messages").getJSONObject(0).getString("content")).contains("\"kind\": \"at\"")
-        val content = """{"commands": [{"text": "Set an alarm for 7:15 am", "when": {"kind": "at", "day": {"relative": 1}, "time": {"hour": 7, "minute": 15, "meridiem": "am", "part": null}, "source": "kal subah sava saat"}}, {"text": "Turn on the flashlight", "when": null}]}"""
-        assertThat(Rewrite.parse(content)).containsExactly("Set an alarm for 7:15 am", "Turn on the flashlight").inOrder()
-        val whens = Rewrite.whens(content)
-        assertThat(whens).hasSize(2)
-        assertThat(whens[0]!!.getJSONObject("day").getInt("relative")).isEqualTo(1)
-        assertThat(whens[1]).isNull()
-        val reply = JSONObject(Rewritten(listOf("a", "b"), "x", "", "m", 1, null, whens = whens).toJson())
-        assertThat(reply.getJSONArray("when").getJSONObject(0).getInt("v")).isEqualTo(TimeFormat.VERSION)
-        assertThat(reply.getJSONArray("when").isNull(1)).isTrue()
-    }
-
-    @Test
-    fun `without +when nothing changes in the reply`() {
-        assertThat(JSONObject(Rewritten(listOf("a"), "x", "", "m", 1, null).toJson()).has("when")).isFalse()
-        assertThat(Rewrite.Variant.of("c2+when").`when`).isTrue()
-    }
-
+class SchemaCallTest {
     @Test
     fun `schema-call enforces one shape per tool, and reads calls with their time`() {
         val tools = org.json.JSONArray("""[{"name": "set_alarm", "description": "Set an alarm", "parameters": {"type": "object", "properties": {"time": {"type": "string"}}, "required": ["time"]}}]""")
@@ -188,38 +127,6 @@ class TimeFormatTest {
     }
 }
 
-class TimedShapeTest {
-    @Test
-    fun `timed puts a trimmed when only in the timed tools`() {
-        val tools = org.json.JSONArray("""[{"name": "set_timer", "description": "t", "parameters": {"type": "object", "properties": {}}}, {"name": "set_flashlight", "description": "f", "parameters": {"type": "object", "properties": {}}}]""")
-        val format = SchemaCall.format(tools, rewrite = false, timed = true)
-        assertThat(format).contains(TimeFormat.TIMER)
-        assertThat(format).contains(""""enum": ["set_flashlight"]}, "arguments": {"type":"object","properties":{}}, "when": {"type": "null"}}, "required": ["tool", "arguments", "when"]""")
-        assertThat(TimeFormat.forTool("set_alarm")).doesNotContain("part")
-        assertThat(TimeFormat.forTool("open_app")).isNull()
-        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2+when"))).isFalse()
-        assertThat(Rewrite.datesInCode(Rewrite.Variant.of("c2"))).isTrue()
-    }
-}
-
-class TimeAsksTest {
-    private fun at(relative: Int?) = org.json.JSONObject().put("kind", "at").put("day", relative?.let { org.json.JSONObject().put("relative", it) } ?: org.json.JSONObject.NULL)
-
-    @Test
-    fun `parso asks unless it came back as the day after tomorrow, and never corrects`() {
-        assertThat(SchemaCall.asks("parso shaam 6 baje", "add_reminder", at(1))).containsExactly("parso is not the day after tomorrow")
-        assertThat(SchemaCall.asks("parso shaam 6 baje", "add_reminder", at(2))).isEmpty()
-        assertThat(SchemaCall.asks("kal shaam 6 baje", "add_reminder", at(1))).isEmpty()
-    }
-
-    @Test
-    fun `a reminder asked to repeat asks when it came back without one`() {
-        assertThat(SchemaCall.asks("every Monday at 8 remind me", "add_reminder", at(null))).containsExactly("a repeat was asked for but not given")
-        assertThat(SchemaCall.asks("har roz 8 baje yaad dilana", "add_reminder", org.json.JSONObject().put("kind", "every"))).isEmpty()
-        assertThat(SchemaCall.asks("remind me daily", "set_alarm", at(null))).isEmpty()
-    }
-}
-
 class LeakedClosingTest {
     @Test
     fun `a string argument holding the answer's closing is cut there, and says so`() {
@@ -228,17 +135,5 @@ class LeakedClosingTest {
         assertThat(arguments.getBoolean("on")).isTrue()
         assertThat(trimmed).isTrue()
         assertThat(SchemaCall.clean(org.json.JSONObject().put("name", "pizza hut")).second).isFalse()
-    }
-}
-
-class AmountKindTest {
-    @Test
-    fun `a Hindi clock time that came back as a length asks, and a length as a moment`() {
-        val asLength = org.json.JSONObject("""{"kind": "in", "length": {"days": 1, "hours": 0, "minutes": 45, "seconds": 0}}""")
-        assertThat(SchemaCall.amountDisagrees("paune aath baje ka alarm lagao", asLength)).contains("came back as a length")
-        val asMoment = org.json.JSONObject("""{"kind": "at", "day": null, "time": {"hour": 2, "minute": 30, "meridiem": null}}""")
-        assertThat(SchemaCall.amountDisagrees("dhai minute ka timer", asMoment)).contains("came back as a moment")
-        val right = org.json.JSONObject("""{"kind": "at", "day": null, "time": {"hour": 7, "minute": 45, "meridiem": null}}""")
-        assertThat(SchemaCall.amountDisagrees("paune aath baje ka alarm lagao", right)).isNull()
     }
 }

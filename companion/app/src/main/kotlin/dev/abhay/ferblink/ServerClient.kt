@@ -17,12 +17,6 @@ import kotlin.math.exp
 data class Call(
     val name: String,
     val arguments: JSONObject,
-    /** A timed call only ([ServerClient.completeTimed]): its time as structure (time v1, with "v"), or null. */
-    val time: JSONObject? = null,
-    /** A timed call only: Ferb Link's ask-only checks that fired ([SchemaCall.asks]); any makes Ferb ask. */
-    val asks: List<String>? = null,
-    /** A timed call only: a leaked closing was cut from a string argument ([SchemaCall.clean]); Ferb asks. */
-    val trimmed: Boolean? = null,
 ) {
     /** `name(key = value, …)` with strings quoted, for display. */
     fun signature(): String = arguments.keys().asSequence().joinToString(prefix = "$name(", postfix = ")") { key ->
@@ -58,10 +52,7 @@ data class Reply(
     fun toJson(): String = JSONObject()
         .put("success", error == null)
         .put("function_calls", JSONArray(calls.map { call ->
-            JSONObject().put("name", call.name).put("arguments", call.arguments).apply {
-                // Only on timed calls, so other replies keep their shape.
-                if (call.asks != null) put("when", call.time ?: JSONObject.NULL).put("asks", JSONArray(call.asks)).put("trimmed", call.trimmed == true)
-            }
+            JSONObject().put("name", call.name).put("arguments", call.arguments)
         }))
         .put("confidence", confidence)
         .put("first", first)
@@ -143,19 +134,13 @@ data class Rewritten(
     val failure: Failure?,
     /** Facts in [commands] the request didn't hold ([Rewrite.invented]): ferb-manager's hard rule, counted apart on the bench. */
     val invented: List<String> = emptyList(),
-    /** Comprehend only: the request can go on as it is (no commands). Null for a rewrite. */
-    val direct: Boolean? = null,
-    /** +when only: each command's time ([TimeFormat]), in the commands' order; null without +when. */
-    val whens: List<JSONObject?>? = null,
     /** Written with the caller's own prompt ([ServerClient.rewriteInstructed]): the reply keeps `raw` and says so. */
     val instructed: Boolean = false,
 ) {
     fun toJson(): String = JSONObject()
         .put("success", failure == null)
-        .apply { direct?.let { put("direct", it) } }
         .put("commands", JSONArray(commands))
         .put("invented", JSONArray(invented))
-        .apply { whens?.let { put("when", JSONArray(it.map(TimeFormat::versioned))) } }
         .put("sent", sent)
         .put("raw", raw)
         .put("model", model)
@@ -370,57 +355,10 @@ class ServerClient(
         }
     }
 
-    /**
-     * `complete` with `time_format` 1: the answer as JSON the server enforces ([SchemaCall], prompt t4),
-     * so each timed tool's call carries its time as structure. Gemma's native tool calls get no
-     * grammar in llama-server, and a time parameter came back as free strings. [request] goes as
-     * typed: the model writes the time itself, with [now] as context.
-     */
-    fun completeTimed(request: String, toolsJson: String, now: String, timeoutMs: Int? = null): Reply {
-        val started = System.nanoTime()
-        val tools = try {
-            JSONArray(toolsJson)
-        } catch (e: Exception) {
-            return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
-        }
-        return try {
-            val body = SchemaCall.body(modelName(timeoutMs), request, now, tools, rewrite = false, timed = true, version = "t4")
-            val (code, text) = send("POST", "/v1/chat/completions", body, auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) return Reply.failed(problem(code, text), ms)
-            val reply = JSONObject(text)
-            val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-            val parsed = SchemaCall.reply(content, request).getJSONArray("calls")
-            val calls = (0 until parsed.length()).map { i ->
-                val call = parsed.getJSONObject(i)
-                val asks = call.getJSONArray("asks")
-                Call(call.getString("tool"), call.getJSONObject("arguments"), call.optJSONObject("when"),
-                    (0 until asks.length()).map { asks.getString(it) }, call.getBoolean("trimmed"))
-            }
-            Reply(calls, "", 0.0, 0.0, 0.0, reply.optString("model"), ms, null)
-        } catch (e: IOException) {
-            Reply.failed(failureOf(e), msSince(started))
-        } catch (e: Exception) {
-            Reply.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
-        }
-    }
-
-    /** The comprehend-style transcribe on text (bench only): the model's fields as they came, plus ms. */
-    fun transcribeComprehendText(heard: String, timeoutMs: Int? = null): JSONObject {
-        val started = System.nanoTime()
-        val (code, text) = send("POST", "/v1/chat/completions", transcribeComprehendTextBody(modelName(timeoutMs), heard), auth = true, timeoutMs)
-        val ms = msSince(started)
-        check(code == 200) { "HTTP $code: $text" }
-        val content = JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-        return JSONObject(content).put("ms", ms).put("success", true)
-    }
-
-    /** [Rewrite]'s experiment: [request] as plain English commands, with dates worked out from [now]. */
+    /** [Rewrite]: [request] as plain English commands, after [Amounts.forRequest], with [now] for the prompt. */
     fun rewrite(request: String, now: String, variant: Rewrite.Variant, toolNames: List<String> = emptyList(), timeoutMs: Int? = null): Rewritten {
         val started = System.nanoTime()
-        val amounts = Amounts.forRequest(request)
-        val today = Dates.dateOf(now)
-        val sent = if (Rewrite.datesInCode(variant) && today != null) Dates.forRequest(amounts, today) else amounts
+        val sent = Amounts.forRequest(request)
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
         var raw = ""
         return try {
@@ -429,11 +367,8 @@ class ServerClient(
             if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
             val reply = JSONObject(text)
             raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-            val direct = if (Rewrite.comprehends(variant)) Rewrite.direct(raw) else null
-            // A direct answer has no commands to run, whatever else the model wrote.
-            val commands = if (direct == true) emptyList() else Rewrite.parse(raw)
-            val whens = if (variant.`when` && direct != true) Rewrite.whens(raw) else if (variant.`when`) emptyList() else null
-            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands), direct, whens)
+            val commands = Rewrite.parse(raw)
+            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands))
         } catch (e: IOException) {
             Rewritten.failed(failureOf(e), sent, msSince(started))
         } catch (e: Exception) {
@@ -617,36 +552,6 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
 
         private const val FORMAT_SLOT = "@response_format@"
 
-        /**
-         * Transcribe answering as comprehend does, in its one call (follow-up 1, bench only for
-         * now): after the four fields, whether "text" can go on as it is ("direct", with its
-         * time), or the request as commands with their times, or none. Comprehend did best on the
-         * heard voice lines (61 right, 2 wrong runs) but as a second Gemma call.
-         */
-        val TRANSCRIBE_COMPREHEND = TRANSCRIBE + """
-
-Then three more fields, after "text":
-- "direct": true when "text" is already one clear command in plain English with its action and values written out ("Set an alarm for 6:45 am", "Call Priya", "Turn on the flashlight"). Then "commands" is [].
-- "when": when "direct" is true, the time "text" names, as below, or null; null when "direct" is false.
-- "commands": when "direct" is false, each thing asked as a short plain English command, in the order asked, each {"text": "...", "when": its time or null}. An empty list when nothing is asked: no speech, a question about the world, chat, thanks, or a statement about something, the past or the speaker. A question about the user's own phone (calendar, alarms, lists, notes, settings) is a request ("Show my agenda for tomorrow"). Never add a name, place, app, number, time or date that wasn't said.
-""" + TimeFormat.PROMPT_T4.replaceFirst("For an alarm, timer, reminder or event, \"when\" is", "A \"when\" is")
-
-        private val TRANSCRIBE_COMPREHEND_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", "properties": {"speech": {"type": "boolean"}, "hindi": {"type": "boolean"}, "heard": {"type": "string"}, "text": {"type": "string"}, """ +
-            """"direct": {"type": "boolean"}, "when": ${TimeFormat.ANY_T4}, "commands": {"type": "array", "items": {"type": "object", "properties": {"text": {"type": "string"}, "when": ${TimeFormat.ANY_T4}}, "required": ["text", "when"]}}}, """ +
-            """"required": ["speech", "hindi", "heard", "text", "direct", "when", "commands"]}}}"""
-
-        /** [transcribeTextBody] with the comprehend answer ([TRANSCRIBE_COMPREHEND]). */
-        fun transcribeComprehendTextBody(model: String, heard: String): String = JSONObject()
-            .put("model", model)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", TRANSCRIBE_COMPREHEND))
-                .put(JSONObject().put("role", "user").put("content", "(The recording, as heard:) $heard")))
-            .put("temperature", 0)
-            .put("max_tokens", 600)
-            .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
-            .put("response_format", FORMAT_SLOT)
-            .toString()
-            .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_COMPREHEND_FORMAT)
 
         /**
          * [transcribeBody] with [heard] typed in place of a recording: for checking the prompt's

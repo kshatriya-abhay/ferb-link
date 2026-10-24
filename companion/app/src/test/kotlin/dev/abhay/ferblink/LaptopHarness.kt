@@ -181,8 +181,8 @@ class LaptopHarness {
     /** [SchemaCall]: B's call as enforced JSON, calls with "when", or rewritten commands with "rewrite". */
     private fun schemaCall(line: JSONObject): JSONObject {
         val tools = line.optJSONArray("tools") ?: JSONArray(line.getString("tools"))
-        val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite"), line.optBoolean("timed"), line.optString("time_prompt", "t3")))
-        return SchemaCall.reply(content, line.getString("request")).put("success", true).put("raw", content).put("ms", ms)
+        val (content, ms) = post(SchemaCall.body(server.third, line.getString("request"), line.getString("now"), tools, line.optBoolean("rewrite")))
+        return SchemaCall.reply(content).put("success", true).put("raw", content).put("ms", ms)
     }
 
     private fun answer(client: ServerClient, line: JSONObject): JSONObject {
@@ -191,22 +191,19 @@ class LaptopHarness {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
             line.optString("method") == "timex" -> timex(line)
             line.optString("method") == "schema-call" -> schemaCall(line)
-            line.optString("method") == "transcribe-text" ->
-                if (line.optBoolean("comprehend")) client.transcribeComprehendText(line.getString("heard"), timeout)
-                else JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
+            line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
             // The provider's instructed rewrite: the caller's prompt, inline or from a file.
             line.optString("method") == "rewrite" && (line.has("instructions") || line.has("instructions_file")) -> {
                 val instructions = line.optString("instructions").ifBlank { File(line.getString("instructions_file")).readText() }
                 val maxTokens = Instructed.maxTokens(mapOf(LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens")))
                 JSONObject(client.rewriteInstructed(line.getString("request"), instructions, maxTokens, timeout).toReplyJson())
             }
-            line.optString("method") in setOf("rewrite", "comprehend") -> {
+            line.optString("method") == "rewrite" -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
                 val tools = line.optJSONArray("tools")
                 val names = (0 until (tools?.length() ?: 0)).map { i -> tools!!.optJSONObject(i)?.getString("name") ?: tools.getString(i) }
-                val name = line.optString("variant").ifBlank { if (line.optString("method") == "comprehend") "c1" else "v1" }
+                val name = line.optString("variant").ifBlank { "v1" }
                 val variant = Rewrite.Variant.of(name)
-                require(Rewrite.comprehends(variant) == (line.optString("method") == "comprehend")) { "variant $name doesn't fit method ${line.optString("method")}" }
                 JSONObject(client.rewrite(line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
                     .put("variant", name)
             }

@@ -6,7 +6,7 @@ import org.json.JSONObject
 /**
  * `rewrite` with Ferb's own prompt ([LinkContract.EXTRA_INSTRUCTIONS]): the instructions as the
  * system message and the request, verbatim, as the user message. Greedy, no thinking, no pre-pass
- * (no Amounts, no Dates), so Gemma gets exactly what Gemini Nano gets on the phone.
+ * (no Amounts), so Gemma gets exactly what Gemini Nano gets on the phone.
  */
 object Instructed {
     const val NONE = "NONE"

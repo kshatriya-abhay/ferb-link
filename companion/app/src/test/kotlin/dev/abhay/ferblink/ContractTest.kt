@@ -158,49 +158,18 @@ class ContractTest {
         },
         Case("rewrite-gemini", "rewrite", "With Ferb's own prompt (instructions): one command, and raw for Ferb's own parsing. No pre-pass: the request goes as it is.",
             mapOf("request" to "open the nfc settings", "instructions" to INSTRUCTIONS, "max_tokens" to 40, "timeout_ms" to 10_000)) {
-            chatReply = 200 to timedAnswer("Open NFC settings")
+            chatReply = 200 to chatAnswer("Open NFC settings")
         },
         Case("rewrite-gemini-none", "rewrite", "With Ferb's own prompt: NONE, so no commands.",
             mapOf("request" to "the alarm woke the baby", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
-            chatReply = 200 to timedAnswer("NONE")
+            chatReply = 200 to chatAnswer("NONE")
         },
         Case("rewrite-gemini-bad_reply", "rewrite", "With Ferb's own prompt: an empty answer.",
             mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
-            chatReply = 200 to timedAnswer("  \n ")
+            chatReply = 200 to chatAnswer("  \n ")
         },
         Case("rewrite-gemini-bad_request", "rewrite", "With Ferb's own prompt: no request.",
             mapOf("request" to "", "instructions" to INSTRUCTIONS, "max_tokens" to 40)),
-        Case("complete-timed", "complete", "time_format 1: the alarm's time as structure (time v1), as said: no day said, no am/pm.",
-            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "6:45"}, "when": {"kind": "at", "day": null, "time": {"hour": 6, "minute": 45, "meridiem": null}}}]}""")
-        },
-        Case("complete-timed-in", "complete", "time_format 1: after a length, never a worked-out clock time.",
-            mapOf("request" to "alarm in 20 minutes", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "in 20 minutes"}, "when": {"kind": "in", "length": {"days": 0, "hours": 0, "minutes": 20, "seconds": 0}}}]}""")
-        },
-        Case("complete-timed-every", "complete", "time_format 1: a repeat, period and weekdays.",
-            mapOf("request" to "remind me every Monday at 8 to take out the bins", "tools" to REMINDER_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "add_reminder", "arguments": {"text": "take out the bins"}, "when": {"kind": "every", "period": "week", "on": ["monday"], "time": {"hour": 8, "minute": 0, "meridiem": null, "part": null}}}]}""")
-        },
-        Case("complete-timed-asks", "complete", "time_format 1: parso came back as tomorrow; Ferb Link's check asks (it never corrects).",
-            mapOf("request" to "parso shaam 6 baje doctor ki yaad dilana", "tools" to REMINDER_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "add_reminder", "arguments": {"text": "doctor"}, "when": {"kind": "at", "day": {"relative": 1}, "time": {"hour": 6, "minute": 0, "meridiem": "pm", "part": "evening"}}}]}""")
-        },
-        Case("complete-timed-trimmed", "complete", "time_format 1: the answer's closing leaked into a string argument; it's cut there and trimmed is true, so Ferb asks.",
-            mapOf("request" to "open maps", "tools" to APP_TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": [{"tool": "open_app", "arguments": {"app_name": "Maps}}]}```"}, "when": null}]}""")
-        },
-        Case("complete-timed-none", "complete", "time_format 1: no tool fits.", mapOf("request" to "what's the capital of Peru", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to timedAnswer("""{"calls": []}""")
-        },
-        Case("complete-timed-timeout", "complete", "time_format 1: no answer within timeout_ms (1000, the least it takes).",
-            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 1000)) {
-            chatReply = 200 to timedAnswer("""{"calls": []}"""); chatDelayMs = 1_500
-        },
-        Case("complete-timed-bad_reply", "complete", "time_format 1: an answer that isn't the enforced JSON.",
-            mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
-            chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, alarm set."}}]}"""
-        },
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
         Case("status-jev-cap", "status", "Jev turned itself off at its spending cap.") { it.jevOffReason = LinkContract.JEV_OFF_CAP },
         Case("decide", "decide", "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
@@ -291,7 +260,7 @@ class ContractTest {
     @Test
     fun `an instructed rewrite sends the instructions and request as they are, greedy and capped`() {
         assumeFalse("rewriting the fixtures", write)
-        chatReply = 200 to timedAnswer("Command: \"Turn on the flashlight\"\nextra")
+        chatReply = 200 to chatAnswer("Command: \"Turn on the flashlight\"\nextra")
         val result = run(Case("x", "rewrite", "", mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS, "max_tokens" to 999, "now" to "2026-10-16T09:00 (Friday)")), State(url = url))
         val body = JSONObject(chatBody)
         val messages = body.getJSONArray("messages")
@@ -395,15 +364,13 @@ class ContractTest {
                 """{"speech": true, "hindi": $hindi, "heard": "$heard", "text": "$text"}""")))).toString()
 
         /** 2 s of 16 kHz WAV: syllable-like bursts for "speech", zeros for "silence". */
-        /** The laptop's model answering a time_format call: [content] (the enforced JSON) as the message's text. */
-        fun timedAnswer(content: String) = JSONObject().put("model", "gemma-4-e2b")
+        /** The laptop's model answering with [content] as the message's text. */
+        fun chatAnswer(content: String) = JSONObject().put("model", "gemma-4-e2b")
             .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content)))).toString()
 
         /** A stand-in for Ferb's GeminiRewrite prompt, which Ferb sends itself. */
         const val INSTRUCTIONS = "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE."
 
-        const val REMINDER_TOOLS = """[{"name": "add_reminder", "description": "Remind the user of something at a time", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to remind about"}}, "required": ["text"]}}]"""
-        const val APP_TOOLS = """[{"name": "open_app", "description": "Open an app by its name", "parameters": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}}]"""
 
         /** What the laptop's model answers to a rewrite: {"commands": [...]} as the message's text. */
         fun commands(vararg commands: String) = JSONObject()
