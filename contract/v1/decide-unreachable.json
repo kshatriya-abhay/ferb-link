@@ -9,7 +9,7 @@
     "reply": {
       "choice": "",
       "error": "can't reach Jev",
-      "error_detail": "TypeSafe doesn't answer: Connection refused",
+      "error_detail": "TypeSafe doesn't answer. Is the phone online?",
       "error_kind": "unreachable",
       "model": "",
       "ms": 0,

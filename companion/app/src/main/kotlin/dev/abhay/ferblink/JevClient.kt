@@ -73,7 +73,7 @@ class JevClient(
         } catch (e: NotConnected) {
             trace?.invoke("POST $PATH couldn't connect: ${e.cause}")
             val cause = e.cause
-            val message = if (cause is UnknownHostException) "Can't find TypeSafe's server. Is the phone online?" else "TypeSafe doesn't answer: ${cause?.message}"
+            val message = if (cause is UnknownHostException) "Can't find TypeSafe's server. Is the phone online?" else "TypeSafe doesn't answer. Is the phone online?"
             Decision.failed(Failure(ErrorKind.Unreachable, message, "can't reach Jev"), msSince(started), options)
         } catch (e: SocketTimeoutException) {
             trace?.invoke("POST $PATH timed out after ${msSince(started)} ms")
