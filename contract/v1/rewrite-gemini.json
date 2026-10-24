@@ -1,0 +1,23 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt (instructions): one command, and raw for Ferb's own parsing. No pre-pass: the request goes as it is.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
+    "request": "open the nfc settings",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "commands": ["Open NFC settings"],
+      "instructions": true,
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "raw": "Open NFC settings",
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

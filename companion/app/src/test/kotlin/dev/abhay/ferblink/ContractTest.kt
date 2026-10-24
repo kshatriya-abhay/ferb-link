@@ -37,6 +37,7 @@ class ContractTest {
     private lateinit var server: HttpServer
     private var chatReply: Pair<Int, String> = 200 to ""
     private var chatDelayMs = 0L
+    @Volatile private var chatBody = ""
     private var jevReply: Pair<Int, String> = 200 to ""
     private var jevDelayMs = 0L
 
@@ -155,6 +156,20 @@ class ContractTest {
         Case("rewrite-bad_reply", "rewrite", "An answer that isn't the commands' JSON.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
             chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, I'll set it."}}]}"""
         },
+        Case("rewrite-gemini", "rewrite", "With Ferb's own prompt (instructions): one command, and raw for Ferb's own parsing. No pre-pass: the request goes as it is.",
+            mapOf("request" to "open the nfc settings", "instructions" to INSTRUCTIONS, "max_tokens" to 40, "timeout_ms" to 10_000)) {
+            chatReply = 200 to timedAnswer("Open NFC settings")
+        },
+        Case("rewrite-gemini-none", "rewrite", "With Ferb's own prompt: NONE, so no commands.",
+            mapOf("request" to "the alarm woke the baby", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
+            chatReply = 200 to timedAnswer("NONE")
+        },
+        Case("rewrite-gemini-bad_reply", "rewrite", "With Ferb's own prompt: an empty answer.",
+            mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
+            chatReply = 200 to timedAnswer("  \n ")
+        },
+        Case("rewrite-gemini-bad_request", "rewrite", "With Ferb's own prompt: no request.",
+            mapOf("request" to "", "instructions" to INSTRUCTIONS, "max_tokens" to 40)),
         Case("complete-timed", "complete", "time_format 1: the alarm's time as structure (time v1), as said: no day said, no am/pm.",
             mapOf("request" to "wake me up at 6:45", "tools" to TOOLS, "time_format" to 1, "timeout_ms" to 6000)) {
             chatReply = 200 to timedAnswer("""{"calls": [{"tool": "set_alarm", "arguments": {"time": "6:45"}, "when": {"kind": "at", "day": null, "time": {"hour": 6, "minute": 45, "meridiem": null}}}]}""")
@@ -237,7 +252,7 @@ class ContractTest {
             exchange.answer(jevReply.first, jevReply.second)
         }
         server.createContext("/v1/chat/completions") { exchange ->
-            exchange.requestBody.readAllBytes()
+            chatBody = String(exchange.requestBody.readAllBytes())
             Thread.sleep(chatDelayMs)
             exchange.answer(chatReply.first, chatReply.second)
         }
@@ -271,6 +286,31 @@ class ContractTest {
             assertWithMessage("${case.name}: extras").that(canonical(fixture.getJSONObject("extras"))).isEqualTo(canonical(toJson(case.extras)))
             assertSame(case.name, fixture.getJSONObject("result"), result)
         }
+    }
+
+    @Test
+    fun `an instructed rewrite sends the instructions and request as they are, greedy and capped`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 200 to timedAnswer("Command: \"Turn on the flashlight\"\nextra")
+        val result = run(Case("x", "rewrite", "", mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS, "max_tokens" to 999, "now" to "2026-10-16T09:00 (Friday)")), State(url = url))
+        val body = JSONObject(chatBody)
+        val messages = body.getJSONArray("messages")
+        assertThat(messages.length()).isEqualTo(2)
+        assertThat(messages.getJSONObject(0).getString("content")).isEqualTo(INSTRUCTIONS)
+        assertThat(messages.getJSONObject(1).getString("content")).isEqualTo("torch on karo")
+        assertThat(body.getInt("temperature")).isEqualTo(0)
+        assertThat(body.getInt("top_k")).isEqualTo(1)
+        assertThat(body.getInt("max_tokens")).isEqualTo(LinkContract.MAX_REWRITE_TOKENS)
+        assertThat(body.has("response_format")).isFalse()
+        val reply = result.getJSONObject("reply")
+        assertThat(reply.getJSONArray("commands").getString(0)).isEqualTo("Turn on the flashlight")
+        assertThat(reply.getBoolean("instructions")).isTrue()
+        assertThat(reply.getString("raw")).startsWith("Command:")
+
+        val long = run(Case("x", "rewrite", "", mapOf("request" to "torch on karo", "instructions" to "x".repeat(LinkContract.MAX_INSTRUCTIONS_CHARS + 1))), State(url = url))
+            .getJSONObject("reply")
+        assertThat(long.getString("error_kind")).isEqualTo("bad_request")
+        assertThat(long.getBoolean("instructions")).isTrue()
     }
 
     @Test
@@ -358,6 +398,9 @@ class ContractTest {
         /** The laptop's model answering a time_format call: [content] (the enforced JSON) as the message's text. */
         fun timedAnswer(content: String) = JSONObject().put("model", "gemma-4-e2b")
             .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content)))).toString()
+
+        /** A stand-in for Ferb's GeminiRewrite prompt, which Ferb sends itself. */
+        const val INSTRUCTIONS = "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE."
 
         const val REMINDER_TOOLS = """[{"name": "add_reminder", "description": "Remind the user of something at a time", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to remind about"}}, "required": ["text"]}}]"""
         const val APP_TOOLS = """[{"name": "open_app", "description": "Open an app by its name", "parameters": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}}]"""

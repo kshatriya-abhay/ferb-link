@@ -145,14 +145,19 @@ class LinkCalls(
         LinkContract.METHOD_REWRITE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
             val at = (extras[LinkContract.EXTRA_NOW] as? String)?.takeIf { it.isNotBlank() } ?: nowText(now())
+            val instructions = (extras[LinkContract.EXTRA_INSTRUCTIONS] as? String)?.takeIf { it.isNotBlank() }
+            val instructed = instructions != null
             val rewritten = when {
-                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request)
-                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request)
-                else -> state.client(trace).rewrite(request, at, Rewrite.Variant.of(LinkContract.REWRITE_VARIANT), timeoutMs = timeoutMs(extras)).also {
-                    if (it.failure == null && it.model.isNotEmpty()) {
-                        state.lastModel = it.model
-                        state.saw(ModelState.Loaded, now())
-                    }
+                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request, instructed = instructed)
+                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request, instructed = instructed)
+                instructions != null && instructions.length > LinkContract.MAX_INSTRUCTIONS_CHARS -> Rewritten.failed(
+                    Failure(ErrorKind.BadRequest, "Instructions over ${LinkContract.MAX_INSTRUCTIONS_CHARS} characters", "bad request: instructions too long"), request, instructed = true)
+                instructions != null -> state.client(trace).rewriteInstructed(request, instructions, Instructed.maxTokens(extras), timeoutMs(extras))
+                else -> state.client(trace).rewrite(request, at, Rewrite.Variant.of(LinkContract.REWRITE_VARIANT), timeoutMs = timeoutMs(extras))
+            }.also {
+                if (it.failure == null && it.model.isNotEmpty()) {
+                    state.lastModel = it.model
+                    state.saw(ModelState.Loaded, now())
                 }
             }
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to rewritten.toReplyJson())

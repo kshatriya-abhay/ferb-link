@@ -97,6 +97,14 @@ object LinkContract {
      * strings, empty when nothing is asked), `invented` (numbers and names in the commands that
      * the request didn't hold: don't run those), `model`, `ms`, `source: "laptop"`, and `error`,
      * `error_detail`, `error_kind` on failure, as for [METHOD_COMPLETE].
+     *
+     * With [EXTRA_INSTRUCTIONS] it runs the caller's own prompt instead (Ferb's GeminiRewrite, so
+     * Gemma and Gemini Nano share one prompt): the instructions as the system message, the request
+     * verbatim as the user message, greedy, at most [EXTRA_MAX_TOKENS] tokens, and no pre-pass
+     * ([EXTRA_NOW] is ignored). `commands` then holds the first line as one command, or nothing
+     * for NONE; the reply adds `raw` (the model's text, for the caller's own parsing) and
+     * `"instructions": true`. An older Ferb Link ignores the extra and answers with v2, without
+     * that echo.
      */
     const val METHOD_REWRITE = "rewrite"
 
@@ -112,6 +120,13 @@ object LinkContract {
     const val EXTRA_TIME_FORMAT = "time_format"
     /** For [METHOD_REWRITE]: when "now" is, to work out "kal" and weekdays, as "2026-10-16T09:00 (Friday)". */
     const val EXTRA_NOW = "now"
+    /** A String, for [METHOD_REWRITE]: the caller's system prompt, at most [MAX_INSTRUCTIONS_CHARS]; blank counts as absent. */
+    const val EXTRA_INSTRUCTIONS = "instructions"
+    /** An Int, with [EXTRA_INSTRUCTIONS]: the answer's token cap, clamped to 1..[MAX_REWRITE_TOKENS]; [REWRITE_MAX_TOKENS] without it. */
+    const val EXTRA_MAX_TOKENS = "max_tokens"
+    const val MAX_INSTRUCTIONS_CHARS = 16_000
+    const val REWRITE_MAX_TOKENS = 40
+    const val MAX_REWRITE_TOKENS = 256
     /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */
     const val EXTRA_TIMEOUT_MS = "timeout_ms"
     /**

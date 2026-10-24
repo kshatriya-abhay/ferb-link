@@ -147,6 +147,8 @@ data class Rewritten(
     val direct: Boolean? = null,
     /** +when only: each command's time ([TimeFormat]), in the commands' order; null without +when. */
     val whens: List<JSONObject?>? = null,
+    /** Written with the caller's own prompt ([ServerClient.rewriteInstructed]): the reply keeps `raw` and says so. */
+    val instructed: Boolean = false,
 ) {
     fun toJson(): String = JSONObject()
         .put("success", failure == null)
@@ -167,15 +169,19 @@ data class Rewritten(
         }
         .toString()
 
-    /** What `rewrite` gives Ferb: the commands and `invented`, without the harness's `sent` and `raw`. */
+    /**
+     * What `rewrite` gives Ferb: the commands and `invented`, without the harness's `sent`. `raw`
+     * only for an instructed rewrite, which Ferb parses itself, with `"instructions": true`.
+     */
     fun toReplyJson(): String = JSONObject(toJson()).apply {
         remove("sent")
-        remove("raw")
+        if (instructed) put("instructions", true) else remove("raw")
         put("source", "laptop")
     }.toString()
 
     companion object {
-        fun failed(failure: Failure, sent: String, ms: Long = 0, raw: String = "") = Rewritten(emptyList(), sent, raw, "", ms, failure)
+        fun failed(failure: Failure, sent: String, ms: Long = 0, raw: String = "", instructed: Boolean = false) =
+            Rewritten(emptyList(), sent, raw, "", ms, failure, instructed = instructed)
     }
 }
 
@@ -432,6 +438,26 @@ class ServerClient(
             Rewritten.failed(failureOf(e), sent, msSince(started))
         } catch (e: Exception) {
             Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, msSince(started), raw)
+        }
+    }
+
+    /** [request] as one command (or none) with the caller's own prompt: [Instructed]. */
+    fun rewriteInstructed(request: String, instructions: String, maxTokens: Int, timeoutMs: Int? = null): Rewritten {
+        val started = System.nanoTime()
+        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), request, instructed = true)
+        var raw = ""
+        return try {
+            val (code, text) = send("POST", "/v1/chat/completions", Instructed.body(modelName(timeoutMs), instructions, request, maxTokens), auth = true, timeoutMs)
+            val ms = msSince(started)
+            if (code != 200) return Rewritten.failed(problem(code, text), request, ms, instructed = true)
+            val reply = JSONObject(text)
+            raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+            val commands = listOfNotNull(Instructed.parse(raw))
+            Rewritten(commands, request, raw, reply.optString("model"), ms, null, Rewrite.invented(request, request, commands), instructed = true)
+        } catch (e: IOException) {
+            Rewritten.failed(failureOf(e), request, msSince(started), instructed = true)
+        } catch (e: Exception) {
+            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the command: ${e.message}"), request, msSince(started), raw, instructed = true)
         }
     }
 

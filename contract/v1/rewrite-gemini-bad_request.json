@@ -1,0 +1,25 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt: no request.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
+    "request": ""
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "bad request: no request",
+      "error_detail": "No request",
+      "error_kind": "bad_request",
+      "instructions": true,
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "raw": "",
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

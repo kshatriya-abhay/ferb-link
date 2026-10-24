@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
  *   "tools": [...]}` → the rewrite experiment ([Rewrite]): `commands` (empty when nothing is asked),
  *   `sent` (after [Amounts.forRequest]), `raw` (the model's text), `variant`. "tools" (names or
  *   schemas) is only used by +tools. Gemma on the laptop: free, one model at a time, under the lock.
+ * - `{"method": "rewrite", "request": "...", "instructions": "..." or "instructions_file": "/path",
+ *   "max_tokens": 40}` → the provider's instructed rewrite ([Instructed]), as `rewrite` answers Ferb.
  * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}; decide lines
  * not sent give {"id", "skipped"}.
  */
@@ -192,6 +194,12 @@ class LaptopHarness {
             line.optString("method") == "transcribe-text" ->
                 if (line.optBoolean("comprehend")) client.transcribeComprehendText(line.getString("heard"), timeout)
                 else JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
+            // The provider's instructed rewrite: the caller's prompt, inline or from a file.
+            line.optString("method") == "rewrite" && (line.has("instructions") || line.has("instructions_file")) -> {
+                val instructions = line.optString("instructions").ifBlank { File(line.getString("instructions_file")).readText() }
+                val maxTokens = Instructed.maxTokens(mapOf(LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens")))
+                JSONObject(client.rewriteInstructed(line.getString("request"), instructions, maxTokens, timeout).toReplyJson())
+            }
             line.optString("method") in setOf("rewrite", "comprehend") -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).
                 val tools = line.optJSONArray("tools")

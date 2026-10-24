@@ -1,0 +1,25 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt: an empty answer.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "unexpected answer",
+      "error_detail": "Couldn't read the command: the model wrote nothing",
+      "error_kind": "bad_reply",
+      "instructions": true,
+      "invented": [],
+      "model": "",
+      "ms": 42,
+      "raw": "  \n ",
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt: NONE, so no commands.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
+    "request": "the alarm woke the baby"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "instructions": true,
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 42,
+      "raw": "NONE",
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

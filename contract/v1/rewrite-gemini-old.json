@@ -1,0 +1,22 @@
+{
+  "method": "rewrite",
+  "synthetic": true,
+  "note": "An older Ferb Link (before instructions): it ignores instructions and max_tokens and answers with its own v2 prompt, with no \"instructions\" echo and no raw. Ferb treats this as a failed Ferb-Link rewrite.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
+    "request": "torch on karo aur volume badhao",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "commands": ["Turn on the flashlight", "Turn the volume up"],
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 42,
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}
