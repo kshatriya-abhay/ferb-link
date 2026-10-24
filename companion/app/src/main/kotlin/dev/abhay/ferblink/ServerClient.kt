@@ -392,7 +392,9 @@ class ServerClient(
             if (Instructed.cutOff(raw, choice.optString("finish_reason").ifEmpty { null })) return Rewritten.failed(
                 Failure(ErrorKind.BadReply, "The command was cut off at $maxTokens tokens", "answer cut off"), request, ms, raw, instructed = true)
             val commands = listOfNotNull(Instructed.parse(raw))
-            Rewritten(commands, request, raw, reply.optString("model"), ms, null, Rewrite.invented(request, request, commands), instructed = true)
+            // No `invented`: Ferb's prompt writes Hindi amounts as numbers ("sava saat" → 7:15),
+            // which the check, without Amounts, would flag.
+            Rewritten(commands, request, raw, reply.optString("model"), ms, null, emptyList(), instructed = true)
         } catch (e: IOException) {
             Rewritten.failed(failureOf(e), request, msSince(started), instructed = true)
         } catch (e: Exception) {
@@ -622,10 +624,15 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
 
         private fun problem(code: Int, body: String): Failure {
             val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull()
-            return when (code) {
+            val type = runCatching { JSONObject(body).getJSONObject("error").optString("type") }.getOrNull()
+            return when {
+                code == 400 && (type == "exceed_context_size_error" || message?.contains("context size") == true) ->
+                    Failure(ErrorKind.BadRequest, "Too long for the model's context on your computer", "bad request: too long")
+                else -> when (code) {
                 401 -> Failure(ErrorKind.Auth, "Your computer turned down the API key")
                 503 -> Failure(ErrorKind.Server, "Your computer is loading the model", "model loading")
                 else -> Failure(ErrorKind.Server, "Your computer answered $code" + (message?.let { ": $it" } ?: ""), "server error $code")
+                }
             }
         }
 

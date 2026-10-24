@@ -16,6 +16,9 @@ object Rewrite {
     /** A prompt version and its switches: few-shot examples, Ferb's tool names, thinking on, no schema. */
     data class Variant(val base: String, val shots: Boolean, val tools: Boolean, val think: Boolean, val free: Boolean) {
         companion object {
+            /** [of], or null for a name it doesn't know (the provider answers a failure, not a crash). */
+            fun orNull(name: String): Variant? = runCatching { of(name) }.getOrNull()
+
             fun of(name: String): Variant {
                 val parts = name.trim().split("+").map { it.trim().lowercase() }
                 val unknown = parts.drop(1) - setOf("shots", "tools", "think", "free")

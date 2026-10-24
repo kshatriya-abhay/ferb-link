@@ -22,7 +22,7 @@ object AudioDecoder {
 
     /** WAV as it is; anything else decoded. Throws [Unreadable], with a reason for the user. */
     fun toWav(audio: ByteArray, mime: String?): ByteArray {
-        if (mime in WAV_TYPES || isWav(audio)) return audio
+        if (mime in WAV_TYPES || isWav(audio)) return checkWav(audio)
         val (pcm, rate, channels) = decode(audio)
         return fromPcm(pcm, rate, channels)
     }
@@ -36,10 +36,30 @@ object AudioDecoder {
             outRate = TARGET_RATE
         }
         if (samples.size > outRate.toLong() * (LinkContract.MAX_AUDIO_SECONDS + 1)) {
-            throw Unreadable("The recording is over ${LinkContract.MAX_AUDIO_SECONDS} s")
+            throw Unreadable(TOO_LONG)
         }
         return wav(samples, outRate)
     }
+
+    /** [wav] as it is, if its header says it's at most [LinkContract.MAX_AUDIO_SECONDS] long. */
+    internal fun checkWav(wav: ByteArray): ByteArray {
+        if (wav.size < 44 || ByteBuffer.wrap(wav, 28, 4).order(ByteOrder.LITTLE_ENDIAN).int <= 0) throw Unreadable("The WAV recording has no usable header")
+        if (seconds(wav) > LinkContract.MAX_AUDIO_SECONDS + 1) throw Unreadable(TOO_LONG)
+        return wav
+    }
+
+    /**
+     * Whether [bytes] of decoded 16-bit PCM is already more than the limit: over
+     * [LinkContract.MAX_AUDIO_SECONDS] (with a second's slack) at [rate] and [channels], or over
+     * [MAX_DECODED_BYTES] whatever the format says. Checked as the decoder runs, so a long
+     * low-bitrate file stops early instead of filling memory.
+     */
+    internal fun overLimit(bytes: Long, rate: Int, channels: Int): Boolean =
+        bytes > MAX_DECODED_BYTES || bytes > rate.toLong() * channels.coerceAtLeast(1) * 2 * (LinkContract.MAX_AUDIO_SECONDS + 1)
+
+    /** 48 kHz stereo for 31 s, about 6 MB: no recording within the limit decodes to more. */
+    internal const val MAX_DECODED_BYTES = 48_000L * 2 * 2 * (LinkContract.MAX_AUDIO_SECONDS + 1)
+    internal val TOO_LONG = "The recording is over ${LinkContract.MAX_AUDIO_SECONDS} s"
 
     /** About how long a WAV file is, from its header's bytes per second. */
     fun seconds(wav: ByteArray): Double {
@@ -86,6 +106,7 @@ object AudioDecoder {
                             codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputDone = true
                         } else {
+                            if (extractor.sampleTime > (LinkContract.MAX_AUDIO_SECONDS + 1) * 1_000_000L) throw Unreadable(TOO_LONG)
                             codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
                             extractor.advance()
                         }
@@ -100,6 +121,7 @@ object AudioDecoder {
                         outFormat.getInteger(MediaFormat.KEY_PCM_ENCODING) != AudioFormat.ENCODING_PCM_16BIT
                     ) throw Unreadable("The decoder gave an unexpected sample format")
                 } else if (index >= 0) {
+                    if (overLimit(out.size().toLong() + info.size, rate, channels)) throw Unreadable(TOO_LONG)
                     val buffer = codec.getOutputBuffer(index)!!
                     val chunk = ByteArray(info.size)
                     buffer.position(info.offset)

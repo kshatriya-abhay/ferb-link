@@ -102,7 +102,8 @@ object LinkContract {
      * Gemma and Gemini Nano share one prompt): the instructions as the system message, the request
      * verbatim as the user message, greedy, at most [EXTRA_MAX_TOKENS] tokens, and no pre-pass
      * ([EXTRA_NOW] is ignored). `commands` then holds the first line as one command, or nothing
-     * for NONE; the reply adds `raw` (the model's text, for the caller's own parsing) and
+     * for NONE, and `invented` is always empty (Ferb's prompt writes Hindi amounts as numbers, so
+     * the check would flag right answers); the reply adds `raw` (the model's text, for the caller's own parsing) and
      * `"instructions": true`. A first line cut off at the token cap fails ("answer cut off",
      * bad_reply), so half a command never runs. An older Ferb Link ignores the extra and answers with v2, without
      * that echo.
@@ -119,6 +120,11 @@ object LinkContract {
     /** An Int, with [EXTRA_INSTRUCTIONS]: the answer's token cap, clamped to 1..[MAX_REWRITE_TOKENS]; [REWRITE_MAX_TOKENS] without it. */
     const val EXTRA_MAX_TOKENS = "max_tokens"
     const val MAX_INSTRUCTIONS_CHARS = 16_000
+    /**
+     * [EXTRA_REQUEST]'s length cap for complete, rewrite and decide: longer is bad_request. A
+     * request with instructions that still overflows the model's context is bad_request too.
+     */
+    const val MAX_REQUEST_CHARS = 2_000
     const val REWRITE_MAX_TOKENS = 40
     const val MAX_REWRITE_TOKENS = 256
     /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */
@@ -170,9 +176,10 @@ object LinkContract {
     /** Without [EXTRA_TIMEOUT_MS]; Ferb sends its own, and goes ahead without Jev past it. */
     const val DECIDE_TIMEOUT_MS = 3_000
     /**
-     * [METHOD_REWRITE]'s prompt. v2: on the held-out suite v2.1 ran one wrong action ("torch band
-     * karo" muted the volume), so v2 ships until v2.2 (Laptop Model Server notes, "Exploration -
-     * Rewrite before Needle 3"). Swapping it needs no change in Ferb.
+     * [METHOD_REWRITE]'s prompt without [EXTRA_INSTRUCTIONS], one of [Rewrite]'s PROMPTS. v2: on
+     * the held-out suite v2.1 ran one wrong action ("torch band karo" muted the volume). Ferb now
+     * sends its own prompt, so this is only for an older Ferb. A name [Rewrite.Variant.of] doesn't
+     * know fails each call (server error), and a unit test catches it first.
      */
     const val REWRITE_VARIANT = "v2"
     const val MAX_DECIDE_TIMEOUT_MS = 10_000

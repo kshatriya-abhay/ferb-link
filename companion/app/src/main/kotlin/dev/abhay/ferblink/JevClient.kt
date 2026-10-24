@@ -177,6 +177,19 @@ class JevClient(
         }
 
         /**
+         * A safe ceiling on a call's cost, for the cap: every byte of the body a token (byte-level
+         * tokens don't outnumber the bytes; [estimateTokens] counts four bytes a token), plus its
+         * per-call and per-option overheads. 0 for tools that aren't valid, which fail before
+         * anything is sent.
+         */
+        fun ceilingUsd(request: String, toolsJson: String): Double {
+            val tools = runCatching { tools(JSONArray(toolsJson)) }.getOrElse { return 0.0 }
+            val options = options(request, tools.map { it.first })
+            val bytes = body(request, tools.toMap(), options).toByteArray().size
+            return (255 + bytes + 8 * options.size) * USD_PER_INPUT_TOKEN
+        }
+
+        /**
          * Input tokens, for when the answer has no `usage` and for a run's budget: about four
          * characters a token, plus what Jev adds to every call (about 255) and to each option
          * (about 8). Fitted on the smoke run of 2026-10-15: 354–871 tokens, within 5%.

@@ -48,6 +48,13 @@ class RewriteTest {
         assertThat(Rewrite.parse("Sure! {\"commands\": [\"Turn on the flashlight\"]} Done.")).containsExactly("Turn on the flashlight")
         assertThrows(IllegalArgumentException::class.java) { Rewrite.parse("no json") }
     }
+
+    @Test
+    fun `the shipped variant exists, and an unknown one is null, not a throw`() {
+        assertThat(Rewrite.Variant.of(LinkContract.REWRITE_VARIANT).base).isEqualTo(LinkContract.REWRITE_VARIANT)
+        assertThat(Rewrite.Variant.orNull("v2.2")).isNull()
+        assertThat(Rewrite.Variant.orNull("v2+nonsense")).isNull()
+    }
 }
 
 class RewriteInventedTest {

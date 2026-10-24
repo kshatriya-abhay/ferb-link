@@ -172,6 +172,8 @@ class ContractTest {
             mapOf("request" to "bhaiya ko message karo ki main aaj late aaunga", "instructions" to INSTRUCTIONS, "max_tokens" to 8)) {
             chatReply = 200 to chatAnswer("Send a message to bhaiya: I", finishReason = "length")
         },
+        Case("rewrite-gemini-too_long", "rewrite", "With Ferb's own prompt: instructions over 16000 characters are turned down before anything is sent.",
+            mapOf("request" to "alarm laga do", "instructions" to "x".repeat(LinkContract.MAX_INSTRUCTIONS_CHARS + 1), "max_tokens" to 40)),
         Case("rewrite-gemini-bad_request", "rewrite", "With Ferb's own prompt: no request.",
             mapOf("request" to "", "instructions" to INSTRUCTIONS, "max_tokens" to 40)),
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
@@ -284,6 +286,46 @@ class ContractTest {
             .getJSONObject("reply")
         assertThat(long.getString("error_kind")).isEqualTo("bad_request")
         assertThat(long.getBoolean("instructions")).isTrue()
+    }
+
+    @Test
+    fun `an instructed rewrite flags nothing as invented, as Ferb's prompt writes amounts as numbers`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 200 to chatAnswer("Set an alarm for 7:15")
+        val reply = run(Case("x", "rewrite", "", mapOf("request" to "sava saat baje alarm laga do", "instructions" to INSTRUCTIONS)), State(url = url))
+            .getJSONObject("reply")
+        assertThat(reply.getJSONArray("commands").getString(0)).isEqualTo("Set an alarm for 7:15")
+        assertThat(reply.getJSONArray("invented").length()).isEqualTo(0)
+    }
+
+    @Test
+    fun `a request over the cap is a bad request for complete, rewrite and decide, and nothing is sent`() {
+        assumeFalse("rewriting the fixtures", write)
+        val long = "alarm ".repeat(LinkContract.MAX_REQUEST_CHARS / 6 + 1)
+        chatBody = ""
+        val state = State(url = url).apply { jevReady() }
+        for (extras in listOf(
+            "complete" to mapOf("request" to long, "tools" to TOOLS),
+            "rewrite" to mapOf("request" to long),
+            "rewrite" to mapOf("request" to long, "instructions" to INSTRUCTIONS),
+            "decide" to mapOf("request" to long, "tools" to TOOLS),
+        )) {
+            val reply = run(Case("x", extras.first, "", extras.second), state).getJSONObject("reply")
+            assertWithMessage(extras.toString()).that(reply.getString("error_kind")).isEqualTo("bad_request")
+            assertWithMessage(extras.toString()).that(reply.getString("error")).isEqualTo("bad request: too long")
+        }
+        assertThat(chatBody).isEmpty()
+        assertThat(state.jevSpentUsd).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `llama-server's context overflow is a bad request, not a server error`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 400 to """{"error": {"code": 400, "message": "the request exceeds the available context size, try increasing it", "type": "exceed_context_size_error", "n_prompt_tokens": 9100, "n_ctx": 8192}}"""
+        val reply = run(Case("x", "rewrite", "", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS)), State(url = url)).getJSONObject("reply")
+        assertThat(reply.getString("error_kind")).isEqualTo("bad_request")
+        assertThat(reply.getString("error")).isEqualTo("bad request: too long")
+        assertThat(reply.getBoolean("instructions")).isTrue()
     }
 
     @Test

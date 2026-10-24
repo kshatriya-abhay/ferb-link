@@ -57,6 +57,7 @@ class LinkCalls(
                 !state.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
                 !state.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
                 request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
+                request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
                 // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
                 else -> state.client(trace).complete(Amounts.forRequest(request), tools, facts, timeoutMs(extras)).also {
                     if (it.failure == null) {
@@ -142,10 +143,14 @@ class LinkCalls(
             val rewritten = when {
                 !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request, instructed = instructed)
                 !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request, instructed = instructed)
+                request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, instructed = instructed)
                 instructions != null && instructions.length > LinkContract.MAX_INSTRUCTIONS_CHARS -> Rewritten.failed(
                     Failure(ErrorKind.BadRequest, "Instructions over ${LinkContract.MAX_INSTRUCTIONS_CHARS} characters", "bad request: instructions too long"), request, instructed = true)
                 instructions != null -> state.client(trace).rewriteInstructed(request, instructions, Instructed.maxTokens(extras), timeoutMs(extras))
-                else -> state.client(trace).rewrite(request, at, Rewrite.Variant.of(LinkContract.REWRITE_VARIANT), timeoutMs = timeoutMs(extras))
+                else -> when (val variant = Rewrite.Variant.orNull(LinkContract.REWRITE_VARIANT)) {
+                    null -> Rewritten.failed(Failure(ErrorKind.Server, "Ferb Link's rewrite prompt \"${LinkContract.REWRITE_VARIANT}\" doesn't exist"), request)
+                    else -> state.client(trace).rewrite(request, at, variant, timeoutMs = timeoutMs(extras))
+                }
             }.also {
                 if (it.failure == null && it.model.isNotEmpty()) {
                     state.lastModel = it.model
@@ -167,25 +172,29 @@ class LinkCalls(
      * Jev's answer, if it's on, has a key and is under its cap; every call's cost goes on the
      * counter. [test]: the Jev card's Test button, which may try the key before Jev is turned on.
      */
-    fun decide(request: String, toolsJson: String, timeoutMs: Int, test: Boolean = false): JevClient.Decision {
-        val off = when {
-            !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
-            !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
-            !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
-            state.jevSpentUsd >= state.jevCapUsd -> {
-                turnJevOff()
-                capReached()
-            }
-            else -> null
-        }
-        if (off != null) return JevClient.Decision.failed(off)
-        val decision = state.jev(trace).decide(request, toolsJson, timeoutMs)
+    fun decide(request: String, toolsJson: String, timeoutMs: Int, test: Boolean = false): JevClient.Decision =
+        // One Jev call at a time, checked and counted under the lock: calls at once can't each pass
+        // the cap. A call goes only if its cost's ceiling still fits under the cap.
         synchronized(spending) {
-            state.jevSpentUsd += decision.billed.usd
-            if (state.jevSpentUsd >= state.jevCapUsd) turnJevOff()
+            val off = when {
+                !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
+                !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
+                !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
+                state.jevSpentUsd >= state.jevCapUsd -> {
+                    turnJevOff()
+                    capReached()
+                }
+                request.length > LinkContract.MAX_REQUEST_CHARS -> Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG)
+                // Under the cap, but this call might take it over: refuse it, and leave Jev on for smaller ones.
+                state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> capReached()
+                else -> null
+            }
+            if (off != null) return@synchronized JevClient.Decision.failed(off)
+            state.jev(trace).decide(request, toolsJson, timeoutMs).also { decision ->
+                state.jevSpentUsd += decision.billed.usd
+                if (state.jevSpentUsd >= state.jevCapUsd) turnJevOff()
+            }
         }
-        return decision
-    }
 
     private fun turnJevOff() {
         state.jevOn = false
@@ -212,11 +221,14 @@ class LinkCalls(
         /** Debug builds only: the recording as base64 text, for trying `transcribe` from `adb shell`. */
         const val DEBUG_AUDIO_BASE64 = "audio_base64"
 
+        const val TOO_LONG = "bad request: too long"
+        val REQUEST_TOO_LONG = "The request is over ${LinkContract.MAX_REQUEST_CHARS} characters"
+
         /** `adb shell`'s user id (android.os.Process.SHELL_UID isn't public). */
         const val SHELL_UID = 2000
 
         private val waking = AtomicBoolean(false)
-        /** Calls run on several binder threads: one adds to the spend at a time. */
+        /** Calls run on several binder threads: one Jev call (check, call, count) at a time. */
         private val spending = Any()
 
         /** The caller's answer timeout (an Int, or a Long), clamped; null without one. */

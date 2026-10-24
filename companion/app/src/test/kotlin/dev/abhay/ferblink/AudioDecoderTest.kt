@@ -12,8 +12,32 @@ class AudioDecoderTest {
     fun `WAV goes on as it is, by type or by its header`() {
         val wav = AudioDecoder.wav(ShortArray(160), 16_000)
         assertThat(AudioDecoder.toWav(wav, "audio/ogg")).isSameInstanceAs(wav)
-        val notWav = byteArrayOf(1, 2, 3)
-        assertThat(AudioDecoder.toWav(notWav, "audio/wav")).isSameInstanceAs(notWav)
+        // Said to be WAV, but no header to read its length from.
+        assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.toWav(byteArrayOf(1, 2, 3), "audio/wav") }
+    }
+
+    @Test
+    fun `WAV over the time limit is turned down, by its header`() {
+        val ok = AudioDecoder.wav(ShortArray(16_000 * LinkContract.MAX_AUDIO_SECONDS), 16_000)
+        assertThat(AudioDecoder.toWav(ok, "audio/wav")).isSameInstanceAs(ok)
+        // 8 kHz 8-bit-sized: 40 s in under 512 KB, which the byte cap alone let through.
+        val long = AudioDecoder.wav(ShortArray(8_000 * 40), 8_000)
+        val e = assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.toWav(long, null) }
+        assertThat(e.message).contains("over ${LinkContract.MAX_AUDIO_SECONDS} s")
+        val noRate = AudioDecoder.wav(ShortArray(160), 16_000).also { java.nio.ByteBuffer.wrap(it, 28, 4).putInt(0) }
+        assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.toWav(noRate, "audio/wav") }
+    }
+
+    @Test
+    fun `decoding stops at the time limit or the byte ceiling, whatever the format says`() {
+        val limit = 48_000L * 2 * 2 * (LinkContract.MAX_AUDIO_SECONDS + 1)
+        assertThat(AudioDecoder.overLimit(limit, 48_000, 2)).isFalse()
+        assertThat(AudioDecoder.overLimit(limit + 1, 48_000, 2)).isTrue()
+        // 16 kHz mono: 31 s is the most.
+        assertThat(AudioDecoder.overLimit(16_000L * 2 * 31, 16_000, 1)).isFalse()
+        assertThat(AudioDecoder.overLimit(16_000L * 2 * 31 + 2, 16_000, 1)).isTrue()
+        // A format claiming 8 channels at 192 kHz still stops at the ceiling.
+        assertThat(AudioDecoder.overLimit(AudioDecoder.MAX_DECODED_BYTES + 1, 192_000, 8)).isTrue()
     }
 
     @Test
