@@ -386,7 +386,11 @@ class ServerClient(
             val ms = msSince(started)
             if (code != 200) return Rewritten.failed(problem(code, text), request, ms, instructed = true)
             val reply = JSONObject(text)
-            raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+            val choice = reply.getJSONArray("choices").getJSONObject(0)
+            raw = choice.getJSONObject("message").optString("content")
+            // A command cut off at the cap ("send bhaiya a message: main aaj") must not run.
+            if (Instructed.cutOff(raw, choice.optString("finish_reason").ifEmpty { null })) return Rewritten.failed(
+                Failure(ErrorKind.BadReply, "The command was cut off at $maxTokens tokens", "answer cut off"), request, ms, raw, instructed = true)
             val commands = listOfNotNull(Instructed.parse(raw))
             Rewritten(commands, request, raw, reply.optString("model"), ms, null, Rewrite.invented(request, request, commands), instructed = true)
         } catch (e: IOException) {

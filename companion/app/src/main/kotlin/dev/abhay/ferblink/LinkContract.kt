@@ -103,7 +103,8 @@ object LinkContract {
      * verbatim as the user message, greedy, at most [EXTRA_MAX_TOKENS] tokens, and no pre-pass
      * ([EXTRA_NOW] is ignored). `commands` then holds the first line as one command, or nothing
      * for NONE; the reply adds `raw` (the model's text, for the caller's own parsing) and
-     * `"instructions": true`. An older Ferb Link ignores the extra and answers with v2, without
+     * `"instructions": true`. A first line cut off at the token cap fails ("answer cut off",
+     * bad_reply), so half a command never runs. An older Ferb Link ignores the extra and answers with v2, without
      * that echo.
      */
     const val METHOD_REWRITE = "rewrite"

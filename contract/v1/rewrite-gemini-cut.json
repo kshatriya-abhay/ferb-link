@@ -1,0 +1,25 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt: the command ran into max_tokens, so it may be cut short and isn't given.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 8,
+    "request": "bhaiya ko message karo ki main aaj late aaunga"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "answer cut off",
+      "error_detail": "The command was cut off at 8 tokens",
+      "error_kind": "bad_reply",
+      "instructions": true,
+      "invented": [],
+      "model": "",
+      "ms": 41,
+      "raw": "Send a message to bhaiya: I",
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

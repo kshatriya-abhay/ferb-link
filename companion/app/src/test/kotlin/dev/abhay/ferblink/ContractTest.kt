@@ -168,6 +168,10 @@ class ContractTest {
             mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
             chatReply = 200 to chatAnswer("  \n ")
         },
+        Case("rewrite-gemini-cut", "rewrite", "With Ferb's own prompt: the command ran into max_tokens, so it may be cut short and isn't given.",
+            mapOf("request" to "bhaiya ko message karo ki main aaj late aaunga", "instructions" to INSTRUCTIONS, "max_tokens" to 8)) {
+            chatReply = 200 to chatAnswer("Send a message to bhaiya: I", finishReason = "length")
+        },
         Case("rewrite-gemini-bad_request", "rewrite", "With Ferb's own prompt: no request.",
             mapOf("request" to "", "instructions" to INSTRUCTIONS, "max_tokens" to 40)),
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
@@ -365,8 +369,8 @@ class ContractTest {
 
         /** 2 s of 16 kHz WAV: syllable-like bursts for "speech", zeros for "silence". */
         /** The laptop's model answering with [content] as the message's text. */
-        fun chatAnswer(content: String) = JSONObject().put("model", "gemma-4-e2b")
-            .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content)))).toString()
+        fun chatAnswer(content: String, finishReason: String = "stop") = JSONObject().put("model", "gemma-4-e2b")
+            .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", content)).put("finish_reason", finishReason))).toString()
 
         /** A stand-in for Ferb's GeminiRewrite prompt, which Ferb sends itself. */
         const val INSTRUCTIONS = "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE."

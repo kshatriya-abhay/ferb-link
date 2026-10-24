@@ -34,6 +34,17 @@ object Instructed {
         return if (line.trimEnd('.').equals(NONE, ignoreCase = true)) null else line
     }
 
+    /**
+     * Whether the answer's command may be cut short: the model stopped at its token cap
+     * ([finishReason] "length") before ending the first line. A later line cut short doesn't
+     * matter ([parse] reads only the first), and NONE is whole however it ended.
+     */
+    fun cutOff(raw: String, finishReason: String?): Boolean {
+        if (finishReason != "length" || raw.trim().contains('\n')) return false
+        // NONE (null) is whole; an empty answer is parse's own error.
+        return runCatching { parse(raw) }.getOrNull() != null
+    }
+
     /** [LinkContract.EXTRA_MAX_TOKENS], clamped; [LinkContract.REWRITE_MAX_TOKENS] without it. */
     fun maxTokens(extras: Map<String, Any?>): Int =
         ((extras[LinkContract.EXTRA_MAX_TOKENS] as? Number)?.toInt() ?: LinkContract.REWRITE_MAX_TOKENS)
