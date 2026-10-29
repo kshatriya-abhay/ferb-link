@@ -235,8 +235,8 @@ class ServerClientTest {
     fun `plain HTTP is accepted only for Tailscale names`() {
         assertThat(LinkSettings.urlProblem("http://my-laptop.tail1234.ts.net")).isNull()
         assertThat(LinkSettings.urlProblem("https://example.com")).isNull()
-        assertThat(LinkSettings.urlProblem("http://100.101.102.103:8080")).contains("Tailscale name")
-        assertThat(LinkSettings.urlProblem("http://my-laptop")).contains("Tailscale name")
+        assertThat(LinkSettings.urlProblem("http://100.101.102.103:8080")).isEqualTo(R.string.url_needs_tailscale_name)
+        assertThat(LinkSettings.urlProblem("http://my-laptop")).isEqualTo(R.string.url_needs_tailscale_name)
         assertThat(LinkSettings.urlProblem("my-laptop.tail1234.ts.net")).isNotNull()
     }
 

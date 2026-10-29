@@ -1,4 +1,121 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Ferb Link's words. Shared terms with Ferb: "your computer" (not laptop or server), "Ferb answers
+     on the phone", "Advanced", "Privacy", "Open-source licences". Server commands stay in English. -->
 <resources>
     <string name="app_name">Ferb Link</string>
+
+    <!-- Not connected yet -->
+    <string name="connect_title">Connect to your computer</string>
+    <string name="connect_body">Ferb Link lets Ferb use a bigger model on your own computer. Until then, Ferb answers on the phone.</string>
+    <string name="connect_step_tailscale">Turn on Tailscale on this phone and your computer.</string>
+    <string name="connect_step_pair">On your computer, run mise run server:pair and scan the code with your camera.</string>
+    <string name="connect_paste">Paste link</string>
+    <string name="connect_by_hand">Enter by hand</string>
+    <string name="connect_guide">Setup guide</string>
+
+    <!-- Pairing -->
+    <string name="pair_title">Connect to this computer?</string>
+    <string name="pair_body">Ferb\'s requests will go to it. Connect only if it\'s yours and you just ran server:pair.</string>
+    <string name="pair_replaces">This replaces %1$s.</string>
+    <string name="pair_connect">Connect</string>
+    <string name="pair_bad_title">This pairing link doesn\'t work</string>
+    <string name="pair_bad_body">%1$s. Run mise run server:pair again.</string>
+    <string name="pair_not_a_link">Not a pairing link</string>
+    <string name="pair_no_address">The link has no address</string>
+    <string name="pair_no_key">The link has no usable key</string>
+    <string name="pair_clipboard_empty">The clipboard has no pairing link</string>
+
+    <!-- Address checks -->
+    <string name="url_not_a_url">Not a web address</string>
+    <string name="url_no_host">Starts with http:// and your computer\'s name</string>
+    <string name="url_bad_scheme">Starts with http:// or https://</string>
+    <string name="url_needs_tailscale_name">Use the full Tailscale name (….ts.net)</string>
+
+    <!-- Main screen -->
+    <string name="main_switch">Use your computer</string>
+    <string name="status_off">Turned off</string>
+    <string name="status_off_detail">Ferb answers on the phone</string>
+    <string name="status_not_set_up">Not set up</string>
+    <string name="status_checking">Checking…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_check_again">Check again</string>
+    <string name="model_loaded">Ready</string>
+    <string name="model_loading">Loading</string>
+    <string name="model_asleep">Asleep</string>
+    <string name="model_unloaded">Unloaded</string>
+    <string name="takes_voice">Takes voice</string>
+    <string name="unload">Unload</string>
+
+    <string name="section_computer">Your computer</string>
+    <string name="computer_row">Computer</string>
+    <string name="section_recent">Recent</string>
+    <string name="recent_written_down">Written down</string>
+    <string name="recent_recording">Recording</string>
+    <string name="section_advanced">Advanced</string>
+    <string name="advanced_show">Test requests, Jev</string>
+    <string name="section_about">About</string>
+    <string name="privacy">Privacy</string>
+    <string name="privacy_detail">What leaves the phone, and what\'s kept</string>
+    <string name="licences">Open-source licences</string>
+    <string name="version">Version %1$s</string>
+
+    <!-- The computer dialog -->
+    <string name="computer_title">Your computer</string>
+    <string name="address">Address</string>
+    <string name="address_placeholder">http://computer.tailnet.ts.net</string>
+    <string name="api_key">Key</string>
+    <string name="show">Show</string>
+    <string name="hide">Hide</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="got_it">Got it</string>
+
+    <!-- Try -->
+    <string name="try_title">Test request</string>
+    <string name="send">Send</string>
+    <string name="no_call">No call: %1$s</string>
+    <string name="no_call_nothing">(nothing)</string>
+    <string name="reply_details">%1$s · %2$d ms · weakest %3$.2f · first %4$.2f · mean %5$.2f</string>
+
+    <!-- Jev -->
+    <string name="jev_section">Jev (TypeSafe)</string>
+    <string name="jev_switch">Let Ferb use Jev</string>
+    <string name="jev_intro">A cloud model that picks the tool. Needs your TypeSafe key.</string>
+    <string name="jev_on">On</string>
+    <string name="jev_off">Off</string>
+    <string name="jev_capped">Off: spending limit reached</string>
+    <string name="jev_key_and_limit">Key and spending limit</string>
+    <string name="jev_spent">%1$s of %2$s</string>
+    <string name="jev_test">Test</string>
+    <string name="jev_test_detail">One small request, about $0.00002</string>
+    <string name="jev_testing">Asking Jev…</string>
+    <string name="jev_tested">Picked %1$s (%2$.2f) in %3$d ms, for $%4$.6f</string>
+    <string name="jev_disclosure">When on, the text of your requests and the names of Ferb\'s tools go to TypeSafe in the US. TypeSafe doesn\'t train on them.</string>
+    <string name="jev_privacy">TypeSafe\'s privacy policy</string>
+    <string name="jev_key">TypeSafe key</string>
+    <string name="jev_new_key">New key (empty keeps the saved one)</string>
+    <string name="jev_limit">Spending limit, in dollars</string>
+    <string name="jev_limit_detail">Spent so far: %1$s. Counted on this phone; it never resets.</string>
+
+    <!-- Guidance under a failed check: one action each -->
+    <string name="guide_tailscale_off">Turn on Tailscale on this phone.</string>
+    <string name="guide_unreachable">Check that your computer is awake and on the tailnet: mise run server:tailnet on.</string>
+    <string name="guide_timeout">Try again. If it keeps happening, see mise run server:logs.</string>
+    <string name="guide_auth">Pair again: mise run server:pair on your computer.</string>
+    <string name="guide_loading">Try again in a few seconds.</string>
+    <string name="guide_server">See mise run server:logs on your computer.</string>
+    <string name="guide_bad_reply">Something else answered at this address. Check it, or pair again.</string>
+
+    <!-- First-use hints, shown once -->
+    <string name="hint_switch">When this is off, or your computer can\'t be reached, Ferb answers on the phone.</string>
+    <string name="hint_voice">Your computer can also hear what you say to Ferb.</string>
+    <string name="hint_text_only">For voice, run mise run server:mode full on your computer.</string>
+    <string name="hint_unload">Unload frees your computer\'s graphics memory. The next request loads the model again.</string>
+    <string name="hint_try">Sends one request with a timer, an alarm and the flashlight. Tap the answer for details.</string>
+
+    <!-- Licences -->
+    <string name="licences_back">Back</string>
+    <string name="licences_intro">Ferb Link is open source under the Apache License 2.0, and is built with these open-source libraries, all under the same licence. Its full text is below.</string>
+    <string name="licences_full_text">Apache License 2.0</string>
 </resources>

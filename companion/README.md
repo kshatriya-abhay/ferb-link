@@ -4,11 +4,15 @@ An Android app (`dev.abhay.ferblink`) that holds the INTERNET permission Ferb mu
 
 ## Using it
 1. On the laptop: `mise run server:start`, `mise run server:tailnet on` (prints the address), `mise run server:key` (prints the key).
-2. Install Ferb Link (from Releases, `mise run companion:install`, or `companion:send-over-tailscale <phone>`). Until it's connected it shows only how to connect. Pair it: `mise run companion:pair` (USB) or `mise run server:pair` (a QR code for the camera) opens a `ferblink://pair?url=…&key=…` link, and Ferb Link asks before saving it, showing the computer's name in full (any app can open such a link). Or tap Enter by hand. It checks the connection.
-3. The status card shows whether the computer answers, the model, its state (Loaded, Asleep, Unloaded), and a mic when it takes voice. Refresh checks again; Unload stops the model on the computer to free its memory, and the next request starts it again.
-4. Try sends a request with three sample tools (timer, alarm, flashlight); tap the answer for the time and the confidence stand-ins.
-5. Recent lists what went to the computer, recordings included with what was heard (kept in memory only); tap a row for details.
-6. Voice needs the server in full mode (`mise run server:mode full`); Check shows whether it's available.
+2. Install Ferb Link (from Releases or Obtainium, `mise run companion:install`, or `companion:send-over-tailscale <phone>`). Until it's connected it shows only how to connect, plus Privacy and the licences. Pair it: `mise run companion:pair` (USB) or `mise run server:pair` (a QR code for the camera) opens a `ferblink://pair?url=…&key=…` link, and Ferb Link asks before saving it, showing the computer's name in full (any app can open such a link). Or tap Enter by hand. It checks the connection.
+3. The main switch, **Use your computer**, and the status card: whether the computer answers, the model, its state (Ready, Asleep, Unloaded), and a mic when it takes voice. Refresh checks again; Unload stops the model on the computer to free its memory, and the next request starts it again.
+4. **Your computer**: one row with the computer's name; tap it to change the address or key.
+5. **Recent** lists what went to the computer, recordings included with what was heard (kept in memory only); tap a row for details.
+6. **Advanced** (closed unless Jev is on): a test request with three sample tools (timer, alarm, flashlight; tap the answer for the time and the confidence stand-ins), and Jev.
+7. **About**: Privacy (the repo's `PRIVACY.md`), and Open-source licences with the version: every library in the APK and the Apache License 2.0's text (`Licences.kt`, `res/raw/apache_2_0.txt`, a copy of the repo's LICENSE).
+8. Voice needs the server in full mode (`mise run server:mode full`); Check shows whether it's available.
+
+All of the screen's words are in `res/values/strings.xml`, with the terms shared with Ferb at its top. The errors from `ServerClient` stay in code: they're part of the contract, and Ferb shows the same words in its chat.
 
 ## For Ferb: `LinkContract`
 One `ContentResolver.call` on `dev.abhay.ferblink.link`; there's no service to bind to. See [`LinkContract.kt`](app/src/main/kotlin/dev/abhay/ferblink/LinkContract.kt).
@@ -54,9 +58,9 @@ A miss found in a model evaluation becomes a unit test of the code that should h
 
 ## Help on the screen
 - **Connection errors:** under the status card's error, one line saying what to do (`Guidance`), only when the error's own detail doesn't already say it: Tailscale off on the phone (no VPN up), the server not on the tailnet, a refused key (pair again), a loading model (try again), the logs for other server errors.
-- **Jev (TypeSafe):** a section to let Ferb use Jev (off by default), with a masked key field, the spending so far against its limit ($3 by default, shared by every use), a Test button (one small, counted request), and what leaves the phone when it's on: the text of every request while Ferb's "Use Jev to select the tool" is on, and the tools' names and descriptions, to TypeSafe in the US.
-- **First-use hints** (`Hint`), each shown once until "Got it": the main switch, voice (or how to turn it on), Unload, and Try.
-- **Pairing:** a "Connect to your computer" card until an address and key are saved, with Paste link (for camera apps that show a `ferblink://` link without opening it), Enter by hand, and the setup guide.
+- **Jev (TypeSafe)**, under Advanced: off by default. Without a key it's one row that opens the key dialog, which says first what would leave the phone. With a key: the switch, the key and the spending against its limit ($3 by default, shared by every use), and a Test (one small, counted request). Under it, what leaves the phone when it's on: the text of every request while Ferb's "Use Jev to select the tool" is on, and the tools' names and descriptions, to TypeSafe in the US.
+- **First-use hints** (`Hint`), each shown once until "Got it": the main switch, voice (or how to turn it on), Unload, and the test request.
+- **Pairing:** a "Connect to your computer" card until an address and key are saved, with Paste link (for camera apps that show a `ferblink://` link without opening it), Enter by hand, and the setup guide (the README's "Install on your phone").
 
 ## Logs
 `adb logcat -s FerbLink`: each call's arrival and total time, and each HTTP request's connect, send, wait and read times. Connections are kept and reused (`send()` no longer closes them): the first request after a while takes about 50–100 ms to connect over the tailnet, the next ones 0–2 ms.

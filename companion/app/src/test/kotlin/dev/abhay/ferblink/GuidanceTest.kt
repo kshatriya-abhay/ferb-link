@@ -7,7 +7,7 @@ class GuidanceTest {
     @Test
     fun `each failure a check can give has one line of guidance`() {
         for (kind in listOf(ErrorKind.Unreachable, ErrorKind.Timeout, ErrorKind.Auth, ErrorKind.Server, ErrorKind.BadReply)) {
-            assertThat(Guidance.of(Failure(kind, "x"), vpnActive = true)).isNotEmpty()
+            assertThat(Guidance.of(Failure(kind, "x"), vpnActive = true)).isNotNull()
         }
         for (kind in listOf(ErrorKind.Off, ErrorKind.NotSetUp, ErrorKind.BadRequest)) {
             assertThat(Guidance.of(Failure(kind, "x"), vpnActive = true)).isNull()
@@ -18,9 +18,9 @@ class GuidanceTest {
     @Test
     fun `unreachable without a VPN points at Tailscale on the phone`() {
         val failure = Failure(ErrorKind.Unreachable, "Your computer doesn't answer")
-        assertThat(Guidance.of(failure, vpnActive = false)).startsWith("Tailscale isn't connected on this phone")
-        assertThat(Guidance.of(failure, vpnActive = true)).contains("server:tailnet on")
-        assertThat(Guidance.of(failure, vpnActive = null)).contains("server:tailnet on")
+        assertThat(Guidance.of(failure, vpnActive = false)).isEqualTo(R.string.guide_tailscale_off)
+        assertThat(Guidance.of(failure, vpnActive = true)).isEqualTo(R.string.guide_unreachable)
+        assertThat(Guidance.of(failure, vpnActive = null)).isEqualTo(R.string.guide_unreachable)
     }
 
     @Test
@@ -28,14 +28,14 @@ class GuidanceTest {
         val noName = Failure(ErrorKind.Unreachable, ServerClient.NO_NAME)
         assertThat(Guidance.of(noName, vpnActive = false)).isNull()
         // With Tailscale up, the name is wrong or the computer is off the tailnet: that's new.
-        assertThat(Guidance.of(noName, vpnActive = true)).contains("server:tailnet on")
+        assertThat(Guidance.of(noName, vpnActive = true)).isEqualTo(R.string.guide_unreachable)
         assertThat(Guidance.of(Failure(ErrorKind.Unreachable, ServerClient.HTTP_NEEDS_TAILSCALE_NAME), vpnActive = true)).isNull()
     }
 
     @Test
     fun `a loading model says wait, other server errors say look at the logs`() {
-        assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"), true)).isEqualTo("Try again in a few seconds.")
-        assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer answered 500", "server error 500"), true)).contains("server:logs")
+        assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"), true)).isEqualTo(R.string.guide_loading)
+        assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer answered 500", "server error 500"), true)).isEqualTo(R.string.guide_server)
     }
 
     @Test

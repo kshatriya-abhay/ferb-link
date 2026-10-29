@@ -171,6 +171,7 @@ mise run companion:publish   # the maintainer only: asks for the version, then c
 | [Material Components for Android](https://github.com/material-components/material-components-android) | Apache-2.0 | The Material 3 window theme behind Compose |
 | [Material Icons and Symbols](https://github.com/google/material-design-icons) | Apache-2.0 | Icons, including the app icon ("link") and the mic |
 | [Kotlin coroutines](https://github.com/Kotlin/kotlinx.coroutines) | Apache-2.0 | Background work |
+| [Kotlin serialization](https://github.com/Kotlin/kotlinx.serialization), [Guava ListenableFuture](https://github.com/google/guava), [JetBrains annotations](https://github.com/JetBrains/java-annotations), [JSpecify](https://github.com/jspecify/jspecify) | Apache-2.0 | Pulled in by AndroidX; listed with the rest in the app's Open-source licences |
 | [JUnit 4](https://junit.org/junit4/), [Truth](https://github.com/google/truth), [JSON-java](https://github.com/stleary/JSON-java) | EPL-1.0, Apache-2.0, Public domain | Tests only (not shipped) |
 
 ## License

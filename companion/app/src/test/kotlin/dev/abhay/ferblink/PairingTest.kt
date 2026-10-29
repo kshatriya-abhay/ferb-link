@@ -29,20 +29,20 @@ class PairingTest {
         for (url in listOf("http://100.101.102.103:8080", "http://evil.example.com", "ftp://laptop.example.ts.net", "javascript:alert(1)")) {
             assertThat(Pairing.parse(Pairing.link(url, key))).isInstanceOf(Pairing.Result.Bad::class.java)
         }
-        assertThat(Pairing.parse("ferblink://pair?key=$key")).isEqualTo(Pairing.Result.Bad("The link has no address"))
+        assertThat(Pairing.parse("ferblink://pair?key=$key")).isEqualTo(Pairing.Result.Bad(R.string.pair_no_address))
     }
 
     @Test
     fun `a missing, short or odd key is refused`() {
         for (bad in listOf("", "short", "has spaces in it right here", "x".repeat(300))) {
-            assertThat(Pairing.parse(Pairing.link("http://laptop.example.ts.net", bad))).isEqualTo(Pairing.Result.Bad("The link has no usable API key"))
+            assertThat(Pairing.parse(Pairing.link("http://laptop.example.ts.net", bad))).isEqualTo(Pairing.Result.Bad(R.string.pair_no_key))
         }
     }
 
     @Test
     fun `other links aren't pairing links`() {
         for (link in listOf("ferblink://other?url=http://laptop.example.ts.net&key=$key", "https://pair?url=x&key=$key", "not a link at all")) {
-            assertThat(Pairing.parse(link)).isEqualTo(Pairing.Result.Bad("Not a pairing link"))
+            assertThat(Pairing.parse(link)).isEqualTo(Pairing.Result.Bad(R.string.pair_not_a_link))
         }
         assertThat(Pairing.isPairingLink("ferblink://pair?x")).isTrue()
         assertThat(Pairing.isPairingLink("https://example.com")).isFalse()

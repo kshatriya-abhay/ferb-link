@@ -1,5 +1,7 @@
 package dev.abhay.ferblink
 
+import androidx.annotation.StringRes
+
 import android.content.Context
 import androidx.core.content.edit
 
@@ -103,14 +105,15 @@ class LinkSettings(context: Context) : LinkState {
          * Why [url] won't work, or null when it looks right. Plain HTTP is allowed only to
          * Tailscale names (`res/xml/network_security_config.xml`): the tailnet encrypts it.
          */
-        fun urlProblem(url: String): String? {
+        @StringRes
+        fun urlProblem(url: String): Int? {
             val parsed = runCatching { java.net.URI(url.trim()) }.getOrNull()
-                ?: return "Not a URL"
-            val host = parsed.host ?: return "Starts with http:// and your computer's name"
+                ?: return R.string.url_not_a_url
+            val host = parsed.host ?: return R.string.url_no_host
             return when {
                 parsed.scheme == "https" -> null
-                parsed.scheme != "http" -> "Starts with http:// or https://"
-                !host.endsWith(".ts.net") -> "Use your computer's full Tailscale name (….ts.net): plain HTTP only goes to the tailnet"
+                parsed.scheme != "http" -> R.string.url_bad_scheme
+                !host.endsWith(".ts.net") -> R.string.url_needs_tailscale_name
                 else -> null
             }
         }

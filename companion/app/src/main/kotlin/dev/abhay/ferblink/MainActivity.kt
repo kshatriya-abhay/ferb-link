@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.View
+import androidx.annotation.StringRes
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -37,6 +38,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -80,6 +83,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -90,9 +94,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 
 /**
- * One screen, Material 3 Expressive: the main switch, the computer's status, its address and key,
- * a request to try, and recent requests; before an address and key are saved, only how to connect.
- * Other explanations are kept out, except first-use hints ([Hint]), each shown once.
+ * One screen, Material 3 Expressive. Before an address and key are saved, only how to connect.
+ * Then the main switch, the computer's status, the computer, and recent requests; the test request
+ * and Jev wait under Advanced. First-use hints ([Hint]) are shown once each. Words are in
+ * res/values/strings.xml.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class MainActivity : ComponentActivity() {
@@ -108,7 +113,9 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val colors = if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialExpressiveTheme(colorScheme = colors, motionScheme = MotionScheme.expressive()) {
-                LinkScreen(viewModel)
+                var licences by rememberSaveable { mutableStateOf(false) }
+                if (licences) LicencesScreen(onBack = { licences = false })
+                else LinkScreen(viewModel, onLicences = { licences = true })
             }
         }
         // No autofill: the API key isn't a login, so password managers have nothing to offer for it,
@@ -130,11 +137,14 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun LinkScreen(viewModel: LinkViewModel) {
+private fun LinkScreen(viewModel: LinkViewModel, onLicences: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val recent by viewModel.recent.collectAsStateWithLifecycle()
     var editing by rememberSaveable { mutableStateOf(false) }
     var editingJev by rememberSaveable { mutableStateOf(false) }
+    // Advanced starts open only when something in it is on.
+    var advanced by rememberSaveable { mutableStateOf(state.jev.on) }
+    val uris = LocalUriHandler.current
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -142,7 +152,7 @@ private fun LinkScreen(viewModel: LinkViewModel) {
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text("Ferb Link") },
+                title = { Text(stringResource(R.string.app_name)) },
                 scrollBehavior = scroll,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -160,8 +170,9 @@ private fun LinkScreen(viewModel: LinkViewModel) {
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
             if (!state.configured) {
-                // Not set up: only how to connect. The switch, Try and Recent come once it is.
+                // Not set up: only how to connect. The switch, Recent and Advanced come once it is.
                 item { ConnectCard(onEnterByHand = { editing = true }, onPaste = viewModel::offerPairing) }
+                aboutSection(onPrivacy = { uris.openUri(PRIVACY_NOTE) }, onLicences = onLicences)
                 return@LazyColumn
             }
             item { MainSwitch(state.enabled, viewModel::setEnabled) }
@@ -170,33 +181,38 @@ private fun LinkScreen(viewModel: LinkViewModel) {
             item { StatusCard(state, viewModel) }
             // One status hint at a time: voice (or text only), then Unload.
             Hint.forStatus(state.health).firstOrNull { it in state.hints }?.let { hint -> item { HintLine(hint, viewModel::dismissHint) } }
-            section("Computer")
+            section(R.string.section_computer)
             item {
                 SegmentedListItem(
                     onClick = { editing = true },
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
+                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
                     colors = rowColors(),
-                    supportingContent = { Text(state.serverUrl.ifBlank { "Not set" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                ) { Text("Address") }
+                    supportingContent = { Text(hostOf(state.serverUrl), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                ) { Text(stringResource(R.string.computer_row)) }
             }
-            item {
-                SegmentedListItem(
-                    onClick = { editing = true },
-                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
-                    colors = rowColors(),
-                    supportingContent = { Text(if (state.apiKey.isBlank()) "Not set" else "Set") },
-                ) { Text("API key") }
-            }
-            jevSection(state.jev, viewModel, onEdit = { editingJev = true })
-            section("Try")
-            if (Hint.Try in state.hints) item { HintLine(Hint.Try, viewModel::dismissHint) }
-            item { TryRow(state, viewModel::tryRequest) }
             if (recent.isNotEmpty()) {
-                section("Recent")
+                section(R.string.section_recent)
                 itemsIndexed(recent, key = { _, entry -> entry.at.toString() + entry.request }) { index, entry ->
                     RecentRow(entry, index, recent.size)
                 }
             }
+            section(R.string.section_advanced)
+            item {
+                SegmentedListItem(
+                    onClick = { advanced = !advanced },
+                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
+                    colors = rowColors(),
+                    supportingContent = { Text(stringResource(R.string.advanced_show)) },
+                    trailingContent = { Icon(if (advanced) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null) },
+                ) { Text(stringResource(R.string.section_advanced)) }
+            }
+            if (advanced) {
+                section(R.string.try_title)
+                if (Hint.Try in state.hints) item { HintLine(Hint.Try, viewModel::dismissHint) }
+                item { TryRow(state, viewModel::tryRequest) }
+                jevSection(state.jev, viewModel, onEdit = { editingJev = true })
+            }
+            aboutSection(onPrivacy = { uris.openUri(PRIVACY_NOTE) }, onLicences = onLicences)
         }
     }
     if (editing) ServerDialog(state, viewModel, onDone = { editing = false })
@@ -205,68 +221,91 @@ private fun LinkScreen(viewModel: LinkViewModel) {
     state.pairingProblem?.let { problem ->
         AlertDialog(
             onDismissRequest = viewModel::dismissPairing,
-            title = { Text("This pairing link doesn't work") },
-            text = { Text("$problem. On your computer, run mise run server:pair again.") },
-            confirmButton = { TextButton(onClick = viewModel::dismissPairing) { Text("OK") } },
+            title = { Text(stringResource(R.string.pair_bad_title)) },
+            text = { Text(stringResource(R.string.pair_bad_body, stringResource(problem))) },
+            confirmButton = { TextButton(onClick = viewModel::dismissPairing) { Text(stringResource(R.string.ok)) } },
         )
     }
 }
 
-/** First launch: how to connect, in three steps. */
+/** The computer's name from its address ("my-laptop" from http://my-laptop.tail1234.ts.net). */
+private fun hostOf(url: String): String =
+    runCatching { java.net.URI(url.trim()).host }.getOrNull()?.substringBefore('.')?.takeIf { it.isNotBlank() } ?: url
+
+/** First launch: how to connect, in two steps. */
 @Composable
 private fun ConnectCard(onEnterByHand: () -> Unit, onPaste: (String) -> Unit) {
     val uris = LocalUriHandler.current
     val context = LocalContext.current
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Connect to your computer", style = MaterialTheme.typography.titleLarge)
-            Text("Ferb Link sends Ferb's requests to a model on your own computer. Until it's connected, Ferb answers on the phone.", style = MaterialTheme.typography.bodyMedium)
-            listOf(
-                "Set up the server on your computer (the quick start in Ferb Link's README).",
-                "Turn on Tailscale on this phone, on the same tailnet as the computer.",
-                "On the computer, run mise run server:pair and scan its QR code with this phone's camera. If the camera only shows the link, copy it and tap Paste link. Or, with the phone on USB, run mise run companion:pair.",
-            ).forEachIndexed { i, step ->
+            Text(stringResource(R.string.connect_title), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.connect_body), style = MaterialTheme.typography.bodyMedium)
+            listOf(R.string.connect_step_tailscale, R.string.connect_step_pair).forEachIndexed { i, step ->
                 Row {
                     Text("${i + 1}.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(20.dp))
-                    Text(step, style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(step), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = { onPaste(clipboardText(context)) }) { Text("Paste link") }
-                TextButton(onClick = onEnterByHand) { Text("Enter by hand") }
-                TextButton(onClick = { uris.openUri(SETUP_GUIDE) }) { Text("Guide") }
+                FilledTonalButton(onClick = { onPaste(clipboardText(context)) }) { Text(stringResource(R.string.connect_paste)) }
+                TextButton(onClick = onEnterByHand) { Text(stringResource(R.string.connect_by_hand)) }
             }
+            TextButton(onClick = { uris.openUri(SETUP_GUIDE) }, contentPadding = PaddingValues(0.dp)) { Text(stringResource(R.string.connect_guide)) }
         }
     }
 }
 
-private const val SETUP_GUIDE = "https://github.com/kshatriya-abhay/ferb-link#quick-start"
+private const val SETUP_GUIDE = "https://github.com/kshatriya-abhay/ferb-link#install-on-your-phone"
+private const val PRIVACY_NOTE = "https://github.com/kshatriya-abhay/ferb-link/blob/main/PRIVACY.md"
+
+/** Privacy, the licences and the version: on every screen, last. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun LazyListScope.aboutSection(onPrivacy: () -> Unit, onLicences: () -> Unit) {
+    section(R.string.section_about)
+    item {
+        SegmentedListItem(
+            onClick = onPrivacy,
+            shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
+            colors = rowColors(),
+            supportingContent = { Text(stringResource(R.string.privacy_detail)) },
+        ) { Text(stringResource(R.string.privacy)) }
+    }
+    item {
+        SegmentedListItem(
+            onClick = onLicences,
+            shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
+            colors = rowColors(),
+            supportingContent = { Text(stringResource(R.string.version, BuildConfig.VERSION_NAME)) },
+        ) { Text(stringResource(R.string.licences)) }
+    }
+}
 
 /** A pairing link arrived. Any app can open one, so the computer's name is shown in full first. */
 @Composable
 private fun PairDialog(offer: Pairing.Offer, replacing: String?, viewModel: LinkViewModel) {
     AlertDialog(
         onDismissRequest = viewModel::dismissPairing,
-        title = { Text("Connect to this computer?") },
+        title = { Text(stringResource(R.string.pair_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(offer.host, style = MaterialTheme.typography.titleMedium)
-                Text("Ferb's requests will go to it. Connect only if it's your own computer and you just ran server:pair or companion:pair.")
-                replacing?.let { Text("This replaces $it.", color = MaterialTheme.colorScheme.error) }
+                Text(stringResource(R.string.pair_body))
+                replacing?.let { Text(stringResource(R.string.pair_replaces, it), color = MaterialTheme.colorScheme.error) }
             }
         },
-        confirmButton = { TextButton(onClick = viewModel::acceptPairing) { Text("Connect") } },
-        dismissButton = { TextButton(onClick = viewModel::dismissPairing) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = viewModel::acceptPairing) { Text(stringResource(R.string.pair_connect)) } },
+        dismissButton = { TextButton(onClick = viewModel::dismissPairing) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surface)
+internal fun rowColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surface)
 
-private fun LazyListScope.section(title: String) = item {
+internal fun LazyListScope.section(@StringRes title: Int) = item {
     Text(
-        title,
+        stringResource(title),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 6.dp),
@@ -284,10 +323,18 @@ private fun MainSwitch(enabled: Boolean, onChange: (Boolean) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(Modifier.padding(horizontal = 24.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Answer Ferb's requests", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.main_switch), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Switch(checked = enabled, onCheckedChange = null)
         }
     }
+}
+
+@StringRes
+private fun ModelState.label(): Int = when (this) {
+    ModelState.Loaded -> R.string.model_loaded
+    ModelState.Loading -> R.string.model_loading
+    ModelState.Asleep -> R.string.model_asleep
+    ModelState.Unloaded -> R.string.model_unloaded
 }
 
 /** The computer at a glance: connected or why not, the model and its state, voice, and Unload. */
@@ -296,11 +343,12 @@ private fun MainSwitch(enabled: Boolean, onChange: (Boolean) -> Unit) {
 private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
     val health = state.health
     val colors = MaterialTheme.colorScheme
+    // The error's words come from the contract (ServerClient), shared with Ferb's chat bubbles.
     val (container, icon, title, detail) = when {
-        !state.enabled -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, "Turned off", "Ferb answers on the phone")
-        state.serverUrl.isBlank() || state.apiKey.isBlank() -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, "Not set up", null)
-        health == null -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, "Checking", null)
-        health.ok -> Status(colors.primaryContainer, Icons.Filled.CheckCircle, "Connected", health.model)
+        !state.enabled -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_off), stringResource(R.string.status_off_detail))
+        state.serverUrl.isBlank() || state.apiKey.isBlank() -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_not_set_up), null)
+        health == null -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_checking), null)
+        health.ok -> Status(colors.primaryContainer, Icons.Filled.CheckCircle, stringResource(R.string.status_connected), health.model)
         else -> Status(colors.errorContainer, Icons.Filled.Warning, health.short.replaceFirstChar { it.uppercase() }, health.message)
     }
     Card(colors = CardDefaults.cardColors(containerColor = container), shape = MaterialTheme.shapes.extraLarge) {
@@ -314,26 +362,26 @@ private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
                 }
                 if (state.checking) LoadingIndicator(Modifier.size(48.dp))
                 else IconButton(onClick = viewModel::check, enabled = !state.edited && state.serverUrl.isNotBlank()) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Check again")
+                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.status_check_again))
                 }
             }
             if (health != null && health.ok && health.state != null) {
                 Row(Modifier.padding(top = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Pill(health.state.words.replaceFirstChar { it.uppercase() })
+                    Pill(stringResource(health.state.label()))
                     if (health.audio == true) {
                         Spacer(Modifier.width(8.dp))
-                        Icon(painterResource(R.drawable.ic_mic), contentDescription = "Takes voice", modifier = Modifier.size(20.dp))
+                        Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.takes_voice), modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.weight(1f))
                     if (state.unloading) LoadingIndicator(Modifier.size(40.dp))
                     else if (health.state == ModelState.Loaded || health.state == ModelState.Asleep) {
-                        FilledTonalButton(onClick = viewModel::unload) { Text("Unload") }
+                        FilledTonalButton(onClick = viewModel::unload) { Text(stringResource(R.string.unload)) }
                     }
                 }
             }
             if (state.enabled && health != null && !health.ok) {
                 Guidance.of(health.failure, state.vpnActive)?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 42.dp, top = 8.dp, end = 12.dp))
+                    Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 42.dp, top = 8.dp, end = 12.dp))
                 }
             }
             state.unloadError?.let { Text(it, color = colors.error, style = MaterialTheme.typography.bodySmall) }
@@ -354,8 +402,8 @@ private fun HintLine(hint: Hint, onDismiss: (Hint) -> Unit) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Info, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(12.dp))
-            Text(hint.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick = { onDismiss(hint) }) { Text("Got it") }
+            Text(stringResource(hint.text), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onDismiss(hint) }) { Text(stringResource(R.string.got_it)) }
         }
     }
 }
@@ -370,62 +418,56 @@ private fun Pill(text: String) {
 }
 
 /**
- * Jev, TypeSafe's cloud model, which picks the tool for Ferb (Ferb's "Use Jev to select the tool"): off by default, with what
- * leaves the phone said plainly, the key, the spend against its cap, and a Test.
+ * Jev, TypeSafe's cloud model, which picks the tool for Ferb (Ferb's "Use Jev to select the tool"):
+ * off by default. Without a key, one row that opens the key dialog; with one, the switch, the key
+ * and spend against its cap, and a Test. What leaves the phone is said under it.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun LazyListScope.jevSection(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onEdit: () -> Unit) {
-    section("Jev (TypeSafe)")
+    section(R.string.jev_section)
+    val rows = if (jev.keySet) 3 else 1
     item {
         val status = when {
-            jev.capped -> "Off: it reached its spending limit"
-            !jev.keySet -> "Off. Needs a TypeSafe key"
-            jev.on -> "On: Ferb can use Jev to pick the tool"
-            else -> "Off"
+            jev.capped -> stringResource(R.string.jev_capped)
+            !jev.keySet -> stringResource(R.string.jev_intro)
+            jev.on -> stringResource(R.string.jev_on)
+            else -> stringResource(R.string.jev_off)
         }
         SegmentedListItem(
             onClick = { if (jev.keySet && !jev.capped || jev.on) viewModel.setJevOn(!jev.on) else onEdit() },
-            shapes = ListItemDefaults.segmentedShapes(index = 0, count = 4),
+            shapes = ListItemDefaults.segmentedShapes(index = 0, count = rows),
             colors = rowColors(),
             supportingContent = { Text(status) },
             trailingContent = { Switch(checked = jev.on, onCheckedChange = null) },
-        ) { Text("Let Ferb use Jev") }
+        ) { Text(stringResource(R.string.jev_switch)) }
     }
-    item {
-        SegmentedListItem(
-            onClick = onEdit,
-            shapes = ListItemDefaults.segmentedShapes(index = 1, count = 4),
-            colors = rowColors(),
-            supportingContent = { Text(if (jev.keySet) "Set" else "Not set") },
-        ) { Text("TypeSafe key") }
-    }
-    item {
-        SegmentedListItem(
-            onClick = onEdit,
-            shapes = ListItemDefaults.segmentedShapes(index = 2, count = 4),
-            colors = rowColors(),
-            supportingContent = { Text("${dollars(jev.spentUsd)} of ${dollars(jev.capUsd)}. At the limit Jev turns itself off") },
-        ) { Text("Spending limit") }
-    }
-    item {
-        SegmentedListItem(
-            onClick = { if (jev.keySet && !jev.testing) viewModel.testJev() },
-            shapes = ListItemDefaults.segmentedShapes(index = 3, count = 4),
-            colors = rowColors(),
-            supportingContent = { Text(if (jev.testing) "Asking Jev…" else jev.tested ?: "One small request (about \$0.00002), counted in the spending") },
-        ) { Text("Test") }
-    }
-    item {
-        val uris = LocalUriHandler.current
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                "When this is on and Ferb's \"Use Jev to select the tool\" is on, the text of every request you make to Ferb, " +
-                    "and the names and descriptions of Ferb's tools, go to TypeSafe's servers in the US. Not your contacts, notes " +
-                    "or other app data. TypeSafe doesn't train on it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = { uris.openUri(TYPESAFE_PRIVACY) }, contentPadding = PaddingValues(0.dp)) { Text("TypeSafe's privacy policy") }
+    if (jev.keySet) {
+        item {
+            SegmentedListItem(
+                onClick = onEdit,
+                shapes = ListItemDefaults.segmentedShapes(index = 1, count = rows),
+                colors = rowColors(),
+                supportingContent = { Text(stringResource(R.string.jev_spent, dollars(jev.spentUsd), dollars(jev.capUsd))) },
+            ) { Text(stringResource(R.string.jev_key_and_limit)) }
         }
+        item {
+            SegmentedListItem(
+                onClick = { if (!jev.testing) viewModel.testJev() },
+                shapes = ListItemDefaults.segmentedShapes(index = 2, count = rows),
+                colors = rowColors(),
+                supportingContent = { Text(if (jev.testing) stringResource(R.string.jev_testing) else jev.tested ?: stringResource(R.string.jev_test_detail)) },
+            ) { Text(stringResource(R.string.jev_test)) }
+        }
+    }
+    item { JevDisclosure() }
+}
+
+@Composable
+private fun JevDisclosure() {
+    val uris = LocalUriHandler.current
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.jev_disclosure), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = { uris.openUri(TYPESAFE_PRIVACY) }, contentPadding = PaddingValues(0.dp)) { Text(stringResource(R.string.jev_privacy)) }
     }
 }
 
@@ -442,13 +484,14 @@ private fun JevDialog(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onDone: 
     val capValue = cap.trim().removePrefix("\$").toDoubleOrNull()?.takeIf { it >= 0 }
     AlertDialog(
         onDismissRequest = onDone,
-        title = { Text("Jev (TypeSafe)") },
+        title = { Text(stringResource(R.string.jev_section)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!jev.keySet) Text(stringResource(R.string.jev_disclosure), style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    label = { Text(if (jev.keySet) "New TypeSafe key (empty keeps the saved one)" else "TypeSafe key") },
+                    label = { Text(stringResource(if (jev.keySet) R.string.jev_new_key else R.string.jev_key)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
@@ -457,19 +500,19 @@ private fun JevDialog(jev: LinkViewModel.Jev, viewModel: LinkViewModel, onDone: 
                 OutlinedTextField(
                     value = cap,
                     onValueChange = { cap = it },
-                    label = { Text("Spending limit, in dollars") },
+                    label = { Text(stringResource(R.string.jev_limit)) },
                     singleLine = true,
                     isError = capValue == null,
-                    supportingText = { Text("Spent so far: ${dollars(jev.spentUsd)}. This phone's count; it never resets.") },
+                    supportingText = { Text(stringResource(R.string.jev_limit_detail, dollars(jev.spentUsd))) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { viewModel.saveJev(key.trim().ifEmpty { null }, capValue!!); onDone() }, enabled = capValue != null) { Text("Save") }
+            TextButton(onClick = { viewModel.saveJev(key.trim().ifEmpty { null }, capValue!!); onDone() }, enabled = capValue != null) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -480,27 +523,27 @@ private fun ServerDialog(state: LinkViewModel.State, viewModel: LinkViewModel, o
     val urlProblem = state.serverUrl.takeIf { it.isNotBlank() }?.let { LinkSettings.urlProblem(it) }
     AlertDialog(
         onDismissRequest = { viewModel.cancelEdit(); onDone() },
-        title = { Text("Computer") },
+        title = { Text(stringResource(R.string.computer_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = state.serverUrl,
                     onValueChange = viewModel::editUrl,
-                    label = { Text("Address") },
-                    placeholder = { Text("http://computer.tailnet.ts.net") },
+                    label = { Text(stringResource(R.string.address)) },
+                    placeholder = { Text(stringResource(R.string.address_placeholder)) },
                     singleLine = true,
                     isError = urlProblem != null,
-                    supportingText = urlProblem?.let { { Text(it) } },
+                    supportingText = urlProblem?.let { { Text(stringResource(it)) } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = state.apiKey,
                     onValueChange = viewModel::editKey,
-                    label = { Text("API key") },
+                    label = { Text(stringResource(R.string.api_key)) },
                     singleLine = true,
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = { TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show") } },
+                    trailingIcon = { TextButton(onClick = { showKey = !showKey }) { Text(stringResource(if (showKey) R.string.hide else R.string.show)) } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -510,9 +553,9 @@ private fun ServerDialog(state: LinkViewModel.State, viewModel: LinkViewModel, o
             TextButton(
                 onClick = { viewModel.save(); onDone() },
                 enabled = state.serverUrl.isNotBlank() && state.apiKey.isNotBlank() && urlProblem == null,
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = { viewModel.cancelEdit(); onDone() }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { viewModel.cancelEdit(); onDone() }) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -540,7 +583,7 @@ private fun TryRow(state: LinkViewModel.State, onSend: (String) -> Unit) {
             shape = CircleShape,
             trailingIcon = {
                 if (state.trying) LoadingIndicator(Modifier.size(40.dp))
-                else IconButton(onClick = send, enabled = canSend) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send") }
+                else IconButton(onClick = send, enabled = canSend) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send)) }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (canSend) send() }),
@@ -550,6 +593,7 @@ private fun TryRow(state: LinkViewModel.State, onSend: (String) -> Unit) {
     }
 }
 
+/** What the test request says: English, as Ferb's requests are sent; it's also the placeholder. */
 internal const val SAMPLE_REQUEST = "set a timer for 5 minutes"
 
 /** The calls (or the model's words, or why it failed); tap for the timings and confidence. */
@@ -564,11 +608,13 @@ private fun ReplyBlock(reply: Reply, expandedAtFirst: Boolean) {
     }
 }
 
+@Composable
 private fun replySummary(reply: Reply): String = reply.error
-    ?: reply.calls.joinToString("\n") { it.signature() }.ifEmpty { "No call: " + reply.text.ifBlank { "(nothing)" } }
+    ?: reply.calls.joinToString("\n") { it.signature() }.ifEmpty { stringResource(R.string.no_call, reply.text.ifBlank { stringResource(R.string.no_call_nothing) }) }
 
+@Composable
 private fun replyDetails(reply: Reply): String = reply.errorDetail
-    ?: "%s · %d ms · weakest %.2f · first %.2f · mean %.2f".format(reply.model, reply.ms, reply.confidence, reply.first, reply.mean)
+    ?: stringResource(R.string.reply_details, reply.model, reply.ms, reply.confidence, reply.first, reply.mean)
 
 @Composable
 private fun replyColor(error: String?) = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
@@ -584,7 +630,7 @@ private fun RecentRow(entry: RecentRequests.Entry, index: Int, count: Int) {
     val summary = when {
         reply != null -> replySummary(reply)
         transcript?.error != null -> transcript.error!!
-        transcript != null -> if (transcript.text != transcript.heard) transcript.text else "Written down"
+        transcript != null -> if (transcript.text != transcript.heard) transcript.text else stringResource(R.string.recent_written_down)
         else -> ""
     }
     val details = when {
@@ -598,7 +644,7 @@ private fun RecentRow(entry: RecentRequests.Entry, index: Int, count: Int) {
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
         colors = rowColors(),
         leadingContent = if (transcript != null) {
-            { Icon(painterResource(R.drawable.ic_mic), contentDescription = "Recording") }
+            { Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.recent_recording)) }
         } else null,
         trailingContent = { Text(DateUtils.getRelativeTimeSpanString(entry.at).toString(), style = MaterialTheme.typography.labelSmall) },
         supportingContent = {

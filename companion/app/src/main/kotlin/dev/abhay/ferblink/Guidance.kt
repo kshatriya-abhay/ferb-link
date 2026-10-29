@@ -1,26 +1,29 @@
 package dev.abhay.ferblink
 
+import androidx.annotation.StringRes
+
 /**
  * What to do about a failed check, in a sentence with one action, under the status card's error.
  * Only when it adds an action the error's detail doesn't already give: never the same thing twice.
  * [vpnActive] is whether this phone has a VPN up (Tailscale is one); null when unknown.
  */
 object Guidance {
-    fun of(failure: Failure?, vpnActive: Boolean?): String? = when (failure?.kind) {
+    @StringRes
+    fun of(failure: Failure?, vpnActive: Boolean?): Int? = when (failure?.kind) {
         null, ErrorKind.Off, ErrorKind.NotSetUp, ErrorKind.BadRequest -> null
         ErrorKind.Unreachable -> when {
             // "Is Tailscale on?" with no VPN up, or "plain HTTP needs the Tailscale name": said already.
             failure.message == ServerClient.HTTP_NEEDS_TAILSCALE_NAME -> null
             vpnActive == false && failure.message == ServerClient.NO_NAME -> null
-            vpnActive == false -> "Tailscale isn't connected on this phone. Turn it on, on the same tailnet as your computer."
-            else -> "Check that your computer is on and awake, and that the server is on the tailnet: mise run server:status, then mise run server:tailnet on."
+            vpnActive == false -> R.string.guide_tailscale_off
+            else -> R.string.guide_unreachable
         }
-        ErrorKind.Timeout -> "If your computer just woke up, try again. Otherwise look at mise run server:logs on it."
-        ErrorKind.Auth -> "The key doesn't match your computer's. Pair again: mise run companion:pair, or server:pair."
+        ErrorKind.Timeout -> R.string.guide_timeout
+        ErrorKind.Auth -> R.string.guide_auth
         ErrorKind.Server ->
-            if (failure.short == "model loading") "Try again in a few seconds."
-            else "Look at mise run server:logs on your computer."
-        ErrorKind.BadReply -> "Something other than Ferb Link's server answered at this address. Check the address, or pair again."
+            if (failure.short == "model loading") R.string.guide_loading
+            else R.string.guide_server
+        ErrorKind.BadReply -> R.string.guide_bad_reply
     }
 }
 
@@ -28,12 +31,12 @@ object Guidance {
  * First-use hints: one line each, shown once under what they explain, until "Got it"
  * (companion/README.md, "Help on the screen").
  */
-enum class Hint(val text: String) {
-    Switch("Ferb's requests go to your computer. When this is off, or the computer can't be reached, Ferb answers on the phone."),
-    Voice("Your computer can hear: in Ferb, pick Computer under the chat box and tap the mic."),
-    TextOnly("Voice needs the server in full mode: mise run server:mode full on your computer."),
-    Unload("Unload frees your computer's GPU now. The next request starts the model again, in a few seconds."),
-    Try("Sends a request with three sample tools: a timer, an alarm and the flashlight. Tap an answer for details.");
+enum class Hint(@StringRes val text: Int) {
+    Switch(R.string.hint_switch),
+    Voice(R.string.hint_voice),
+    TextOnly(R.string.hint_text_only),
+    Unload(R.string.hint_unload),
+    Try(R.string.hint_try);
 
     companion object {
         /** The hints the status card can show for [health], in order: voice or text-only, then Unload. */

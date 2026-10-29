@@ -1,5 +1,7 @@
 package dev.abhay.ferblink
 
+import androidx.annotation.StringRes
+
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -26,15 +28,15 @@ object Pairing {
 
     sealed interface Result {
         data class Ok(val offer: Offer) : Result
-        data class Bad(val reason: String) : Result
+        data class Bad(@StringRes val reason: Int) : Result
     }
 
     fun isPairingLink(link: String?) = link != null && link.startsWith("$SCHEME:", ignoreCase = true)
 
     fun parse(link: String): Result {
-        val uri = runCatching { URI(link.trim()) }.getOrNull() ?: return Result.Bad("Not a pairing link")
+        val uri = runCatching { URI(link.trim()) }.getOrNull() ?: return Result.Bad(R.string.pair_not_a_link)
         if (!uri.scheme.equals(SCHEME, ignoreCase = true) || !uri.host.equals(HOST, ignoreCase = true)) {
-            return Result.Bad("Not a pairing link")
+            return Result.Bad(R.string.pair_not_a_link)
         }
         val params = uri.rawQuery.orEmpty().split("&").mapNotNull { part ->
             val (name, value) = part.split("=", limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
@@ -42,9 +44,9 @@ object Pairing {
         }.toMap()
         val url = params["url"]?.trim()?.trimEnd('/').orEmpty()
         val key = params["key"]?.trim().orEmpty()
-        if (url.isEmpty()) return Result.Bad("The link has no address")
+        if (url.isEmpty()) return Result.Bad(R.string.pair_no_address)
         LinkSettings.urlProblem(url)?.let { return Result.Bad(it) }
-        if (!KEY.matches(key)) return Result.Bad("The link has no usable API key")
+        if (!KEY.matches(key)) return Result.Bad(R.string.pair_no_key)
         return Result.Ok(Offer(url, key))
     }
 

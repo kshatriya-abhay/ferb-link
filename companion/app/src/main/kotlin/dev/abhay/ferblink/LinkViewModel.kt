@@ -3,6 +3,7 @@ package dev.abhay.ferblink
 import android.app.Application
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 class LinkViewModel(application: Application) : AndroidViewModel(application) {
     private val settings = LinkSettings(application)
@@ -34,7 +34,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         val configured: Boolean = false,
         /** A pairing link waiting for the user to confirm it, or why one didn't work. */
         val pairing: Pairing.Offer? = null,
-        val pairingProblem: String? = null,
+        @StringRes val pairingProblem: Int? = null,
         /** First-use hints still to show. */
         val hints: Set<Hint> = emptySet(),
         /** Whether this phone has a VPN up (Tailscale), at the last check; null when unknown. */
@@ -100,7 +100,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
                 LinkCalls(settings, { it.run() }, BuildConfig.DEBUG).decide(SAMPLE_REQUEST, SAMPLE_TOOLS, LinkContract.MAX_DECIDE_TIMEOUT_MS, test = true)
             }
             val tested = decision.failure?.message
-                ?: "Jev picked ${decision.choice} (%.2f) in ${decision.ms} ms, for \$%.6f".format(Locale.ROOT, decision.probabilities[decision.choice] ?: 0.0, decision.billed.usd)
+                ?: getApplication<Application>().getString(R.string.jev_tested, decision.choice, decision.probabilities[decision.choice] ?: 0.0, decision.ms, decision.billed.usd)
             _state.update { it.copy(jev = jev().copy(testing = false, tested = tested)) }
         }
     }
@@ -117,7 +117,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** A ferblink://pair link arrived: ask before using it (any app can open one). */
-    fun offerPairing(link: String) = when (val result = if (link.isBlank()) Pairing.Result.Bad("The clipboard has no pairing link") else Pairing.parse(link)) {
+    fun offerPairing(link: String) = when (val result = if (link.isBlank()) Pairing.Result.Bad(R.string.pair_clipboard_empty) else Pairing.parse(link)) {
         is Pairing.Result.Ok -> _state.update { it.copy(pairing = result.offer, pairingProblem = null) }
         is Pairing.Result.Bad -> _state.update { it.copy(pairing = null, pairingProblem = result.reason) }
     }
