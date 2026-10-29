@@ -69,16 +69,16 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
 
 ## Install on your phone
 
-Ferb and Ferb Link must come from the same place: both from GitHub releases (or Obtainium, which uses them), or both built on one computer. Ferb Link answers only apps signed with its own key.
+Get both apps from the same place: releases pair with releases (GitHub or Obtainium), and your own builds with your own builds. Ferb Link answers only apps signed with its own key. Android won't update an app across different keys, and switching means uninstalling, which removes the app's data.
 
-**From GitHub releases.** On the phone, open [Ferb Link's latest release](https://github.com/kshatriya-abhay/ferb-link/releases/latest) and download `ferb-link-<version>.apk`. Open it, and allow your browser to install apps when Android asks. Do the same for [Ferb](https://github.com/kshatriya-abhay/ferb/releases/latest). To check a download, compare its SHA-256 with the `.sha256` file next to it.
+**From GitHub releases.** On the phone, open [Ferb Link's latest release](https://github.com/kshatriya-abhay/ferb-link/releases/latest) and download `ferb-link-<version>.apk`. Open it. Android asks once to allow installs from the browser or files app. Updates install the same way, and settings stay. Do the same for [Ferb](https://github.com/kshatriya-abhay/ferb/releases/latest). To check a download, compare its SHA-256 with the `.sha256` file next to it.
 
 **With [Obtainium](https://github.com/ImranR98/Obtainium)**, which installs from GitHub releases and keeps the apps up to date:
-1. Install Obtainium (from its GitHub releases, or F-Droid).
-2. Tap **Add app**, paste `https://github.com/kshatriya-abhay/ferb-link`, and tap **Add**. Then **Install**.
-3. Add `https://github.com/kshatriya-abhay/ferb` the same way.
+1. Install Obtainium (its site or F-Droid).
+2. Tap **Add app**, paste `https://github.com/kshatriya-abhay/ferb-link`, and tap **Add**.
+3. Tap **Install**. Obtainium then offers each update, and Android asks you to confirm it.
 
-Obtainium checks for new releases in the background and offers updates. Android installs an update only if it's signed with the same key, so a tampered APK can't replace either app.
+Add `https://github.com/kshatriya-abhay/ferb` the same way. Android installs an update only if it's signed with the same key, so a tampered APK can't replace either app.
 
 **Then connect to your computer:**
 1. Install [Tailscale](https://tailscale.com/download/android) on the phone and sign in to the same tailnet as your computer.
