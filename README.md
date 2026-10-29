@@ -52,7 +52,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    mise run server:tailnet on     # prints the address, http://<computer>.<tailnet>.ts.net
    mise run server:ping tailnet
    ```
-7. **Install Ferb Link on the phone.** Download the latest `FerbLink-*.apk` from this repo's [Releases](https://github.com/kshatriya-abhay/ferb-link/releases/latest) on the phone and open it (allow installing from your browser when asked). Or build it from source, with the phone connected over USB:
+7. **Install Ferb Link on the phone**, from this repo's releases or with Obtainium ([Install on your phone](#install-on-your-phone)). Or build it from source, with the phone connected over USB:
    ```sh
    mise run companion:install
    ```
@@ -65,7 +65,27 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    mise run server:pair
    ```
    If the camera only shows the link instead of opening it, copy it and tap **Paste link** in Ferb Link. Either way, Ferb Link asks first, with the computer's name: tap **Connect**. The status card turns green and shows the model. (**Enter by hand** takes the address from step 6 and the key from `mise run server:key`.)
-9. **Install Ferb the same way you installed Ferb Link**: from [Ferb's Releases](https://github.com/kshatriya-abhay/ferb/releases/latest), or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
+9. **Install Ferb the same way you installed Ferb Link**: from its releases or Obtainium, or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
+
+## Install on your phone
+
+Ferb and Ferb Link must come from the same place: both from GitHub releases (or Obtainium, which uses them), or both built on one computer. Ferb Link answers only apps signed with its own key.
+
+**From GitHub releases.** On the phone, open [Ferb Link's latest release](https://github.com/kshatriya-abhay/ferb-link/releases/latest) and download `ferb-link-<version>.apk`. Open it, and allow your browser to install apps when Android asks. Do the same for [Ferb](https://github.com/kshatriya-abhay/ferb/releases/latest). To check a download, compare its SHA-256 with the `.sha256` file next to it.
+
+**With [Obtainium](https://github.com/ImranR98/Obtainium)**, which installs from GitHub releases and keeps the apps up to date:
+1. Install Obtainium (from its GitHub releases, or F-Droid).
+2. Tap **Add app**, paste `https://github.com/kshatriya-abhay/ferb-link`, and tap **Add**. Then **Install**.
+3. Add `https://github.com/kshatriya-abhay/ferb` the same way.
+
+Obtainium checks for new releases in the background and offers updates. Android installs an update only if it's signed with the same key, so a tampered APK can't replace either app.
+
+**Then connect to your computer:**
+1. Install [Tailscale](https://tailscale.com/download/android) on the phone and sign in to the same tailnet as your computer.
+2. Set up the server on the computer ([Quick start](#quick-start), steps 1–6).
+3. Pair: on the computer, run `mise run server:pair` and scan the QR code with the phone's camera. If the camera only shows the link, copy it and tap **Paste link** in Ferb Link. Ferb Link shows the computer's name: tap **Connect**.
+
+What leaves the phone, and what's stored on it: [PRIVACY.md](PRIVACY.md).
 
 ## Troubleshooting
 
