@@ -48,6 +48,8 @@ Five tiers. Most tests check one piece; models are evaluated only when tuning th
 | Model evaluation | The transcribe prompt and schema, the complete system prompt, tool configuration: the harness, synthetic-voice clip runs, `server:chat`. | Only when tuning a prompt or tool config | `mise run companion:harness`, `mise run server:chat` |
 | End to end | `mise run server:ping`, and the ~6-case smoke checklist on the phone (in Ferb's repo). | Before an install-worthy release | by hand |
 
+GitHub Actions runs the unit and contract tests and Android lint on every push and pull request (`.github/workflows/ci.yml`), with no secrets and no signing.
+
 A miss found in a model evaluation becomes a unit test of the code that should have caught it (most are in `AmountsTest`), not a new evaluation case. Gradle runs without daemons (`--no-daemon`, and the Kotlin compiler in-process): nothing outlives a build to crowd the model server's memory, and never run `./gradlew --stop`, which stops Ferb's builds too.
 
 ## Help on the screen
