@@ -65,7 +65,7 @@ Ferb ──(on the phone)──▶ Ferb Link ──(Tailscale)──▶ llama-se
    mise run server:pair
    ```
    If the camera only shows the link instead of opening it, copy it and tap **Paste link** in Ferb Link. Either way, Ferb Link asks first, with the computer's name: tap **Connect**. The status card turns green and shows the model. (**Enter by hand** takes the address from step 6 and the key from `mise run server:key`.)
-9. **Install Ferb the same way you installed Ferb Link**: from its releases or Obtainium, or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Ferb Link** and choose **Choose in the chat**, then pick **Computer** under the chat box and ask something. The answer has a laptop icon: it came from your computer.
+9. **Install Ferb the same way you installed Ferb Link**: from its releases or Obtainium, or built on this computer (its README, "Build and run"). In Ferb, open **Settings → Choose your preferred model** and pick **Gemma 4 (via Ferb Link)**: it runs on your own server and is multilingual. Then ask something. The answer has a laptop icon: it came from your computer.
 
 ## Install on your phone
 

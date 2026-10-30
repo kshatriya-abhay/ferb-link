@@ -109,7 +109,7 @@
 
     <!-- First-use hints, shown once -->
     <string name="hint_switch">When this is off, or your computer can\'t be reached, Ferb answers on the phone.</string>
-    <string name="hint_voice">Your computer can also hear you. In Ferb, choose it under Settings → Talk to Ferb in.</string>
+    <string name="hint_voice">Your computer can also hear you. In Ferb, choose Settings → Choose your preferred model → Gemma 4 (via Ferb Link): it runs on your own server and is multilingual.</string>
     <string name="hint_text_only">For voice, run mise run server:mode full on your computer.</string>
     <string name="hint_unload">Unload frees your computer\'s graphics memory. The next request loads the model again.</string>
     <string name="hint_try">Sends one request with a timer, an alarm and the flashlight. Tap the answer for details.</string>
