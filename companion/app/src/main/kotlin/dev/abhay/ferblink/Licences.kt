@@ -49,6 +49,10 @@ internal object Licences {
         Component("JetBrains Java Annotations", "https://github.com/JetBrains/java-annotations"),
         Component("JSpecify", "https://github.com/jspecify/jspecify"),
     )
+
+    /** [text]'s paragraphs (blank-line separated), each on one line so it wraps to the screen. */
+    fun paragraphs(text: String): List<String> =
+        text.split(Regex("\n\\s*\n")).map { it.trim().replace(Regex("\\s*\n\\s*"), " ") }.filter { it.isNotBlank() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -57,10 +61,10 @@ internal fun LicencesScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val resources = LocalResources.current
     val uris = LocalUriHandler.current
-    // The licence in paragraphs, so the list lays out only what's on screen.
+    // The licence in paragraphs, so the list lays out only what's on screen. The file is wrapped
+    // at 80 columns: each paragraph's lines are joined so it wraps to the screen instead.
     val paragraphs = remember(resources) {
-        resources.openRawResource(R.raw.apache_2_0).bufferedReader().use { it.readText() }
-            .split(Regex("\n\\s*\n")).map { it.trimEnd() }.filter { it.isNotBlank() }
+        Licences.paragraphs(resources.openRawResource(R.raw.apache_2_0).bufferedReader().use { it.readText() })
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
