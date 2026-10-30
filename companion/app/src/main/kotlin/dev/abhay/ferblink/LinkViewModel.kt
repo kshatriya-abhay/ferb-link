@@ -39,6 +39,8 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         val hints: Set<Hint> = emptySet(),
         /** Whether this phone has a VPN up (Tailscale), at the last check; null when unknown. */
         val vpnActive: Boolean? = null,
+        /** Whether Private DNS is set to a server name, at the last check (it hides Tailscale names). */
+        val privateDns: Boolean = false,
         val jev: Jev = Jev(),
     ) {
         /** The address a waiting pairing would replace: only when one is saved and it differs. */
@@ -148,6 +150,17 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         return connectivity.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
+    /**
+     * Whether Private DNS is set to a server name ("Private DNS provider hostname"): Android then
+     * sends every lookup there, past Tailscale's DNS. Android reports it on the Wi-Fi or mobile
+     * network, not on the VPN, so any network counts.
+     */
+    @Suppress("DEPRECATION") // allNetworks: the one call that lists every network without a callback.
+    private fun privateDns(): Boolean {
+        val connectivity = getApplication<Application>().getSystemService(ConnectivityManager::class.java) ?: return false
+        return connectivity.allNetworks.any { connectivity.getLinkProperties(it)?.privateDnsServerName != null }
+    }
+
     fun dismissPairing() = _state.update { it.copy(pairing = null, pairingProblem = null) }
 
     /** Drops unsaved edits to the address and key. */
@@ -166,7 +179,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
             health.model?.let { settings.lastModel = it }
             health.audio?.let { settings.audio = it }
             health.state?.let { settings.saw(it, System.currentTimeMillis()) }
-            _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive()) }
+            _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive(), privateDns = privateDns()) }
         }
     }
 

@@ -380,7 +380,7 @@ private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
                 }
             }
             if (state.enabled && health != null && !health.ok) {
-                Guidance.of(health.failure, state.vpnActive)?.let {
+                Guidance.of(health.failure, state.vpnActive, state.privateDns)?.let {
                     Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 42.dp, top = 8.dp, end = 12.dp))
                 }
             }

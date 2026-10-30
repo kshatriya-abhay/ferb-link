@@ -33,6 +33,18 @@ class GuidanceTest {
     }
 
     @Test
+    fun `a name that doesn't resolve with Private DNS set points at Private DNS`() {
+        val noName = Failure(ErrorKind.Unreachable, ServerClient.NO_NAME)
+        assertThat(Guidance.of(noName, vpnActive = true, privateDns = true)).isEqualTo(R.string.guide_private_dns)
+        assertThat(Guidance.of(noName, vpnActive = null, privateDns = true)).isEqualTo(R.string.guide_private_dns)
+        // Tailscale off comes first: that's the fix to try before anything else.
+        assertThat(Guidance.of(noName, vpnActive = false, privateDns = true)).isNull()
+        // Other failures aren't about names.
+        val noAnswer = Failure(ErrorKind.Unreachable, "Your computer doesn't answer")
+        assertThat(Guidance.of(noAnswer, vpnActive = true, privateDns = true)).isEqualTo(R.string.guide_unreachable)
+    }
+
+    @Test
     fun `a loading model says wait, other server errors say look at the logs`() {
         assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"), true)).isEqualTo(R.string.guide_loading)
         assertThat(Guidance.of(Failure(ErrorKind.Server, "Your computer answered 500", "server error 500"), true)).isEqualTo(R.string.guide_server)

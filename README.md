@@ -96,6 +96,7 @@ What leaves the phone, and what's stored on it: [PRIVACY.md](PRIVACY.md).
 | `server:tailnet on` says access denied | Step 2: `sudo tailscale set --operator=$USER`. |
 | The camera doesn't open Ferb Link from the QR code | Some camera apps don't open `ferblink://` links: copy the link it shows and tap **Paste link**, or use `mise run companion:pair` over USB. |
 | Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. |
+| Ferb Link: "Can't find your computer's name" with Tailscale on | The phone's Private DNS is set to a provider (NextDNS, for example), so Android skips Tailscale's DNS. Set **Settings → Network & internet → Private DNS** to **Automatic**. To keep that provider, add it as the tailnet's nameserver in Tailscale's admin console (DNS) instead. |
 | Ferb Link: "key refused" | Pair again (`mise run companion:pair` or `server:pair`), or enter the key from `mise run server:key`. |
 | "This pairing link doesn't work" | The server isn't on the tailnet (`mise run server:tailnet on`), or the link was cut off: run `server:pair` again. |
 | The first answer after a while takes seconds | The server unloads the model after 5 minutes idle and loads it again on the next request: about 2 s, up to 30 s after a reboot. Ferb waits 10 s, then answers on the phone. |

@@ -102,6 +102,7 @@
     <string name="guide_tailscale_off">Turn on Tailscale on this phone.</string>
     <string name="guide_unreachable">Check that your computer is awake and on the tailnet: mise run server:tailnet on.</string>
     <string name="guide_timeout">Try again. If it keeps happening, see mise run server:logs.</string>
+    <string name="guide_private_dns">This phone\'s Private DNS hides Tailscale names. In Settings → Network &amp; internet → Private DNS, choose Automatic.</string>
     <string name="guide_auth">Pair again: mise run server:pair on your computer.</string>
     <string name="guide_loading">Try again in a few seconds.</string>
     <string name="guide_server">See mise run server:logs on your computer.</string>

@@ -6,16 +6,19 @@ import androidx.annotation.StringRes
  * What to do about a failed check, in a sentence with one action, under the status card's error.
  * Only when it adds an action the error's detail doesn't already give: never the same thing twice.
  * [vpnActive] is whether this phone has a VPN up (Tailscale is one); null when unknown.
+ * [privateDns] is whether Android's Private DNS is set to a server name: then every lookup goes to
+ * that server, Tailscale's DNS is skipped, and the computer's Tailscale name doesn't resolve.
  */
 object Guidance {
     @StringRes
-    fun of(failure: Failure?, vpnActive: Boolean?): Int? = when (failure?.kind) {
+    fun of(failure: Failure?, vpnActive: Boolean?, privateDns: Boolean = false): Int? = when (failure?.kind) {
         null, ErrorKind.Off, ErrorKind.NotSetUp, ErrorKind.BadRequest -> null
         ErrorKind.Unreachable -> when {
             // "Is Tailscale on?" with no VPN up, or "plain HTTP needs the Tailscale name": said already.
             failure.message == ServerClient.HTTP_NEEDS_TAILSCALE_NAME -> null
             vpnActive == false && failure.message == ServerClient.NO_NAME -> null
             vpnActive == false -> R.string.guide_tailscale_off
+            privateDns && failure.message == ServerClient.NO_NAME -> R.string.guide_private_dns
             else -> R.string.guide_unreachable
         }
         ErrorKind.Timeout -> R.string.guide_timeout
