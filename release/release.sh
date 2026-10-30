@@ -45,6 +45,8 @@ VERSION=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' companion/app/build.gradle.k
 (cd companion && ./gradlew -q --no-daemon :app:assembleRelease)
 UNSIGNED=companion/app/build/outputs/apk/release/app-release-unsigned.apk
 [ -f "$UNSIGNED" ] || fail "No $UNSIGNED"
+# Classes Android creates by name (manifest, androidx.startup, ServiceLoader) must survive R8.
+release/check-reflection.sh "$UNSIGNED" || fail "R8 removed something a class created by name needs (above)"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$UNSIGNED" "$TMP/aligned.apk"
