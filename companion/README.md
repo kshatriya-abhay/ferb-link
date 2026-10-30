@@ -41,6 +41,13 @@ Recordings go with their own prompt (`ServerClient.TRANSCRIBE`), at temperature 
 ## Network
 Plain HTTP, only to Tailscale names (`*.ts.net`, `res/xml/network_security_config.xml`), because the tailnet already encrypts it; HTTPS anywhere. The app rejects other `http://` addresses (a raw `100.x` address or a short name like `my-laptop` won't do).
 
+**Planned, after 0.1: reach the computer by its Tailscale IP when its name won't resolve.** With Android's Private DNS set to a provider (NextDNS, for example), every lookup skips Tailscale's DNS, so the computer's name doesn't resolve. For now the status card says to set Private DNS to Automatic (`Guidance`). The design:
+- `server:pair` adds `ip=` to the link. `Pairing` accepts it only within Tailscale's range, 100.64.0.0/10, and `LinkSettings` keeps it. Links without it still pair, just with no fallback.
+- `ServerClient.send` moves from HttpURLConnection to OkHttp, and the URL keeps the `….ts.net` name. The network security config and the name Tailscale Serve needs stay the same. Serve answers 404 to a request by IP alone and 200 when the request names the computer, and the key check is unchanged.
+- OkHttp's `Dns` asks the system first. Only on `UnknownHostException`, and only for the paired name, does it return the paired IP.
+- Why not without OkHttp: the config can't list an address known only at pairing, or a range of them. With HttpURLConnection the request would go to `http://100.x`, which is checked against the IP, so cleartext would have to be allowed everywhere.
+- To do: tests for parsing and checking `ip=`, and for the fallback happening only on a failed lookup for the paired name. Add OkHttp and Okio to Credits and `Licences`. Run `check-reflection.sh` and a smoke test of the release build on the phone. If the computer's Tailscale IP changes (rare), pair again.
+
 ## Testing
 Five tiers. Most tests check one piece; models are evaluated only when tuning them.
 
