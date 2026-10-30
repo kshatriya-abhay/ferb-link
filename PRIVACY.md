@@ -15,7 +15,7 @@ When Ferb Link's main switch is off, or your computer can't be reached, nothing 
 
 ## What goes to TypeSafe (Jev), only if you turn it on
 
-Jev is off by default. It runs only when you have turned on both **Let Ferb use Jev** in Ferb Link and **Use Jev to select the tool** in Ferb, and entered your own TypeSafe key. Then:
+Jev is off by default. It runs only when you have turned on **Let Ferb use Jev** in Ferb Link, chosen **Ferb Link (Jev)** in Ferb's **Settings → Advanced → Tool selection**, and entered your own TypeSafe key. Then:
 
 - **What's sent:** the text of every request you make to Ferb, and the names and descriptions of Ferb's tools. Not recordings, contacts, notes or other app data.
 - **Where:** TypeSafe's servers in the US (`api.typesafe.ai`), over HTTPS. TypeSafe says it doesn't train on it; see [TypeSafe's privacy policy](https://typesafe.ai/legal/privacy-policy).
@@ -31,11 +31,11 @@ In Ferb Link's private storage, which other apps can't read, and which isn't bac
 
 The keys are stored as they are, not encrypted with a separate key. Uninstalling Ferb Link, or clearing its storage, deletes all of it.
 
-**Recent requests:** the last 30 requests, with what was heard, are kept in memory so you can see what left the phone. They are gone when the app closes. Android's system log (`adb logcat`) gets only which method was called, by which app, and how long it took.
+**Recent requests:** the last 30 requests, with what was heard, are kept in memory so you can see what left the phone. They are gone when the app closes. Android's system log (`adb logcat`) gets only which method was called, by which app, and how long it took; if a request fails, the error, which can include your computer's name.
 
 ## Who can use Ferb Link
 
-Only apps signed with the same key as Ferb Link, which is Ferb. Other apps can't send requests through it.
+Only apps signed with the same key as Ferb Link: Ferb from the same releases, or, for your own builds, apps built on the same computer. Other apps can't send requests through it.
 
 ## Questions
 

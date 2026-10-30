@@ -5,8 +5,9 @@
 # bench), run as a systemd user service on localhost and put on the tailnet with Tailscale Serve.
 # Settings are in server/server.conf.
 
-[tools]
-java = "temurin-21"   # JDK for the companion's Gradle build (as Ferb)
+# Java 21 is for the companion's Gradle build only, so it isn't under [tools]: setting up the
+# server doesn't need it. The Gradle tasks name it (tools = …); install it once with
+# `mise install java@temurin-21` (README, Build from source).
 
 [env]
 ANDROID_HOME = "{{env.HOME}}/Android/Sdk"
@@ -234,6 +235,7 @@ curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE"
 '''
 
 [tasks."companion:harness"]
+tools = { java = "temurin-21" }
 description = "Run Ferb Link's complete, transcribe and decide (Jev, which costs money) on the laptop, no phone: JSON lines in, Ferb Link's replies out"
 usage = '''
 arg "<in>" help="JSON lines: {\"request\": …, \"tools\": […]}, {\"audio\": \"clip.ogg\"} or {\"method\": \"decide\", …}, optional \"id\" (see LaptopHarness.kt)"
@@ -260,17 +262,20 @@ exit "$status"
 # Every Gradle run in this repo takes /tmp/ferb-link-gradle.lock: companion:test and a harness run
 # share the build folder (and the test task), and two at once broke each other (2026-10-16).
 [tasks."companion:build"]
+tools = { java = "temurin-21" }
 description = "Build the companion app's debug APK"
 dir = "companion"
 run = "flock /tmp/ferb-link-gradle.lock ./gradlew --no-daemon assembleDebug"
 
 [tasks."companion:test"]
+tools = { java = "temurin-21" }
 description = "The companion app's unit and contract tests: no model, server or phone (see README, Testing)"
 dir = "companion"
 # No daemons left behind: they hold gigabytes the model server needs for its page cache.
 run = "flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:testDebugUnitTest"
 
 [tasks."companion:device-test"]
+tools = { java = "temurin-21" }
 description = "The companion app's device tests (pairing links, Paste link, hints) on the connected phone; it stays installed and paired"
 dir = "companion"
 usage = 'arg "[class]" help="Only this test class, e.g. HintsTest (no screen: fine while the phone is in use)" default=""'
@@ -284,16 +289,19 @@ grep -q '^OK (' <<<"$OUT"
 """
 
 [tasks."companion:contract-write"]
+tools = { java = "temurin-21" }
 description = "Rewrite contract/v1's fixtures from what Ferb Link answers; review the diff, and tell Ferb (link:contract-sync)"
 dir = "companion"
 run = "flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:testDebugUnitTest --tests dev.abhay.ferblink.ContractTest --rerun -Pcontract.write=true"
 
 [tasks."companion:install"]
+tools = { java = "temurin-21" }
 description = "Install the companion app on the connected phone"
 dir = "companion"
 run = "flock /tmp/ferb-link-gradle.lock ./gradlew --no-daemon installDebug"
 
 [tasks."companion:release"]
+tools = { java = "temurin-21" }
 description = "Build the release APK and sign it with the release key (asks for what isn't set); dist/ferb-link-<version>.apk"
 raw = true
 run = "release/release.sh"
