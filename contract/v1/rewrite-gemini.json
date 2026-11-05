@@ -16,7 +16,8 @@
       "ms": 41,
       "raw": "Open NFC settings",
       "source": "laptop",
-      "success": true
+      "success": true,
+      "truncated": false
     },
     "version": 1
   }

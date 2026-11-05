@@ -18,7 +18,8 @@
       "ms": 41,
       "raw": "Send a message to bhaiya: I",
       "source": "laptop",
-      "success": false
+      "success": false,
+      "truncated": true
     },
     "version": 1
   }

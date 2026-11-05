@@ -18,7 +18,8 @@
       "ms": 0,
       "raw": "",
       "source": "laptop",
-      "success": false
+      "success": false,
+      "truncated": false
     },
     "version": 1
   }

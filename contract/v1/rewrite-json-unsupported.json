@@ -1,0 +1,27 @@
+{
+  "method": "rewrite",
+  "note": "llama-server can't turn the schema into a grammar (HTTP 500, \"JSON schema error\"): bad_request.",
+  "extras": {
+    "instructions": "Write the user's request as JSON: command, a short English command, and content, the words to keep exactly as said.",
+    "json_schema": "{\"type\": \"object\", \"properties\": {\"command\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}, \"required\": [\"command\", \"content\"]}",
+    "request": "torch on karo"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "bad request: schema not supported",
+      "error_detail": "Your computer couldn't use the JSON schema: JSON schema error at #/properties/a: cannot resolve $ref #/definitions/missing, definitions not found",
+      "error_kind": "bad_request",
+      "instructions": true,
+      "invented": [],
+      "model": "",
+      "ms": 41,
+      "raw": "",
+      "schema": true,
+      "source": "laptop",
+      "success": false,
+      "truncated": false
+    },
+    "version": 1
+  }
+}

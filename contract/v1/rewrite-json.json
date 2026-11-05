@@ -1,0 +1,29 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt and a JSON schema: the answer parsed as output, raw as written, commands empty.",
+  "extras": {
+    "instructions": "Write the user's request as JSON: command, a short English command, and content, the words to keep exactly as said.",
+    "json_schema": "{\"type\": \"object\", \"properties\": {\"command\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}, \"required\": [\"command\", \"content\"]}",
+    "request": "Rahul ko message bhejo kal shaam ko milte hain",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "instructions": true,
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "output": {
+        "command": "Send a text to Rahul",
+        "content": "kal shaam ko milte hain"
+      },
+      "raw": "{\"command\": \"Send a text to Rahul\", \"content\": \"kal shaam ko milte hain\"}",
+      "schema": true,
+      "source": "laptop",
+      "success": true,
+      "truncated": false
+    },
+    "version": 1
+  }
+}

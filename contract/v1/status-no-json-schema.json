@@ -1,0 +1,15 @@
+{
+  "method": "status",
+  "synthetic": true,
+  "note": "An older Ferb Link (before json_schema): no json_schema in status. Ferb uses its line prompt, without a schema.",
+  "extras": {},
+  "result": {
+    "audio": true,
+    "configured": true,
+    "enabled": true,
+    "jev": false,
+    "model": "gemma-4-e2b",
+    "model_state": "loaded",
+    "version": 1
+  }
+}

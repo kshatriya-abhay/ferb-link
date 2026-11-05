@@ -40,7 +40,8 @@ object LinkContract {
      * No network: whether Ferb Link is on and has a server, the model it last saw (empty if none
      * yet), and whether that server last said it takes audio (for [METHOD_TRANSCRIBE]). Returns
      * [RESULT_VERSION], [RESULT_ENABLED], [RESULT_CONFIGURED], [RESULT_MODEL], [RESULT_AUDIO], and
-     * [RESULT_MODEL_STATE] once a state has been seen, [RESULT_JEV], and [RESULT_JEV_OFF_REASON] when it applies.
+     * [RESULT_MODEL_STATE] once a state has been seen, [RESULT_JEV], [RESULT_JEV_OFF_REASON] when it
+     * applies, and [RESULT_JSON_SCHEMA].
      */
     const val METHOD_STATUS = "status"
 
@@ -106,7 +107,16 @@ object LinkContract {
      * the check would flag right answers); the reply adds `raw` (the model's text, for the caller's own parsing) and
      * `"instructions": true`. A first line cut off at the token cap fails ("answer cut off",
      * bad_reply), so half a command never runs. An older Ferb Link ignores the extra and answers with v2, without
-     * that echo.
+     * that echo. Every instructed reply has `truncated`: whether the model stopped at the token cap.
+     *
+     * With [EXTRA_JSON_SCHEMA] too, the answer is JSON in that schema (llama-server turns it into a
+     * grammar): the reply adds `"schema": true` and `output`, the parsed JSON object, and
+     * `commands` stays empty (Ferb reads `output`). An answer that hit the token cap always fails
+     * ("answer cut off", `truncated: true`), as cut JSON is half an answer; one that isn't a JSON
+     * object is bad_reply ("not JSON"). Ferb Link doesn't check `output` against the schema. A
+     * schema llama-server can't use is bad_request ("bad request: schema not supported"). An
+     * older Ferb Link ignores the extra, with no `schema` echo and no [RESULT_JSON_SCHEMA] in
+     * status: Ferb checks status first and uses a line prompt then.
      */
     const val METHOD_REWRITE = "rewrite"
 
@@ -117,8 +127,18 @@ object LinkContract {
     const val EXTRA_NOW = "now"
     /** A String, for [METHOD_REWRITE]: the caller's system prompt, at most [MAX_INSTRUCTIONS_CHARS]; blank counts as absent. */
     const val EXTRA_INSTRUCTIONS = "instructions"
-    /** An Int, with [EXTRA_INSTRUCTIONS]: the answer's token cap, clamped to 1..[MAX_REWRITE_TOKENS]; [REWRITE_MAX_TOKENS] without it. */
+    /**
+     * An Int, with [EXTRA_INSTRUCTIONS]: the answer's token cap, clamped to 1..[MAX_REWRITE_TOKENS];
+     * [REWRITE_MAX_TOKENS] without it ([REWRITE_JSON_MAX_TOKENS] with [EXTRA_JSON_SCHEMA]).
+     */
     const val EXTRA_MAX_TOKENS = "max_tokens"
+    /**
+     * A String, with [EXTRA_INSTRUCTIONS]: a JSON Schema (a JSON object, at most
+     * [MAX_JSON_SCHEMA_CHARS]) for the answer; blank counts as absent. Without instructions, or not a
+     * JSON object, it's bad_request. Its default token cap is [REWRITE_JSON_MAX_TOKENS].
+     */
+    const val EXTRA_JSON_SCHEMA = "json_schema"
+    const val MAX_JSON_SCHEMA_CHARS = 8_000
     const val MAX_INSTRUCTIONS_CHARS = 16_000
     /**
      * [EXTRA_REQUEST]'s length cap for complete, rewrite and decide: longer is bad_request. A
@@ -126,7 +146,9 @@ object LinkContract {
      */
     const val MAX_REQUEST_CHARS = 2_000
     const val REWRITE_MAX_TOKENS = 40
-    const val MAX_REWRITE_TOKENS = 256
+    /** With [EXTRA_JSON_SCHEMA]: braces and key names cost tokens, and Devanagari content several a word. */
+    const val REWRITE_JSON_MAX_TOKENS = 160
+    const val MAX_REWRITE_TOKENS = 512
     /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */
     const val EXTRA_TIMEOUT_MS = "timeout_ms"
     /**
@@ -151,6 +173,8 @@ object LinkContract {
     const val RESULT_REPLY = "reply"
     /** Boolean: the server last said it takes audio (`mise run server:mode full` on the laptop). */
     const val RESULT_AUDIO = "audio"
+    /** Boolean, in status: [METHOD_REWRITE] takes [EXTRA_JSON_SCHEMA]. Missing in an older Ferb Link. */
+    const val RESULT_JSON_SCHEMA = "json_schema"
     /**
      * Whether the laptop's model is ready: [MODEL_LOADED], [MODEL_ASLEEP] (also while it loads) or
      * [MODEL_UNLOADED]. "loaded" only if seen loaded within [LOADED_FOR_MS]: the server puts it to

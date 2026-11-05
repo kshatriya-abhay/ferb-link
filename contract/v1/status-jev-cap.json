@@ -8,6 +8,7 @@
     "enabled": true,
     "jev": false,
     "jev_off_reason": "cap",
+    "json_schema": true,
     "model": "gemma-4-e2b",
     "model_state": "loaded",
     "version": 1

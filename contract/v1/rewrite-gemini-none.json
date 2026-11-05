@@ -12,10 +12,11 @@
       "instructions": true,
       "invented": [],
       "model": "gemma-4-e2b",
-      "ms": 42,
+      "ms": 41,
       "raw": "NONE",
       "source": "laptop",
-      "success": true
+      "success": true,
+      "truncated": false
     },
     "version": 1
   }

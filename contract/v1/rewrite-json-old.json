@@ -1,0 +1,24 @@
+{
+  "method": "rewrite",
+  "synthetic": true,
+  "note": "An older Ferb Link (before json_schema): it ignores json_schema and runs the instructions with no grammar, with no \"schema\", \"output\" or \"truncated\" in the reply. Ferb treats a reply without \"schema\": true as unsupported, and doesn't parse raw as JSON.",
+  "extras": {
+    "instructions": "Write the user's request as JSON: command, a short English command, and content, the words to keep exactly as said.",
+    "json_schema": "{\"type\": \"object\", \"properties\": {\"command\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}, \"required\": [\"command\", \"content\"]}",
+    "request": "Rahul ko message bhejo kal shaam ko milte hain",
+    "timeout_ms": 10000
+  },
+  "result": {
+    "reply": {
+      "commands": ["```json"],
+      "instructions": true,
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "raw": "```json\n{\"command\": \"Send a text to Rahul\", \"content\": \"kal shaam ko milte hain\"}\n```",
+      "source": "laptop",
+      "success": true
+    },
+    "version": 1
+  }
+}

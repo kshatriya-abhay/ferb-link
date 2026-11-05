@@ -1,0 +1,28 @@
+{
+  "method": "rewrite",
+  "note": "With a JSON schema: the answer ran into max_tokens, so it fails, whatever it holds.",
+  "extras": {
+    "instructions": "Write the user's request as JSON: command, a short English command, and content, the words to keep exactly as said.",
+    "json_schema": "{\"type\": \"object\", \"properties\": {\"command\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}, \"required\": [\"command\", \"content\"]}",
+    "max_tokens": 12,
+    "request": "Rahul ko message bhejo kal shaam ko milte hain"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "answer cut off",
+      "error_detail": "The answer was cut off at 12 tokens",
+      "error_kind": "bad_reply",
+      "instructions": true,
+      "invented": [],
+      "model": "",
+      "ms": 41,
+      "raw": "{\"command\": \"Send a text to Rahul\", \"content\": \"kal",
+      "schema": true,
+      "source": "laptop",
+      "success": false,
+      "truncated": true
+    },
+    "version": 1
+  }
+}

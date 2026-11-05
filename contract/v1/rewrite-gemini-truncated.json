@@ -1,0 +1,23 @@
+{
+  "method": "rewrite",
+  "note": "With Ferb's own prompt: the cap cut a later line, so the first line is whole and given, with truncated: true.",
+  "extras": {
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 8,
+    "request": "torch on karo"
+  },
+  "result": {
+    "reply": {
+      "commands": ["Turn on the flashlight"],
+      "instructions": true,
+      "invented": [],
+      "model": "gemma-4-e2b",
+      "ms": 41,
+      "raw": "Turn on the flashlight\nThe user wants",
+      "source": "laptop",
+      "success": true,
+      "truncated": true
+    },
+    "version": 1
+  }
+}

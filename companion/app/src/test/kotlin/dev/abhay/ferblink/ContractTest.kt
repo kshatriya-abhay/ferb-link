@@ -176,6 +176,32 @@ class ContractTest {
             mapOf("request" to "alarm laga do", "instructions" to "x".repeat(LinkContract.MAX_INSTRUCTIONS_CHARS + 1), "max_tokens" to 40)),
         Case("rewrite-gemini-bad_request", "rewrite", "With Ferb's own prompt: no request.",
             mapOf("request" to "", "instructions" to INSTRUCTIONS, "max_tokens" to 40)),
+        Case("rewrite-gemini-truncated", "rewrite", "With Ferb's own prompt: the cap cut a later line, so the first line is whole and given, with truncated: true.",
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS, "max_tokens" to 8)) {
+            chatReply = 200 to chatAnswer("Turn on the flashlight\nThe user wants", finishReason = "length")
+        },
+        Case("rewrite-json", "rewrite", "With Ferb's own prompt and a JSON schema: the answer parsed as output, raw as written, commands empty.",
+            mapOf("request" to "Rahul ko message bhejo kal shaam ko milte hain", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA, "timeout_ms" to 10_000)) {
+            chatReply = 200 to chatAnswer(JSON_ANSWER)
+        },
+        Case("rewrite-json-cut", "rewrite", "With a JSON schema: the answer ran into max_tokens, so it fails, whatever it holds.",
+            mapOf("request" to "Rahul ko message bhejo kal shaam ko milte hain", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA, "max_tokens" to 12)) {
+            chatReply = 200 to chatAnswer("{\"command\": \"Send a text to Rahul\", \"content\": \"kal", finishReason = "length")
+        },
+        Case("rewrite-json-not-json", "rewrite", "With a JSON schema: an answer that isn't a JSON object.",
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA)) {
+            chatReply = 200 to chatAnswer("Turn on the flashlight")
+        },
+        Case("rewrite-json-bad_request", "rewrite", "A JSON schema that isn't a JSON object is turned down before anything is sent.",
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to "{\"type\": ")),
+        Case("rewrite-json-too_long", "rewrite", "A JSON schema over 8000 characters is turned down before anything is sent.",
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to LONG_SCHEMA)),
+        Case("rewrite-json-no-instructions", "rewrite", "A JSON schema without instructions is turned down: it's only for Ferb's own prompt.",
+            mapOf("request" to "torch on karo", "json_schema" to SCHEMA)),
+        Case("rewrite-json-unsupported", "rewrite", "llama-server can't turn the schema into a grammar (HTTP 500, \"JSON schema error\"): bad_request.",
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA)) {
+            chatReply = 500 to UNSUPPORTED_SCHEMA
+        },
         Case("status-jev", "status", "Jev is on and has a key: decide may answer.") { it.jevReady() },
         Case("status-jev-cap", "status", "Jev turned itself off at its spending cap.") { it.jevOffReason = LinkContract.JEV_OFF_CAP },
         Case("decide", "decide", "Jev picks set_alarm; every option's probability, in the order asked (shuffled per request).",
@@ -329,6 +355,55 @@ class ContractTest {
     }
 
     @Test
+    fun `a JSON rewrite sends the schema as response_format, with the higher default cap`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 200 to chatAnswer(JSON_ANSWER)
+        val reply = run(Case("x", "rewrite", "", mapOf("request" to "Rahul ko message bhejo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA)), State(url = url))
+            .getJSONObject("reply")
+        val body = JSONObject(chatBody)
+        assertThat(body.getJSONObject("response_format").getJSONObject("json_schema").getJSONObject("schema").getJSONArray("required").length()).isEqualTo(2)
+        assertThat(body.getInt("max_tokens")).isEqualTo(LinkContract.REWRITE_JSON_MAX_TOKENS)
+        assertThat(reply.getBoolean("success")).isTrue()
+        assertThat(reply.getBoolean("schema")).isTrue()
+        assertThat(reply.getBoolean("truncated")).isFalse()
+        assertThat(reply.getJSONObject("output").getString("content")).isEqualTo("kal shaam ko milte hain")
+        assertThat(reply.getJSONArray("commands").length()).isEqualTo(0)
+    }
+
+    @Test
+    fun `a schema that can't be used is turned down before anything is sent, and says schema`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatBody = ""
+        for (extras in listOf(
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to "[]"),
+            mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS_JSON, "json_schema" to LONG_SCHEMA),
+            mapOf("request" to "torch on karo", "json_schema" to SCHEMA),
+        )) {
+            val reply = run(Case("x", "rewrite", "", extras), State(url = url)).getJSONObject("reply")
+            assertWithMessage(extras.keys.toString()).that(reply.getString("error_kind")).isEqualTo("bad_request")
+            assertWithMessage(extras.keys.toString()).that(reply.getBoolean("schema")).isTrue()
+        }
+        assertThat(chatBody).isEmpty()
+    }
+
+    @Test
+    fun `with a schema, a context overflow is still too long, not an unusable schema`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 400 to """{"error": {"code": 400, "message": "the request exceeds the available context size, try increasing it", "type": "exceed_context_size_error"}}"""
+        val reply = run(Case("x", "rewrite", "", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS_JSON, "json_schema" to SCHEMA)), State(url = url)).getJSONObject("reply")
+        assertThat(reply.getString("error")).isEqualTo("bad request: too long")
+    }
+
+    @Test
+    fun `without a schema, the same answer is still a server error`() {
+        assumeFalse("rewriting the fixtures", write)
+        chatReply = 500 to UNSUPPORTED_SCHEMA
+        val reply = run(Case("x", "rewrite", "", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS)), State(url = url)).getJSONObject("reply")
+        assertThat(reply.getString("error_kind")).isEqualTo("server")
+        assertThat(reply.has("schema")).isFalse()
+    }
+
+    @Test
     fun `every fixture is a case here, or synthetic`() {
         assumeFalse("rewriting the fixtures", write)
         val files = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
@@ -416,6 +491,14 @@ class ContractTest {
 
         /** A stand-in for Ferb's GeminiRewrite prompt, which Ferb sends itself. */
         const val INSTRUCTIONS = "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE."
+
+        /** A stand-in for a JSON prompt and its schema (Ferb sends its own). */
+        const val INSTRUCTIONS_JSON = "Write the user's request as JSON: command, a short English command, and content, the words to keep exactly as said."
+        const val SCHEMA = """{"type": "object", "properties": {"command": {"type": "string"}, "content": {"type": "string"}}, "required": ["command", "content"]}"""
+        const val JSON_ANSWER = """{"command": "Send a text to Rahul", "content": "kal shaam ko milte hain"}"""
+        val LONG_SCHEMA = """{"type": "object", "description": "${"x".repeat(LinkContract.MAX_JSON_SCHEMA_CHARS)}"}"""
+        /** What llama-server b11541 answered for a $ref it couldn't resolve (probed 2026-11-06): HTTP 500. */
+        const val UNSUPPORTED_SCHEMA = """{"error": {"code": 500, "message": "JSON schema error at #/properties/a: cannot resolve ${'$'}ref #/definitions/missing, definitions not found", "type": "server_error"}}"""
 
 
         /** What the laptop's model answers to a rewrite: {"commands": [...]} as the message's text. */

@@ -1,0 +1,23 @@
+{
+  "method": "rewrite",
+  "note": "A JSON schema without instructions is turned down: it's only for Ferb's own prompt.",
+  "extras": {
+    "json_schema": "{\"type\": \"object\", \"properties\": {\"command\": {\"type\": \"string\"}, \"content\": {\"type\": \"string\"}}, \"required\": [\"command\", \"content\"]}",
+    "request": "torch on karo"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "bad request: schema without instructions",
+      "error_detail": "A JSON schema needs instructions",
+      "error_kind": "bad_request",
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "schema": true,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

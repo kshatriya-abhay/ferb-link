@@ -29,7 +29,8 @@ import java.util.concurrent.TimeUnit
  *   `sent` (after [Amounts.forRequest]), `raw` (the model's text), `variant`. "tools" (names or
  *   schemas) is only used by +tools. Gemma on the laptop: free, one model at a time, under the lock.
  * - `{"method": "rewrite", "request": "...", "instructions": "..." or "instructions_file": "/path",
- *   "max_tokens": 40}` → the provider's instructed rewrite ([Instructed]), as `rewrite` answers Ferb.
+ *   "max_tokens": 40}` → the provider's instructed rewrite ([Instructed]), as `rewrite` answers Ferb;
+ *   with "json_schema" (a JSON string) or "json_schema_file", the answer in that schema (`output`).
  * An "id" field is copied to the reply. Errors in a line give {"id", "harness_error"}; decide lines
  * not sent give {"id", "skipped"}.
  */
@@ -195,8 +196,9 @@ class LaptopHarness {
             // The provider's instructed rewrite: the caller's prompt, inline or from a file.
             line.optString("method") == "rewrite" && (line.has("instructions") || line.has("instructions_file")) -> {
                 val instructions = line.optString("instructions").ifBlank { File(line.getString("instructions_file")).readText() }
-                val maxTokens = Instructed.maxTokens(mapOf(LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens")))
-                JSONObject(client.rewriteInstructed(line.getString("request"), instructions, maxTokens, timeout).toReplyJson())
+                val schema = line.optString("json_schema").ifBlank { line.optString("json_schema_file").takeIf { it.isNotBlank() }?.let { File(it).readText() } ?: "" }
+                val extras = mapOf(LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens"), LinkContract.EXTRA_JSON_SCHEMA to schema)
+                JSONObject(client.rewriteInstructed(line.getString("request"), instructions, Instructed.maxTokens(extras), timeout, Instructed.schema(extras)).toReplyJson())
             }
             line.optString("method") == "rewrite" -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).

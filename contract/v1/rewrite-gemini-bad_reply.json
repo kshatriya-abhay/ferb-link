@@ -15,10 +15,11 @@
       "instructions": true,
       "invented": [],
       "model": "",
-      "ms": 42,
+      "ms": 41,
       "raw": "  \n ",
       "source": "laptop",
-      "success": false
+      "success": false,
+      "truncated": false
     },
     "version": 1
   }
