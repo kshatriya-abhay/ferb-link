@@ -77,5 +77,8 @@ cp "$ROOT/server/server.conf" "$T/repo/server/"
 check "without server.local.conf: the tracked default" '[ "$(bash -c "source $T/repo/server/server.conf; echo \$CAPABILITIES")" = full ]'
 echo "CAPABILITIES=text" > "$T/repo/server/server.local.conf"
 check "server.local.conf overrides it" '[ "$(bash -c "source $T/repo/server/server.conf; echo \$CAPABILITIES")" = text ]'
+# Settings change in server.local.conf only: one exported in the shell would reach the mise tasks
+# but not the systemd unit. FERB_REPO is the exception (these tests set it).
+check "MODELS_DIR in the environment doesn't change it" '[ "$(MODELS_DIR=/elsewhere bash -c "source $T/repo/server/server.conf; echo \$MODELS_DIR")" != /elsewhere ]'
 
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }
