@@ -192,7 +192,7 @@ class LaptopHarness {
             // The transcribe prompt's "text" rules on a heard line, without audio (not the phone's path).
             line.optString("method") == "timex" -> timex(line)
             line.optString("method") == "schema-call" -> schemaCall(line)
-            line.optString("method") == "transcribe-text" -> JSONObject(client.transcribeText(line.getString("heard"), timeout).toJson())
+            line.optString("method") == "transcribe-text" -> JSONObject(TranscribeText.transcribe(client, line.getString("heard"), timeout).toJson())
             // The provider's instructed rewrite: the caller's prompt, inline or from a file.
             line.optString("method") == "rewrite" && (line.has("instructions") || line.has("instructions_file")) -> {
                 val instructions = line.optString("instructions").ifBlank { File(line.getString("instructions_file")).readText() }
@@ -205,8 +205,8 @@ class LaptopHarness {
                 val tools = line.optJSONArray("tools")
                 val names = (0 until (tools?.length() ?: 0)).map { i -> tools!!.optJSONObject(i)?.getString("name") ?: tools.getString(i) }
                 val name = line.optString("variant").ifBlank { "v1" }
-                val variant = Rewrite.Variant.of(name)
-                JSONObject(client.rewrite(line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
+                val variant = RewriteVariants.Variant.of(name)
+                JSONObject(RewriteVariants.rewrite(client, line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
                     .put("variant", name)
             }
             line.has("audio") -> {

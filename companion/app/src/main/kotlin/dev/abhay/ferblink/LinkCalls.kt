@@ -137,10 +137,7 @@ class LinkCalls(
                 schema.isFailure -> Rewritten.failed(
                     Failure(ErrorKind.BadRequest, "The JSON schema isn't a JSON object", "bad request: schema"), request, instructed = true, schema = true)
                 instructions != null -> state.client(trace).rewriteInstructed(request, instructions, Instructed.maxTokens(extras), timeoutMs(extras), schema.getOrNull())
-                else -> when (val variant = Rewrite.Variant.orNull(LinkContract.REWRITE_VARIANT)) {
-                    null -> Rewritten.failed(Failure(ErrorKind.Server, "Ferb Link's rewrite prompt \"${LinkContract.REWRITE_VARIANT}\" doesn't exist"), request)
-                    else -> state.client(trace).rewrite(request, at, variant, timeoutMs = timeoutMs(extras))
-                }
+                else -> state.client(trace).rewrite(request, at, timeoutMs(extras))
             }.also {
                 if (it.failure == null && it.model.isNotEmpty()) {
                     state.lastModel = it.model

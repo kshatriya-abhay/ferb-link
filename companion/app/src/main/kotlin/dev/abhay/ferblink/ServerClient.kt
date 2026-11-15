@@ -344,10 +344,13 @@ class ServerClient(
     }
 
     /** Writes down the request in [wav] (a WAV file), within [timeoutMs] (default: the client's). */
-    fun transcribe(wav: ByteArray, timeoutMs: Int? = null): Transcript {
+    fun transcribe(wav: ByteArray, timeoutMs: Int? = null): Transcript = transcribe({ transcribeBody(it, wav) }, timeoutMs)
+
+    /** [transcribe] with the request [body] given the model's name (the bench types heard lines in place of audio). */
+    internal fun transcribe(body: (model: String) -> String, timeoutMs: Int?): Transcript {
         val started = System.nanoTime()
         return try {
-            val (code, text) = send("POST", "/v1/chat/completions", transcribeBody(modelName(timeoutMs), wav), auth = true, timeoutMs)
+            val (code, text) = send("POST", "/v1/chat/completions", body(modelName(timeoutMs)), auth = true, timeoutMs)
             val ms = msSince(started)
             if (code != 200) problem(code, text).let { Transcript.failed(it, ms) } else parseTranscript(JSONObject(text), ms)
         } catch (e: IOException) {
@@ -357,30 +360,20 @@ class ServerClient(
         }
     }
 
-    /** [transcribe]'s prompt on text in place of audio, then the same steps as [Voice.transcribe] (bench only). */
-    fun transcribeText(heard: String, timeoutMs: Int? = null): Transcript {
-        val started = System.nanoTime()
-        return try {
-            val (code, text) = send("POST", "/v1/chat/completions", transcribeTextBody(modelName(timeoutMs), heard), auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) return Transcript.failed(problem(code, text), ms)
-            val transcript = parseTranscript(JSONObject(text), ms)
-            transcript.copy(text = Amounts.normalize(transcript.heard, transcript.text))
-        } catch (e: IOException) {
-            failureOf(e).let { Transcript.failed(it, msSince(started)) }
-        } catch (e: Exception) {
-            Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
-        }
-    }
-
-    /** [Rewrite]: [request] as plain English commands, after [Amounts.forRequest], with [now] for the prompt. */
-    fun rewrite(request: String, now: String, variant: Rewrite.Variant, toolNames: List<String> = emptyList(), timeoutMs: Int? = null): Rewritten {
+    /**
+     * [Rewrite]: [request] as plain English commands, after [Amounts.forRequest], with [now] for the
+     * prompt. [body] builds the request from the model's name and what's sent (the bench's variants pass their own).
+     */
+    fun rewrite(
+        request: String, now: String, timeoutMs: Int? = null,
+        body: (model: String, sent: String) -> String = { model, sent -> Rewrite.body(model, sent, now) },
+    ): Rewritten {
         val started = System.nanoTime()
         val sent = Amounts.forRequest(request)
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
         var raw = ""
         return try {
-            val (code, text) = send("POST", "/v1/chat/completions", Rewrite.body(modelName(timeoutMs), sent, now, variant, toolNames), auth = true, timeoutMs)
+            val (code, text) = send("POST", "/v1/chat/completions", body(modelName(timeoutMs), sent), auth = true, timeoutMs)
             val ms = msSince(started)
             if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
             val reply = JSONObject(text)
@@ -571,7 +564,7 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
          * The answer's shape, as a literal: the model writes the fields in this order (whether anyone
          * spoke, before any words), and the JVM's org.json (the laptop harness) doesn't keep key order.
          */
-        private const val TRANSCRIBE_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", """ +
+        internal const val TRANSCRIBE_FORMAT = """{"type": "json_schema", "json_schema": {"schema": {"type": "object", """ +
             """"properties": {"speech": {"type": "boolean"}, "hindi": {"type": "boolean"}, "heard": {"type": "string"}, "text": {"type": "string"}}, """ +
             """"required": ["speech", "hindi", "heard", "text"]}}}"""
 
@@ -592,25 +585,8 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
                 .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_FORMAT)
         }
 
-        private const val FORMAT_SLOT = "@response_format@"
+        internal const val FORMAT_SLOT = "@response_format@"
 
-
-        /**
-         * [transcribeBody] with [heard] typed in place of a recording: for checking the prompt's
-         * "text" rules on the audio bench's heard lines (`companion:harness`'s `transcribe-text`;
-         * the audio wasn't kept). Not what the phone sends.
-         */
-        fun transcribeTextBody(model: String, heard: String): String = JSONObject()
-            .put("model", model)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", TRANSCRIBE))
-                .put(JSONObject().put("role", "user").put("content", "(The recording, as heard:) $heard")))
-            .put("temperature", 0)
-            .put("max_tokens", 300)
-            .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
-            .put("response_format", FORMAT_SLOT)
-            .toString()
-            .replace("\"$FORMAT_SLOT\"", TRANSCRIBE_FORMAT)
 
         fun parseTranscript(reply: JSONObject, ms: Long): Transcript {
             val content = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")

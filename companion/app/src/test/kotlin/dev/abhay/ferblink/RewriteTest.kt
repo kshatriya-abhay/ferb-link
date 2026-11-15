@@ -9,15 +9,15 @@ import org.junit.Test
 class RewriteTest {
     @Test
     fun `variants are a version and switches`() {
-        assertThat(Rewrite.Variant.of("v1")).isEqualTo(Rewrite.Variant("v1", shots = false, tools = false, think = false, free = false))
-        assertThat(Rewrite.Variant.of("v1+shots+tools+think+free")).isEqualTo(Rewrite.Variant("v1", shots = true, tools = true, think = true, free = true))
-        assertThrows(IllegalArgumentException::class.java) { Rewrite.Variant.of("v9") }
-        assertThrows(IllegalArgumentException::class.java) { Rewrite.Variant.of("v1+magic") }
+        assertThat(RewriteVariants.Variant.of("v1")).isEqualTo(RewriteVariants.Variant("v1", shots = false, tools = false, think = false, free = false))
+        assertThat(RewriteVariants.Variant.of("v1+shots+tools+think+free")).isEqualTo(RewriteVariants.Variant("v1", shots = true, tools = true, think = true, free = true))
+        assertThrows(IllegalArgumentException::class.java) { RewriteVariants.Variant.of("v9") }
+        assertThrows(IllegalArgumentException::class.java) { RewriteVariants.Variant.of("v1+magic") }
     }
 
     @Test
     fun `v1 is constrained JSON at temperature 0 with thinking off, and now in the prompt`() {
-        val body = JSONObject(Rewrite.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)", Rewrite.Variant.of("v1"), listOf("set_timer")))
+        val body = JSONObject(RewriteVariants.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)", RewriteVariants.Variant.of("v1"), listOf("set_timer")))
         assertThat(body.getInt("temperature")).isEqualTo(0)
         assertThat(body.getJSONObject("chat_template_kwargs").getBoolean("enable_thinking")).isFalse()
         assertThat(body.getJSONObject("response_format").getString("type")).isEqualTo("json_schema")
@@ -31,14 +31,14 @@ class RewriteTest {
 
     @Test
     fun `switches add examples, tool names, thinking, or drop the schema`() {
-        val body = JSONObject(Rewrite.body("gemma", "x", "now", Rewrite.Variant.of("v1+shots+tools+think+free"), listOf("set_timer", "make_call")))
+        val body = JSONObject(RewriteVariants.body("gemma", "x", "now", RewriteVariants.Variant.of("v1+shots+tools+think+free"), listOf("set_timer", "make_call")))
         assertThat(body.has("response_format")).isFalse()
         assertThat(body.getJSONObject("chat_template_kwargs").getBoolean("enable_thinking")).isTrue()
         val messages = body.getJSONArray("messages")
         assertThat(messages.getJSONObject(0).getString("content")).contains("set_timer, make_call")
-        assertThat(messages.length()).isEqualTo(2 + 1 + 2 * Rewrite.SHOTS.size)
+        assertThat(messages.length()).isEqualTo(2 + 1 + 2 * RewriteVariants.SHOTS.size)
         // The examples' requests are sent as the bench's are: Hindi hours already as times.
-        assertThat(messages.getJSONObject(2).getString("content")).isEqualTo(Amounts.forRequest(Rewrite.SHOTS.first().first))
+        assertThat(messages.getJSONObject(2).getString("content")).isEqualTo(Amounts.forRequest(RewriteVariants.SHOTS.first().first))
     }
 
     @Test
@@ -50,10 +50,15 @@ class RewriteTest {
     }
 
     @Test
-    fun `the shipped variant exists, and an unknown one is null, not a throw`() {
-        assertThat(Rewrite.Variant.of(LinkContract.REWRITE_VARIANT).base).isEqualTo(LinkContract.REWRITE_VARIANT)
-        assertThat(Rewrite.Variant.orNull("v2.2")).isNull()
-        assertThat(Rewrite.Variant.orNull("v2+nonsense")).isNull()
+    fun `the app's rewrite is v2, constrained JSON with thinking off and now in the prompt`() {
+        val body = JSONObject(Rewrite.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)"))
+        assertThat(body.getJSONObject("chat_template_kwargs").getBoolean("enable_thinking")).isFalse()
+        assertThat(body.getJSONObject("response_format").getString("type")).isEqualTo("json_schema")
+        val messages = body.getJSONArray("messages")
+        assertThat(messages.getJSONObject(0).getString("content")).isEqualTo("${Rewrite.V2}\n\nNow: 2026-10-16T09:00 (Friday).")
+        assertThat(messages.getJSONObject(1).getString("content")).isEqualTo("set a timer")
+        // The bench's v2 sends the same request as the app.
+        assertThat(Rewrite.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)")).isEqualTo(RewriteVariants.body("gemma", "set a timer", "2026-10-16T09:00 (Friday)", RewriteVariants.Variant.of("v2"), emptyList()))
     }
 }
 
@@ -93,9 +98,9 @@ class RewriteV21Test {
 
     @Test
     fun `v2_1 is v2 plus amounts, short commands and muting`() {
-        assertThat(Rewrite.Variant.of("v2.1+shots").base).isEqualTo("v2.1")
-        assertThat(Rewrite.V21).startsWith(Rewrite.V2)
-        assertThat(Rewrite.V21).contains("50 percent")
+        assertThat(RewriteVariants.Variant.of("v2.1+shots").base).isEqualTo("v2.1")
+        assertThat(RewriteVariants.V21).startsWith(Rewrite.V2)
+        assertThat(RewriteVariants.V21).contains("50 percent")
     }
 
     @Test

@@ -92,7 +92,8 @@ object LinkContract {
     /**
      * A typed request (Hinglish, as Ferb sends it) as plain English commands, one per action, for
      * Needle 3, or none when it asks for nothing. The laptop's model writes them with [Rewrite]'s
-     * prompt ([REWRITE_VARIANT]); Hindi amounts are worked out in code first. Takes
+     * v2 prompt (on the held-out suite v2.1 ran one wrong action; Ferb now sends its own prompt, so
+     * this is only for an older Ferb); Hindi amounts are worked out in code first. Takes
      * [EXTRA_REQUEST], [EXTRA_NOW] (optional: the phone's clock without it), [EXTRA_TIMEOUT_MS];
      * returns [RESULT_REPLY], [RESULT_VERSION]. The reply: `success`, `commands` (a list of
      * strings, empty when nothing is asked), `invented` (numbers and names in the commands that
@@ -203,13 +204,6 @@ object LinkContract {
     const val TRANSCRIBE_TIMEOUT_MS = 15_000
     /** Without [EXTRA_TIMEOUT_MS]; Ferb sends its own, and goes ahead without Jev past it. */
     const val DECIDE_TIMEOUT_MS = 3_000
-    /**
-     * [METHOD_REWRITE]'s prompt without [EXTRA_INSTRUCTIONS], one of [Rewrite]'s PROMPTS. v2: on
-     * the held-out suite v2.1 ran one wrong action ("torch band karo" muted the volume). Ferb now
-     * sends its own prompt, so this is only for an older Ferb. A name [Rewrite.Variant.of] doesn't
-     * know fails each call (server error), and a unit test catches it first.
-     */
-    const val REWRITE_VARIANT = "v2"
     const val MAX_DECIDE_TIMEOUT_MS = 10_000
     const val MAX_AUDIO_BYTES = 512 * 1024
     const val MAX_AUDIO_SECONDS = 30
