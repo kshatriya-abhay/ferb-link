@@ -3,14 +3,11 @@ package dev.abhay.ferblink
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.net.ConnectException
-import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
-import java.net.URL
-import java.net.UnknownHostException
 import java.net.URLEncoder
-import java.net.UnknownServiceException
 import java.util.Base64
+import dev.abhay.ferblink.LlamaHttp.Companion.failureOf
+import dev.abhay.ferblink.LlamaHttp.Companion.msSince
+import dev.abhay.ferblink.LlamaHttp.Companion.problem
 import kotlin.math.exp
 
 /**
@@ -52,24 +49,24 @@ data class Props(val state: ModelState, val audio: Boolean?, val sleepIdleSecond
  */
 class ServerClient(
     baseUrl: String,
-    private val apiKey: String,
+    apiKey: String,
     /** The model to ask for (the router needs it named); looked up in `/v1/models` when empty. */
     private var model: String = "",
-    private val connectTimeoutMs: Int = 3_000,
-    private val readTimeoutMs: Int = 30_000,
+    connectTimeoutMs: Int = 3_000,
+    readTimeoutMs: Int = 30_000,
     /** Gets one line of timings per HTTP request (Ferb Link logs them). */
-    private val trace: ((String) -> Unit)? = null,
+    trace: ((String) -> Unit)? = null,
 ) {
-    private val base = baseUrl.trim().trimEnd('/')
+    private val http = LlamaHttp(baseUrl, apiKey, connectTimeoutMs, readTimeoutMs, trace)
 
     /** `/health`, then `/v1/models` with the key, both within [timeoutMs] each (default: the client's). */
     fun health(timeoutMs: Int? = null): Health {
         val started = System.nanoTime()
         return try {
-            val (code, body) = send("GET", "/health", null, auth = false, timeoutMs)
+            val (code, body) = http.send("GET", "/health", null, auth = false, timeoutMs)
             if (code == 503) return Health(false, null, msSince(started), Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"))
             if (code != 200) return Health(false, null, msSince(started), problem(code, body))
-            val (modelsCode, models) = send("GET", "/v1/models", null, auth = true, timeoutMs)
+            val (modelsCode, models) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
             if (modelsCode != 200) return Health(false, null, msSince(started), problem(modelsCode, models))
             val model = JSONObject(models).optJSONArray("data")?.optJSONObject(0)?.optString("id")
             if (!model.isNullOrEmpty()) this.model = model
@@ -87,26 +84,13 @@ class ServerClient(
      * [timeoutMs] replaces the client's answer timeout for this call (and caps its connect timeout).
      */
     fun complete(request: String, toolsJson: String, facts: String? = null, timeoutMs: Int? = null): Reply {
-        val started = System.nanoTime()
         val tools = try {
             JSONArray(toolsJson)
         } catch (e: Exception) {
             return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
         }
-        val body = try {
-            requestBody(modelName(timeoutMs), request, tools, facts)
-        } catch (e: IOException) {
-            return failureOf(e).let { Reply.failed(it, msSince(started)) }
-        }
-        return try {
-            val (code, text) = send("POST", "/v1/chat/completions", body.toString(), auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) problem(code, text).let { Reply.failed(it, ms) } else parse(JSONObject(text), ms)
-        } catch (e: IOException) {
-            failureOf(e).let { Reply.failed(it, msSince(started)) }
-        } catch (e: Exception) {
-            Reply.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
-        }
+        val exchange = http.post(CHAT, timeoutMs) { requestBody(modelName(timeoutMs), request, tools, facts).toString() }
+        return read(exchange, { failure, ms -> Reply.failed(failure, ms) }) { parse(JSONObject(it.text), it.ms) }
     }
 
     /**
@@ -114,7 +98,7 @@ class ServerClient(
      * `/v1/models` status, then, when it's running, its `/props`. Null when they can't be read.
      */
     fun props(timeoutMs: Int? = null): Props? = try {
-        val (code, body) = send("GET", "/v1/models", null, auth = true, timeoutMs)
+        val (code, body) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
         val entry = if (code == 200) JSONObject(body).optJSONArray("data")?.optJSONObject(0) else null
         val sleep = entry?.optJSONObject("status")?.optJSONArray("args")?.let(::sleepIdleSeconds)
         when (entry?.optJSONObject("status")?.optString("value")) {
@@ -123,7 +107,7 @@ class ServerClient(
             "loading" -> Props(ModelState.Loading, null, sleep)
             else -> {
                 val name = entry.getString("id").also { model = it }
-                val (propsCode, propsBody) = send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
+                val (propsCode, propsBody) = http.send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
                 if (propsCode != 200) null else JSONObject(propsBody).let {
                     Props(
                         if (it.optBoolean("is_sleeping")) ModelState.Asleep else ModelState.Loaded,
@@ -143,7 +127,7 @@ class ServerClient(
      */
     fun unload(timeoutMs: Int? = null): Failure? = try {
         val body = JSONObject().put("model", modelName(timeoutMs)).toString()
-        val (code, text) = send("POST", "/models/unload", body, auth = true, timeoutMs)
+        val (code, text) = http.send("POST", "/models/unload", body, auth = true, timeoutMs)
         val notRunning = code == 400 && text.contains("not running")
         when {
             notRunning -> null
@@ -171,7 +155,7 @@ class ServerClient(
     fun wake(timeoutMs: Int? = null): Props? {
         val props = props(LinkContract.CHECK_TIMEOUT_MS) ?: return null
         if (props.state != ModelState.Loaded) runCatching {
-            send("POST", "/v1/chat/completions", wakeBody(modelName(timeoutMs)), auth = true, timeoutMs)
+            http.send("POST", "/v1/chat/completions", wakeBody(modelName(timeoutMs)), auth = true, timeoutMs)
         }
         return props
     }
@@ -180,18 +164,8 @@ class ServerClient(
     fun transcribe(wav: ByteArray, timeoutMs: Int? = null): Transcript = transcribe({ transcribeBody(it, wav) }, timeoutMs)
 
     /** [transcribe] with the request [body] given the model's name (the bench types heard lines in place of audio). */
-    internal fun transcribe(body: (model: String) -> String, timeoutMs: Int?): Transcript {
-        val started = System.nanoTime()
-        return try {
-            val (code, text) = send("POST", "/v1/chat/completions", body(modelName(timeoutMs)), auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) problem(code, text).let { Transcript.failed(it, ms) } else parseTranscript(JSONObject(text), ms)
-        } catch (e: IOException) {
-            failureOf(e).let { Transcript.failed(it, msSince(started)) }
-        } catch (e: Exception) {
-            Transcript.failed(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}", msSince(started))
-        }
-    }
+    internal fun transcribe(body: (model: String) -> String, timeoutMs: Int?): Transcript =
+        read(http.post(CHAT, timeoutMs) { body(modelName(timeoutMs)) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
 
     /**
      * [Rewrite]: [request] as plain English commands, after [Amounts.forRequest], with [now] for the
@@ -201,22 +175,15 @@ class ServerClient(
         request: String, now: String, timeoutMs: Int? = null,
         body: (model: String, sent: String) -> String = { model, sent -> Rewrite.body(model, sent, now) },
     ): Rewritten {
-        val started = System.nanoTime()
         val sent = Amounts.forRequest(request)
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
         var raw = ""
-        return try {
-            val (code, text) = send("POST", "/v1/chat/completions", body(modelName(timeoutMs), sent), auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) return Rewritten.failed(problem(code, text), sent, ms = ms)
-            val reply = JSONObject(text)
+        val exchange = http.post(CHAT, timeoutMs) { body(modelName(timeoutMs), sent) }
+        return read(exchange, { failure, ms -> Rewritten.failed(failure, sent, ms = ms, raw = raw) }, "the commands") { answer ->
+            val reply = JSONObject(answer.text)
             raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
             val commands = Rewrite.parse(raw)
-            Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands))
-        } catch (e: IOException) {
-            Rewritten.failed(failureOf(e), sent, ms = msSince(started))
-        } catch (e: Exception) {
-            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, ms = msSince(started), raw = raw)
+            Rewritten(commands, sent, raw, reply.optString("model"), answer.ms, null, Rewrite.invented(request, sent, commands))
         }
     }
 
@@ -225,16 +192,15 @@ class ServerClient(
      * the answer is JSON in its schema, given back parsed as `output`.
      */
     fun rewriteInstructed(request: String, mode: Instructed.Mode, timeoutMs: Int? = null): Rewritten {
-        val started = System.nanoTime()
         val asked = mode.asked
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), request, asked)
         var raw = ""
         var truncated = false
-        return try {
-            val (code, text) = send("POST", "/v1/chat/completions", Instructed.body(modelName(timeoutMs), request, mode), auth = true, timeoutMs)
-            val ms = msSince(started)
-            if (code != 200) return Rewritten.failed(if (mode is Instructed.Mode.Json) schemaProblem(code, text) else problem(code, text), request, asked, ms)
-            val reply = JSONObject(text)
+        val problemOf = if (mode is Instructed.Mode.Json) LlamaHttp.Companion::schemaProblem else LlamaHttp.Companion::problem
+        val exchange = http.post(CHAT, timeoutMs, problemOf) { Instructed.body(modelName(timeoutMs), request, mode) }
+        return read(exchange, { failure, ms -> Rewritten.failed(failure, request, asked, ms, raw, truncated) }, "the command") { answer ->
+            val ms = answer.ms
+            val reply = JSONObject(answer.text)
             val choice = reply.getJSONArray("choices").getJSONObject(0)
             raw = choice.getJSONObject("message").optString("content")
             truncated = choice.optString("finish_reason") == "length"
@@ -256,76 +222,35 @@ class ServerClient(
                     Rewritten(listOfNotNull(Instructed.parse(raw)), request, raw, reply.optString("model"), ms, null, emptyList(), asked, truncated)
                 }
             }
-        } catch (e: IOException) {
-            Rewritten.failed(failureOf(e), request, asked, msSince(started))
-        } catch (e: Exception) {
-            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the command: ${e.message}"), request, asked, msSince(started), raw, truncated)
         }
     }
+
+    /**
+     * [parse] the answer of [exchange], or [failed] with its failure, or with bad_reply when the
+     * answer can't be read ("Couldn't read [what]: …").
+     */
+    private inline fun <T> read(exchange: LlamaHttp.Exchange, failed: (Failure, Long) -> T, what: String = "your computer's answer", parse: (LlamaHttp.Exchange.Answer) -> T): T =
+        when (exchange) {
+            is LlamaHttp.Exchange.Failed -> failed(exchange.failure, exchange.ms)
+            is LlamaHttp.Exchange.Answer -> try {
+                parse(exchange)
+            } catch (e: Exception) {
+                failed(Failure(ErrorKind.BadReply, "Couldn't read $what: ${e.message}"), exchange.ms)
+            }
+        }
 
     /** The model to name in requests: the one given, or the first in `/v1/models`. */
     private fun modelName(timeoutMs: Int?): String {
         if (model.isEmpty()) {
-            val (code, body) = send("GET", "/v1/models", null, auth = true, timeoutMs)
-            if (code != 200) throw Refused(problem(code, body))
+            val (code, body) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
+            if (code != 200) throw LlamaHttp.Companion.Refused(problem(code, body))
             model = JSONObject(body).optJSONArray("data")?.optJSONObject(0)?.optString("id").orEmpty()
         }
         return model
     }
 
-    /**
-     * One request. The connection isn't closed afterwards: reading the answer to the end returns it
-     * to Android's pool, so the next request (transcribe, then complete) skips a new TCP handshake
-     * over the tailnet. It's closed only when something went wrong.
-     */
-    private fun send(method: String, path: String, body: String?, auth: Boolean, timeoutMs: Int?): Pair<Int, String> {
-        val started = System.nanoTime()
-        val connection = URL(base + path).openConnection() as HttpURLConnection
-        var ok = false
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = timeoutMs?.let { minOf(it, connectTimeoutMs) } ?: connectTimeoutMs
-            connection.readTimeout = timeoutMs ?: readTimeoutMs
-            if (auth) connection.setRequestProperty("Authorization", "Bearer $apiKey")
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json")
-            }
-            // Connect before sending, so a failure here is "unreachable" and a timeout later is "timeout".
-            try {
-                connection.connect()
-            } catch (e: IOException) {
-                throw NotConnected(e)
-            }
-            val connected = System.nanoTime()
-            val bytes = body?.toByteArray()
-            if (bytes != null) connection.outputStream.use { it.write(bytes) }
-            val sent = System.nanoTime()
-            val code = connection.responseCode
-            val answered = System.nanoTime()
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            ok = true
-            // A connect of a few ms means a pooled connection; a new one over the tailnet takes longer.
-            trace?.invoke(
-                "$method $path ${bytes?.size ?: 0} B → $code: connect ${ms(started, connected)} ms, send ${ms(connected, sent)} ms, " +
-                    "wait ${ms(sent, answered)} ms, read ${ms(answered, System.nanoTime())} ms",
-            )
-            return code to text
-        } catch (e: IOException) {
-            trace?.invoke("$method $path failed after ${ms(started, System.nanoTime())} ms: $e")
-            throw e
-        } finally {
-            if (!ok) connection.disconnect()
-        }
-    }
-
-    private fun ms(from: Long, to: Long) = (to - from) / 1_000_000
-
     companion object {
-        /** Unreachable details that already say what to do ([Guidance] adds nothing to them). */
-        const val NO_NAME = "Can't find your computer's name. Is Tailscale on?"
-        const val HTTP_NEEDS_TAILSCALE_NAME = "Plain HTTP only works with your computer's Tailscale name (….ts.net)"
+        private const val CHAT = "/v1/chat/completions"
 
         /** Ferb's bench's instruction, word for word (`tool-check/bench.py`), so its results hold here. */
         const val SYSTEM = "You are Ferb, an assistant on an Android phone. When the user asks for something one of the tools does, " +
@@ -469,50 +394,5 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
             }
             else -> JSONObject()
         }
-
-        private fun problem(code: Int, body: String): Failure {
-            val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull()
-            val type = runCatching { JSONObject(body).getJSONObject("error").optString("type") }.getOrNull()
-            return when {
-                code == 400 && (type == "exceed_context_size_error" || message?.contains("context size") == true) ->
-                    Failure(ErrorKind.BadRequest, "Too long for the model's context on your computer", "bad request: too long")
-                else -> when (code) {
-                401 -> Failure(ErrorKind.Auth, "Your computer turned down the API key")
-                503 -> Failure(ErrorKind.Server, "Your computer is loading the model", "model loading")
-                else -> Failure(ErrorKind.Server, "Your computer answered $code" + (message?.let { ": $it" } ?: ""), "server error $code")
-                }
-            }
-        }
-
-        /**
-         * As [problem], but a schema llama-server can't turn into a grammar is bad_request. b11541
-         * answers that with HTTP 500 and "JSON schema error at #/…: …" (probed 2026-11-06).
-         */
-        private fun schemaProblem(code: Int, body: String): Failure {
-            val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull()
-            if (code !in 400..500 || message?.startsWith("JSON schema error") != true) return problem(code, body)
-            return Failure(ErrorKind.BadRequest, "Your computer couldn't use the JSON schema: $message", "bad request: schema not supported")
-        }
-
-        private fun failureOf(e: IOException): Failure = when {
-            e is Refused -> e.failure
-            e is NotConnected -> Failure(ErrorKind.Unreachable, when (val cause = e.cause) {
-                is UnknownHostException -> NO_NAME
-                // Android's network security config: plain HTTP only to Tailscale names.
-                is UnknownServiceException -> HTTP_NEEDS_TAILSCALE_NAME
-                is ConnectException, is SocketTimeoutException -> "Your computer doesn't answer. Is the server running?"
-                else -> cause?.message ?: e.toString()
-            })
-            e is SocketTimeoutException -> Failure(ErrorKind.Timeout, "Your computer took too long to answer")
-            else -> Failure(ErrorKind.Unreachable, e.message ?: e.toString())
-        }
-
-        /** The server answered, but not with what was needed (looking up the model). */
-        private class Refused(val failure: Failure) : IOException(failure.message)
-
-        /** The connection itself failed (as opposed to the answer taking too long). */
-        private class NotConnected(cause: IOException) : IOException(cause)
-
-        private fun msSince(started: Long) = (System.nanoTime() - started) / 1_000_000
     }
 }

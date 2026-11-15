@@ -25,16 +25,16 @@ class GuidanceTest {
 
     @Test
     fun `no line when the error's detail already says what to do`() {
-        val noName = Failure(ErrorKind.Unreachable, ServerClient.NO_NAME)
+        val noName = Failure(ErrorKind.Unreachable, LlamaHttp.NO_NAME)
         assertThat(Guidance.of(noName, vpnActive = false)).isNull()
         // With Tailscale up, the name is wrong or the computer is off the tailnet: that's new.
         assertThat(Guidance.of(noName, vpnActive = true)).isEqualTo(R.string.guide_unreachable)
-        assertThat(Guidance.of(Failure(ErrorKind.Unreachable, ServerClient.HTTP_NEEDS_TAILSCALE_NAME), vpnActive = true)).isNull()
+        assertThat(Guidance.of(Failure(ErrorKind.Unreachable, LlamaHttp.HTTP_NEEDS_TAILSCALE_NAME), vpnActive = true)).isNull()
     }
 
     @Test
     fun `a name that doesn't resolve with Private DNS set points at Private DNS`() {
-        val noName = Failure(ErrorKind.Unreachable, ServerClient.NO_NAME)
+        val noName = Failure(ErrorKind.Unreachable, LlamaHttp.NO_NAME)
         assertThat(Guidance.of(noName, vpnActive = true, privateDns = true)).isEqualTo(R.string.guide_private_dns)
         assertThat(Guidance.of(noName, vpnActive = null, privateDns = true)).isEqualTo(R.string.guide_private_dns)
         // Tailscale off comes first: that's the fix to try before anything else.
