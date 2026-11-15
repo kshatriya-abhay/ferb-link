@@ -25,4 +25,10 @@ class LatinTest {
         assertThat(Latin.dropFinalSchwa("ka")).isEqualTo("ka")
         assertThat(Latin.dropFinalSchwa("kara")).isEqualTo("kar")
     }
+
+    @Test
+    fun `punctuation after a word doesn't keep its last a`() {
+        assertThat(Latin.convert("कर,", mapOf("कर," to "kara,")::getValue) { it }).isEqualTo("kar,")
+        assertThat(Latin.convert("खोल।", mapOf("खोल।" to "khola।")::getValue) { it }).isEqualTo("khol।")
+    }
 }

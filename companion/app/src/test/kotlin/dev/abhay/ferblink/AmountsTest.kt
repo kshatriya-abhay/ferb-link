@@ -128,4 +128,25 @@ class AmountsTest {
         assertThat(Amounts.normalize("raat 11 baje ka alarm", "Set an alarm for 11")).isEqualTo("Set an alarm for 11 pm")
         assertThat(Amounts.normalize("subah sava saat baje utha dena", "Wake me up at 7 AM")).isEqualTo("Wake me up at 7:15 am")
     }
+
+    /** Devanagari through Latin, with ICU's own output (`uconv -x Any-Latin`, 2026-11-16) for each word. */
+    private fun latin(devanagari: String): String {
+        val icu = mapOf("शाम" to "śāma", "सवा" to "savā", "सात" to "sāta", "बजे" to "bajē", "रात" to "rāta", "नौ" to "nau", "पाँच" to "pām̐ca", "को" to "kō")
+        val ascii = { t: String -> java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "") }
+        return Latin.convert(devanagari, icu::getValue, ascii)
+    }
+
+    @Test
+    fun `amounts and times of day written in Devanagari are worked out`() {
+        assertThat(Amounts.normalize(latin("शाम सवा सात बजे"), "Set an alarm for 7")).isEqualTo("Set an alarm for 7:15 pm")
+        assertThat(Amounts.normalize(latin("शाम सात बजे"), "Set an alarm for 7")).isEqualTo("Set an alarm for 7 pm")
+        assertThat(Amounts.normalize(latin("रात नौ बजे"), "Remind me at 9")).isEqualTo("Remind me at 9 pm")
+        assertThat(Amounts.normalize(latin("सवा पाँच बजे"), "Wake me up at 5")).isEqualTo("Wake me up at 5:15")
+    }
+
+    @Test
+    fun `sam and rat in English aren't times of day`() {
+        assertThat(Amounts.normalize("call sam at 7", "Call Sam at 7")).isEqualTo("Call Sam at 7")
+        assertThat(Amounts.normalize("the rat ran at 9", "Remind me at 9")).isEqualTo("Remind me at 9")
+    }
 }

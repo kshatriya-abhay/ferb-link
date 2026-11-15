@@ -15,6 +15,10 @@ object Amounts {
         "chhe" to 6, "chhah" to 6, "chah" to 6, "chahe" to 6, "che" to 6, "saat" to 7, "aath" to 8, "nau" to 9,
         "das" to 10, "gyarah" to 11, "barah" to 12, "pandrah" to 15, "bees" to 20, "pachchees" to 25,
         "tees" to 30, "chalees" to 40, "chalis" to 40, "pachaas" to 50,
+        // As Latin writes them from Devanagari (ICU, long vowels flattened): सात "sat", आठ "ath",
+        // तीन "tin", चार "car", पाँच "pamc" or "panc". Read only in a number's place, after an
+        // amount word or before baje, so English "sat" or "car" elsewhere is left alone.
+        "sat" to 7, "ath" to 8, "tin" to 3, "car" to 4, "pamc" to 5, "panc" to 5,
     )
     private val words = "sava|saade|sadhe|paune|pone|dedh|derh|tedh|dhai|dhaai"
     private val units = "baje|ghanta|ghante|ghanton|minute|minut|minat|mint|min|second|sekand"
@@ -89,14 +93,22 @@ object Amounts {
 
     /** "am" or "pm" from the time of day said in [heard], for a time at [hour]; null when none was. */
     private fun dayHalf(heard: String, hour: Int): String? {
-        val words = heard.lowercase().split(Regex("[^a-z]+")).toSet()
+        val lower = heard.lowercase()
+        val words = lower.split(Regex("[^a-z]+")).toSet()
         return when {
             "subah" in words -> "am"
-            afternoon.containsMatchIn(heard.lowercase()) || "shaam" in words || "sham" in words -> "pm"
-            "raat" in words -> if (hour in 7..11) "pm" else "am"
+            afternoon.containsMatchIn(lower) || "shaam" in words || "sham" in words || latinDay("sam").containsMatchIn(lower) -> "pm"
+            "raat" in words || latinDay("rat").containsMatchIn(lower) -> if (hour in 7..11) "pm" else "am"
             else -> null
         }
     }
+
+    /**
+     * शाम and रात as Latin writes them ("sam", "rat"), which are English words too ("call Sam at
+     * 7"): a time of day only when Hindi about a time follows ("sam ko", "rat 9 baje", "sam sava sat").
+     */
+    private fun latinDay(word: String) =
+        Regex("\\b$word\\s+(?:ko|ke|mein|me|main|ki|\\d|$words|${numbers.keys.joinToString("|")})\\b")
 
     // dopahar as it gets written down: dopahar, dopehar, dopaher, dophar, dupahar, "do peher".
     private val afternoon = Regex("\\bd[ou]\\s?p(?:a|e)?h(?:a|e)r\\b")

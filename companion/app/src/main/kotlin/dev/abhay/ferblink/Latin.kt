@@ -37,8 +37,10 @@ object Latin {
      * short "a" after a consonant, in words longer than two letters.
      */
     fun dropFinalSchwa(word: String): String {
-        if (word.length <= 2 || !word.endsWith("a")) return word
-        val before = word[word.length - 2]
-        return if (before.isLetter() && before.lowercaseChar() !in "aeiouāēīōū") word.dropLast(1) else word
+        // Punctuation after the word ("kara,") stays, and the word before it is what's checked.
+        val core = word.trimEnd { !it.isLetter() }
+        if (core.length <= 2 || !core.endsWith("a")) return word
+        val before = core[core.length - 2]
+        return if (before.isLetter() && before.lowercaseChar() !in "aeiouāēīōū") core.dropLast(1) + word.substring(core.length) else word
     }
 }
