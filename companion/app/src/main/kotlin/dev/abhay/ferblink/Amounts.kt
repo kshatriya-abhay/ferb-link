@@ -23,6 +23,13 @@ object Amounts {
     private val words = "sava|saade|sadhe|paune|pone|dedh|derh|tedh|dhai|dhaai"
     private val units = "baje|ghanta|ghante|ghanton|minute|minut|minat|mint|min|second|sekand"
 
+    // The one vocabulary every pattern here reads, so they agree on what a time is: how a time
+    // says its half of the day (am, a.m., a.m), and the units after a number that make it a
+    // length or a count, not a clock time ("2 days", "10 sec", "2 to 3 hours").
+    private const val DAY_HALF = "(?:[ap]\\.?m\\.?)"
+    private val lengthUnit = "(?:hours?|hrs?|minutes?|mins?|seconds?|secs?|days?|weeks?|months?|years?|times?|${units.removePrefix("baje|")})"
+    private val notALength = "(?!\\s*$lengthUnit\\b)"
+
     // "paune 8 baje", "sava ghanta", "dhai minute"; the number is optional (sava ghanta = 1¼ hours).
     private val inHeard = Regex("\\b($words)\\b\\s*(?:(\\d{1,2}|[a-z]+)\\s+)?($units)\\b", RegexOption.IGNORE_CASE)
 
@@ -45,8 +52,11 @@ object Amounts {
         return if (time) Amount(clock(value), isTime = true) else Amount(length(value, unit), isTime = false)
     }
 
-    // "5 baje", "saat baje": a whole hour.
-    private val wholeHour = Regex("\\b(\\d{1,2}|[a-z]+)\\s+baje\\b", RegexOption.IGNORE_CASE)
+    // "5 baje", "saat baje": a whole hour; not the minutes of "6:10 baje".
+    private val wholeHour = Regex("(?<!:)\\b(\\d{1,2}|[a-z]+)\\s+baje\\b", RegexOption.IGNORE_CASE)
+
+    // "6:10 baje": a time already, so baje just goes.
+    private val clockBaje = Regex("\\b(\\d{1,2}:\\d{2})\\s+baje\\b", RegexOption.IGNORE_CASE)
 
     /**
      * The same for a typed request, which has no English rewrite to correct: its Hindi amounts and
@@ -56,7 +66,7 @@ object Amounts {
      */
     fun forRequest(request: String): String {
         val amounts = inHeard.replace(request) { match -> amountOf(match)?.english ?: match.value }
-        val hours = wholeHour.replace(amounts) { match ->
+        val hours = wholeHour.replace(clockBaje.replace(amounts, "$1")) { match ->
             val text = match.groupValues[1].lowercase()
             val hour = text.toIntOrNull() ?: numbers[text]
             if (hour == null || hour !in 1..12) match.value else "$hour:00"
@@ -117,11 +127,11 @@ object Amounts {
     private val hourWord = "(\\d{1,2}|${englishNumbers.joinToString("|")})"
 
     // "quarter to 8", "a quarter past seven", "half past 5".
-    private val clockPhrase = Regex("\\b(?:a\\s+)?(quarter\\s+past|quarter\\s+to|half\\s+past)\\s+$hourWord\\b(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
+    private val clockPhrase = Regex("\\b(?:a\\s+)?(quarter\\s+past|quarter\\s+to|half\\s+past)\\s+$hourWord\\b$notALength(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
 
     // "5 past 7", "ten to eight", "20 minutes past 6", "twenty-five to nine".
     private val minutesWord = "(\\d{1,2}|five|ten|twenty|twenty[- ]five)"
-    private val minutesPhrase = Regex("\\b$minutesWord\\s+(?:minutes?\\s+)?(past|to)\\s+$hourWord\\b(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
+    private val minutesPhrase = Regex("\\b$minutesWord\\s+(?:minutes?\\s+)?(past|to)\\s+$hourWord\\b$notALength(?:\\s*o'clock)?", RegexOption.IGNORE_CASE)
 
     private fun hourOf(text: String) = text.toIntOrNull() ?: (englishNumbers.indexOf(text.lowercase()) + 1)
 
@@ -151,11 +161,11 @@ object Amounts {
 
     // A clock time without am/pm: "7:30", "7 o'clock", or a bare hour after "at" or "for" ("at 7").
     private val bareTime = Regex(
-        "\\b(\\d{1,2}):(\\d{2})\\b(?!\\s*(?:am|pm|a\\.m|p\\.m))|\\b(\\d{1,2})\\s*o'clock\\b|" +
-            "\\b(?:at|for)\\s+(\\d{1,2})\\b(?!\\s*(?::|am|pm|a\\.m|p\\.m|o'clock|minutes?|mins?|hours?|seconds?|days?))",
+        "\\b(\\d{1,2}):(\\d{2})\\b(?!\\s*$DAY_HALF)|\\b(\\d{1,2})\\s*o'clock\\b|" +
+            "\\b(?:at|for)\\s+(\\d{1,2})\\b(?!\\s*(?::|$DAY_HALF|o'clock))$notALength",
         RegexOption.IGNORE_CASE,
     )
-    private val saysDayHalf = Regex("\\b(?:am|pm|a\\.m|p\\.m|morning|afternoon|evening|night|tonight)\\b", RegexOption.IGNORE_CASE)
+    private val saysDayHalf = Regex("\\b$DAY_HALF(?!\\w)|\\b(?:morning|afternoon|evening|night|tonight)\\b", RegexOption.IGNORE_CASE)
 
     /** [text] with am or pm on each time that has neither, when [heard] says the time of day. */
     fun withHalfOfDay(heard: String, text: String): String {
@@ -196,7 +206,7 @@ object Amounts {
 
     // How the model writes a time: "7", "7:15", "7 am", "quarter past 7", "half past", "8 o'clock".
     private val timeInText = Regex(
-        "\\b(?:(?:a )?quarter (?:past|to) |half past ?)?\\d{1,2}(?::\\d{2})?(?:\\s*(?:am|pm|a\\.m\\.|p\\.m\\.|o'clock))?\\b|\\bhalf past\\b",
+        "\\b(?:(?:a )?quarter (?:past|to) |half past ?)?\\d{1,2}(?::\\d{2})?(?:\\s*(?:$DAY_HALF|o'clock))?(?!\\w)$notALength|\\bhalf past\\b",
         RegexOption.IGNORE_CASE,
     )
 

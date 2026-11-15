@@ -149,4 +149,49 @@ class AmountsTest {
         assertThat(Amounts.normalize("call sam at 7", "Call Sam at 7")).isEqualTo("Call Sam at 7")
         assertThat(Amounts.normalize("the rat ran at 9", "Remind me at 9")).isEqualTo("Remind me at 9")
     }
+
+    @Test
+    fun `pinned before the one grammar - what Amounts already gets right`() {
+        assertThat(Amounts.englishClock("Wake me up at quarter to 8")).isEqualTo("Wake me up at 7:45")
+        assertThat(Amounts.englishClock("Set an alarm for half past 5")).isEqualTo("Set an alarm for 5:30")
+        assertThat(Amounts.englishClock("Remind me at 5 past 7")).isEqualTo("Remind me at 7:05")
+        assertThat(Amounts.englishClock("Remind me at ten to eight")).isEqualTo("Remind me at 7:50")
+        assertThat(Amounts.forRequest("saade paanch baje ka alarm")).isEqualTo("5:30 ka alarm")
+        assertThat(Amounts.forRequest("7 baje ka alarm")).isEqualTo("7:00 ka alarm")
+        assertThat(Amounts.forRequest("subah 7 baje ka alarm")).isEqualTo("subah 7:00 am ka alarm")
+        assertThat(Amounts.forRequest("dhai minute ka timer")).isEqualTo("2 minutes 30 seconds ka timer")
+        assertThat(Amounts.normalize("shaam saat baje ka alarm", "Set an alarm for 7 o'clock")).isEqualTo("Set an alarm for 7 pm")
+        assertThat(Amounts.normalize("shaam ko alarm", "Set an alarm at 7")).isEqualTo("Set an alarm at 7 pm")
+        assertThat(Amounts.normalize("sava ghanta ka timer", "Set a timer for 1 hour")).isEqualTo("Set a timer for 1 hour 15 minutes")
+        assertThat(Amounts.normalize("subah sava saat baje utha dena", "Wake me up at 7")).isEqualTo("Wake me up at 7:15 am")
+        assertThat(Amounts.normalize("shaam ko 10 minute ka timer", "Set a timer for 10 minutes")).isEqualTo("Set a timer for 10 minutes")
+    }
+
+    @Test
+    fun `the time replaced is the time, not the first number`() {
+        assertThat(Amounts.fix("parson sava saat baje yaad dilana", "Remind me in 2 days at 7")).isEqualTo("Remind me in 2 days at 7:15")
+    }
+
+    @Test
+    fun `a range of hours or minutes isn't a clock time`() {
+        assertThat(Amounts.forRequest("remind me in 2 to 3 hours")).isEqualTo("remind me in 2 to 3 hours")
+        assertThat(Amounts.englishClock("set a timer for 5 to 10 minutes")).isEqualTo("set a timer for 5 to 10 minutes")
+    }
+
+    @Test
+    fun `a typed time with minutes before baje keeps its minutes`() {
+        assertThat(Amounts.forRequest("subah 6:10 baje ka alarm")).isEqualTo("subah 6:10 am ka alarm")
+        assertThat(Amounts.forRequest("7:05 baje ka alarm")).isEqualTo("7:05 ka alarm")
+    }
+
+    @Test
+    fun `a length after for gets no am or pm`() {
+        assertThat(Amounts.withHalfOfDay("shaam ko 10 sec ka timer", "Set a timer for 10 sec")).isEqualTo("Set a timer for 10 sec")
+        assertThat(Amounts.withHalfOfDay("shaam ko 2 hrs ka timer", "Set a timer for 2 hrs")).isEqualTo("Set a timer for 2 hrs")
+    }
+
+    @Test
+    fun `the model's a_m_ isn't doubled`() {
+        assertThat(Amounts.normalize("subah sava saat baje utha dena", "Wake me up at 7 a.m.")).isEqualTo("Wake me up at 7:15 am")
+    }
 }
