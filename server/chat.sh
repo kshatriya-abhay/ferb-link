@@ -22,8 +22,12 @@ DIM=$'\e[2m' BOLD=$'\e[1m' CYAN=$'\e[36m' GREEN=$'\e[32m' RED=$'\e[31m' OFF=$'\e
 
 curl -fs --max-time 3 "$URL/health" >/dev/null || { echo "The server doesn't answer at $URL. Start it: mise run server:start" >&2; exit 1; }
 MODEL=$(curl -fs --max-time 3 -H "Authorization: Bearer $KEY" "$URL/v1/models" | jq -r '.data[0].id // "?"')
-# What the server takes in besides text (CAPABILITIES=full loads the projector).
-read -r VISION AUDIO < <(curl -fs --max-time 3 -H "Authorization: Bearer $KEY" "$URL/props?model=$MODEL" | jq -r '"\(.modalities.vision // false) \(.modalities.audio // false)"')
+# What the server takes in besides text (CAPABILITIES=full loads the projector). autoload=false, as
+# Ferb Link asks, so this doesn't load the model; while it isn't loaded, server.conf says.
+read -r VISION AUDIO < <(curl -fs --max-time 3 -H "Authorization: Bearer $KEY" "$URL/props?model=$MODEL&autoload=false" | jq -r '"\(.modalities.vision // false) \(.modalities.audio // false)"')
+if [ -z "${VISION:-}" ]; then
+  VISION=false AUDIO=false; [ "$CAPABILITIES" = full ] && VISION=true AUDIO=true
+fi
 
 # Requests, attachments and the conversation go through files: an image or a recording is too big
 # for one command-line argument (Linux allows 128 KB).

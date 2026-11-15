@@ -47,6 +47,17 @@ check "server running: it holds the lock, so a bench can't start" '[ -e "$T/serv
 kill "$server"; wait "$server" 2>/dev/null || true
 check "server stopped: a bench can start" 'bench_could_start'
 
+# server:chat asks about the model without loading it: `/props` with autoload=false, as the app
+# does, against a stand-in router whose model is unloaded. What the model takes in then comes from
+# CAPABILITIES.
+cp "$ROOT/server/chat.sh" "$F/server/"
+python3 "$ROOT/server/testdata/stub-server.py" "$T/requests" "$T/port" & stub=$!
+for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
+out=$("$F/server/chat.sh" "http://127.0.0.1:$(cat "$T/port")" </dev/null 2>&1 || true)
+kill "$stub"; wait "$stub" 2>/dev/null || true
+check "server:chat: /props never loads the model" 'grep -q "^/props" "$T/requests" && ! grep "^/props" "$T/requests" | grep -vq "autoload=false"'
+check "server:chat: an unloaded model's inputs come from CAPABILITIES" 'grep -q "taking text\." <<<"$out"'
+
 # server:mode's choice goes in server.local.conf (gitignored), which server.conf reads last, so
 # switching modes never edits the tracked file.
 mkdir -p "$T/repo/server"
