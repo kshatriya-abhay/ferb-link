@@ -4,8 +4,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * `rewrite` without Ferb's own prompt (an older Ferb): Gemma reads a typed request and writes it
- * as plain English commands, one per action, with the v2 prompt. The request first goes through
+ * The bench's v2 rewrite (Ferb's tool-check/rewrite.py, through `companion:harness`), out of the
+ * app since no Ferb sends `rewrite` without its own prompt: Gemma reads a typed request and writes
+ * it as plain English commands, one per action. The request first goes through
  * [Amounts.forRequest], so Hindi amounts reach the model as digits ("sava saat baje" as 7:15), as
  * for `complete`; the model never does the sums. The other prompt versions and switches the bench
  * compared live with the laptop harness (`RewriteVariants`, in the tests), documented in the

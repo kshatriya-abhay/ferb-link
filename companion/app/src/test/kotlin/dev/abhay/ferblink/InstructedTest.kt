@@ -42,9 +42,12 @@ class InstructedTest {
     }
 
     @Test
-    fun `the extras give the old prompt, lines or JSON, and a schema must be a JSON object with instructions`() {
+    fun `the extras give lines or JSON, instructions are needed, and a schema must be a JSON object`() {
         val prompt = LinkContract.EXTRA_INSTRUCTIONS to "Rewrite it"
-        assertThat(Instructed.Ask.from(emptyMap())).isEqualTo(Instructed.Ask(RewriteAsked.LEGACY, null, null))
+        val none = Instructed.Ask.from(emptyMap())
+        assertThat(none.mode).isNull()
+        assertThat(none.failure?.kind).isEqualTo(ErrorKind.BadRequest)
+        assertThat(none.failure?.short).isEqualTo("bad request: no instructions")
         assertThat(Instructed.Ask.from(mapOf(prompt, LinkContract.EXTRA_JSON_SCHEMA to " ")).mode)
             .isEqualTo(Instructed.Mode.Lines("Rewrite it", LinkContract.REWRITE_MAX_TOKENS))
         val json = Instructed.Ask.from(mapOf(prompt, LinkContract.EXTRA_JSON_SCHEMA to """{"type": "object"}"""))

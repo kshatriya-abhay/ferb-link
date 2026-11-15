@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /**
  * The rewrite prompts and switches the bench compared (`companion:harness`'s `rewrite`, run by
- * Ferb's tool-check/rewrite.py), kept out of the APK: Ferb Link itself sends only v2 ([Rewrite]).
+ * Ferb's tool-check/rewrite.py), kept out of the APK with v2 ([Rewrite]), which Ferb Link no longer sends.
  * Written "v1", "v1+shots", "v1+tools+think" and so on, so one bench table can compare them.
  */
 object RewriteVariants {
@@ -99,7 +99,24 @@ When the user does ask:
         return json.toString().replace("\"${Rewrite.FORMAT_SLOT}\"", Rewrite.FORMAT)
     }
 
-    /** [request] rewritten by [client] with [variant]'s prompt, as `rewrite` answers for v2. */
-    fun rewrite(client: ServerClient, request: String, now: String, variant: Variant, toolNames: List<String>, timeoutMs: Int?): Rewritten =
-        client.rewrite(request, now, timeoutMs) { model, sent -> body(model, sent, now, variant, toolNames) }
+    /**
+     * [request] rewritten by the server at [url] with [variant]'s prompt, as Ferb Link's `rewrite`
+     * answered before it took only Ferb's prompt: after [Amounts.forRequest], with [Rewrite.invented].
+     */
+    fun rewrite(url: String, key: String, model: String, request: String, now: String, variant: Variant, toolNames: List<String>, timeoutMs: Int?): Rewritten {
+        val sent = Amounts.forRequest(request)
+        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
+        val http = LlamaHttp(url, key, 3_000, LinkContract.DEFAULT_TIMEOUT_MS, null)
+        return when (val exchange = http.post("/v1/chat/completions", timeoutMs) { body(model, sent, now, variant, toolNames) }) {
+            is LlamaHttp.Exchange.Failed -> Rewritten.failed(exchange.failure, sent, ms = exchange.ms)
+            is LlamaHttp.Exchange.Answer -> {
+                val reply = JSONObject(exchange.text)
+                val raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+                runCatching { Rewrite.parse(raw) }.fold(
+                    { commands -> Rewritten(commands, sent, raw, reply.optString("model"), exchange.ms, null, Rewrite.invented(request, sent, commands)) },
+                    { e -> Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, ms = exchange.ms, raw = raw) },
+                )
+            }
+        }
+    }
 }

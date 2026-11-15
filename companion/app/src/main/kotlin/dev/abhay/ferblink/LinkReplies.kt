@@ -99,7 +99,7 @@ data class Rewritten(
     val model: String,
     val ms: Long,
     val failure: Failure?,
-    /** Facts in [commands] the request didn't hold ([Rewrite.invented]): ferb-manager's hard rule, counted apart on the bench. */
+    /** Facts in [commands] the request didn't hold (the bench's `Rewrite.invented`; always empty in what Ferb Link sends): ferb-manager's hard rule, counted apart on the bench. */
     val invented: List<String> = emptyList(),
     /** What the request asked for, which the reply echoes, failed or not. */
     val asked: RewriteAsked = RewriteAsked.LEGACY,

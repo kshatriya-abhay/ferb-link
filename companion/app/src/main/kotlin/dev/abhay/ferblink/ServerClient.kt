@@ -167,26 +167,6 @@ class ServerClient(
         read(http.post(CHAT, timeoutMs) { body(modelName(timeoutMs)) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
 
     /**
-     * [Rewrite]: [request] as plain English commands, after [Amounts.forRequest], with [now] for the
-     * prompt. [body] builds the request from the model's name and what's sent (the bench's variants pass their own).
-     */
-    fun rewrite(
-        request: String, now: String, timeoutMs: Int? = null,
-        body: (model: String, sent: String) -> String = { model, sent -> Rewrite.body(model, sent, now) },
-    ): Rewritten {
-        val sent = Amounts.forRequest(request)
-        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
-        var raw = ""
-        val exchange = http.post(CHAT, timeoutMs) { body(modelName(timeoutMs), sent) }
-        return read(exchange, { failure, ms -> Rewritten.failed(failure, sent, ms = ms, raw = raw) }, "the commands") { answer ->
-            val reply = JSONObject(answer.text)
-            raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
-            val commands = Rewrite.parse(raw)
-            Rewritten(commands, sent, raw, reply.optString("model"), answer.ms, null, Rewrite.invented(request, sent, commands))
-        }
-    }
-
-    /**
      * [request] as one command (or none) with the caller's own prompt: [Instructed]. In [Instructed.Mode.Json]
      * the answer is JSON in its schema, given back parsed as `output`.
      */

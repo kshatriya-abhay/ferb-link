@@ -133,15 +133,13 @@ class LinkCalls(
         }
         LinkContract.METHOD_REWRITE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
-            val at = (extras[LinkContract.EXTRA_NOW] as? String)?.takeIf { it.isNotBlank() } ?: nowText(now())
             val ask = Instructed.Ask.from(extras)
             val off = laptopOff()
             val rewritten = when {
                 off != null -> Rewritten.failed(off, request, ask.asked)
                 request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, ask.asked)
-                ask.failure != null -> Rewritten.failed(ask.failure, request, ask.asked)
-                ask.mode != null -> state.client(trace).rewriteInstructed(request, ask.mode, timeoutMs(extras))
-                else -> state.client(trace).rewrite(request, at, timeoutMs(extras))
+                ask.mode == null -> Rewritten.failed(checkNotNull(ask.failure), request, ask.asked)
+                else -> state.client(trace).rewriteInstructed(request, ask.mode, timeoutMs(extras))
             }.also {
                 if (it.failure == null && it.model.isNotEmpty()) {
                     state.lastModel = it.model
@@ -245,13 +243,6 @@ class LinkCalls(
     }
 
     companion object {
-        /** "2026-10-16T09:00 (Friday)", the phone's local time, as [Rewrite]'s prompt takes "now". */
-        fun nowText(millis: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
-            val time = java.time.Instant.ofEpochMilli(millis).atZone(zone).toLocalDateTime().withSecond(0).withNano(0)
-            val day = time.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
-            return "${time.toLocalDate()}T${"%02d:%02d".format(java.util.Locale.ROOT, time.hour, time.minute)} ($day)"
-        }
-
         /** Debug builds only: the recording as base64 text, for trying `transcribe` from `adb shell`. */
         const val DEBUG_AUDIO_BASE64 = "audio_base64"
 

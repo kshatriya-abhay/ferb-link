@@ -138,34 +138,20 @@ class ContractTest {
             chatReply = 200 to transcript(hindi = false, heard = "set a timer for ten minutes", text = "Set a timer for 10 minutes")
             chatDelayMs = 1_500
         },
-        Case("rewrite", "rewrite", "Typed Hinglish as one English command; sava saat worked out as 7:15 before the model.",
-            mapOf("request" to "kal subah sava saat baje ka alarm laga do", "now" to "2026-10-16T09:00 (Friday)", "timeout_ms" to 10_000)) {
-            chatReply = 200 to commands("Set an alarm for 7:15 am on Saturday 17 October")
+        Case("rewrite-no-instructions", "rewrite", "Without Ferb's own prompt: turned down before anything is sent (an older Ferb Link used a prompt of its own; no Ferb sends this).",
+            mapOf("request" to "alarm laga do")),
+        Case("rewrite-off", "rewrite", "Turned off in Ferb Link: no network.", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) { it.enabled = false },
+        Case("rewrite-not_set_up", "rewrite", "No server set up.", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) { it.url = "" },
+        Case("rewrite-unreachable", "rewrite", "Nothing answers at the laptop's address.", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) { it.url = CLOSED },
+        Case("rewrite-timeout", "rewrite", "No answer within timeout_ms (1000, the least it takes).",
+            mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40, "timeout_ms" to 1000)) {
+            chatReply = 200 to chatAnswer("Set an alarm"); chatDelayMs = 1_500
         },
-        Case("rewrite-two", "rewrite", "Two things asked: two commands, in order.", mapOf("request" to "torch on karo aur volume badhao", "now" to "2026-10-16T09:00 (Friday)")) {
-            chatReply = 200 to commands("Turn on the flashlight", "Turn the volume up")
-        },
-        Case("rewrite-none", "rewrite", "Nothing asked: no commands.", mapOf("request" to "aaj mausam kaisa hai", "now" to "2026-10-16T09:00 (Friday)")) {
-            chatReply = 200 to commands()
-        },
-        Case("rewrite-invented", "rewrite", "A time the request didn't hold: listed in invented, so Ferb doesn't run it.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
-            chatReply = 200 to commands("Set an alarm for 7 am")
-        },
-        Case("rewrite-off", "rewrite", "Turned off in Ferb Link: no network.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.enabled = false },
-        Case("rewrite-not_set_up", "rewrite", "No server set up.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.url = "" },
-        Case("rewrite-bad_request", "rewrite", "No request.", mapOf("request" to "", "now" to "2026-10-16T09:00 (Friday)")),
-        Case("rewrite-unreachable", "rewrite", "Nothing answers at the laptop's address.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) { it.url = CLOSED },
-        Case("rewrite-timeout", "rewrite", "No answer within timeout_ms (1000, the least it takes).", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)", "timeout_ms" to 1000)) {
-            chatReply = 200 to commands("Set an alarm"); chatDelayMs = 1_500
-        },
-        Case("rewrite-auth", "rewrite", "The laptop turns the API key down.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+        Case("rewrite-auth", "rewrite", "The laptop turns the API key down.", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
             chatReply = 401 to """{"error": {"code": 401, "message": "Invalid API Key"}}"""
         },
-        Case("rewrite-server", "rewrite", "The model is still loading (HTTP 503).", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
+        Case("rewrite-server", "rewrite", "The model is still loading (HTTP 503).", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS, "max_tokens" to 40)) {
             chatReply = 503 to """{"error": {"code": 503, "message": "Loading model"}}"""
-        },
-        Case("rewrite-bad_reply", "rewrite", "An answer that isn't the commands' JSON.", mapOf("request" to "alarm laga do", "now" to "2026-10-16T09:00 (Friday)")) {
-            chatReply = 200 to """{"model": "gemma-4-e2b", "choices": [{"message": {"content": "Sure, I'll set it."}}]}"""
         },
         Case("rewrite-gemini", "rewrite", "With Ferb's own prompt (instructions): one command, and raw for Ferb's own parsing. No pre-pass: the request goes as it is.",
             mapOf("request" to "open the nfc settings", "instructions" to INSTRUCTIONS, "max_tokens" to 40, "timeout_ms" to 10_000)) {
@@ -324,7 +310,7 @@ class ContractTest {
     fun `an instructed rewrite sends the instructions and request as they are, greedy and capped`() {
         assumeFalse("rewriting the fixtures", write)
         chatReply = 200 to chatAnswer("Command: \"Turn on the flashlight\"\nextra")
-        val result = run(Case("x", "rewrite", "", mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS, "max_tokens" to 999, "now" to "2026-10-16T09:00 (Friday)")), State(url = url))
+        val result = run(Case("x", "rewrite", "", mapOf("request" to "torch on karo", "instructions" to INSTRUCTIONS, "max_tokens" to 999)), State(url = url))
         val body = JSONObject(chatBody)
         val messages = body.getJSONArray("messages")
         assertThat(messages.length()).isEqualTo(2)
@@ -363,7 +349,6 @@ class ContractTest {
         val state = State(url = url).apply { jevReady() }
         for (extras in listOf(
             "complete" to mapOf("request" to long, "tools" to TOOLS),
-            "rewrite" to mapOf("request" to long),
             "rewrite" to mapOf("request" to long, "instructions" to INSTRUCTIONS),
             "decide" to mapOf("request" to long, "tools" to TOOLS),
         )) {
@@ -578,12 +563,6 @@ class ContractTest {
         /** What llama-server b11541 answered for a $ref it couldn't resolve (probed 2026-11-06): HTTP 500. */
         const val UNSUPPORTED_SCHEMA = """{"error": {"code": 500, "message": "JSON schema error at #/properties/a: cannot resolve ${'$'}ref #/definitions/missing, definitions not found", "type": "server_error"}}"""
 
-
-        /** What the laptop's model answers to a rewrite: {"commands": [...]} as the message's text. */
-        fun commands(vararg commands: String) = JSONObject()
-            .put("model", "gemma-4-e2b")
-            .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", JSONObject().put("commands", JSONArray(commands.toList())).toString()))))
-            .toString()
 
         /** What TypeSafe answers for one Choice (its API reference), with usage. */
         fun jevAnswer(choice: String, vararg probabilities: Pair<String, Double>) = 200 to JSONObject()

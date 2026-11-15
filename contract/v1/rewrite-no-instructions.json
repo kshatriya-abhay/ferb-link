@@ -1,0 +1,21 @@
+{
+  "method": "rewrite",
+  "note": "Without Ferb's own prompt: turned down before anything is sent (an older Ferb Link used a prompt of its own; no Ferb sends this).",
+  "extras": {
+    "request": "alarm laga do"
+  },
+  "result": {
+    "reply": {
+      "commands": [],
+      "error": "bad request: no instructions",
+      "error_detail": "A rewrite needs instructions (Ferb's own prompt)",
+      "error_kind": "bad_request",
+      "invented": [],
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false
+    },
+    "version": 1
+  }
+}

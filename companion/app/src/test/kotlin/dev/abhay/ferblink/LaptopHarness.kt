@@ -208,7 +208,7 @@ class LaptopHarness {
                 val names = (0 until (tools?.length() ?: 0)).map { i -> tools!!.optJSONObject(i)?.getString("name") ?: tools.getString(i) }
                 val name = line.optString("variant").ifBlank { "v1" }
                 val variant = RewriteVariants.Variant.of(name)
-                JSONObject(RewriteVariants.rewrite(client, line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
+                JSONObject(RewriteVariants.rewrite(server.first, server.second, server.third, line.getString("request"), line.getString("now"), variant, names, timeout).toJson())
                     .put("variant", name)
             }
             line.has("audio") -> {

@@ -28,8 +28,8 @@ object Instructed {
     }
 
     /**
-     * What a `rewrite` call's extras ask for: [asked], echoed in every reply; [mode], null for the
-     * old prompt (no instructions); or [failure], a bad request, before anything is sent.
+     * What a `rewrite` call's extras ask for: [asked], echoed in every reply; and either [mode], or
+     * [failure], a bad request, before anything is sent.
      */
     data class Ask(val asked: RewriteAsked, val mode: Mode?, val failure: Failure?) {
         companion object {
@@ -44,7 +44,7 @@ object Instructed {
                     schemaText != null && instructions == null -> bad("A JSON schema needs instructions", "bad request: schema without instructions")
                     schemaText != null && schemaText.length > LinkContract.MAX_JSON_SCHEMA_CHARS ->
                         bad("JSON schema over ${LinkContract.MAX_JSON_SCHEMA_CHARS} characters", "bad request: schema")
-                    instructions == null -> Ask(asked, null, null)
+                    instructions == null -> bad("A rewrite needs instructions (Ferb's own prompt)", "bad request: no instructions")
                     schemaText == null -> Ask(asked, Mode.Lines(instructions, maxTokens(extras)), null)
                     else -> runCatching { JSONObject(schemaText) }.getOrNull()?.let { Ask(asked, Mode.Json(instructions, maxTokens(extras), it), null) }
                         ?: bad("The JSON schema isn't a JSON object", "bad request: schema")

@@ -2,7 +2,8 @@
   "method": "rewrite",
   "note": "No answer within timeout_ms (1000, the least it takes).",
   "extras": {
-    "now": "2026-10-16T09:00 (Friday)",
+    "instructions": "Rewrite the user's request as one short English command for a phone assistant. If it asks for nothing, write NONE.",
+    "max_tokens": 40,
     "request": "alarm laga do",
     "timeout_ms": 1000
   },
@@ -12,11 +13,14 @@
       "error": "timed out",
       "error_detail": "Your computer took too long to answer",
       "error_kind": "timeout",
+      "instructions": true,
       "invented": [],
       "model": "",
       "ms": 1001,
+      "raw": "",
       "source": "laptop",
-      "success": false
+      "success": false,
+      "truncated": false
     },
     "version": 1
   }
