@@ -150,7 +150,7 @@ object LinkContract {
     /** With [EXTRA_JSON_SCHEMA]: braces and key names cost tokens, and Devanagari content several a word. */
     const val REWRITE_JSON_MAX_TOKENS = 160
     const val MAX_REWRITE_TOKENS = 512
-    /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; 30 s without it. */
+    /** An Int (a Long is taken too): the answer timeout in ms, clamped to [MIN_TIMEOUT_MS]..[MAX_TIMEOUT_MS]; [DEFAULT_TIMEOUT_MS] without it. */
     const val EXTRA_TIMEOUT_MS = "timeout_ms"
     /**
      * A ByteArray: the recording, at most [MAX_AUDIO_BYTES] and [MAX_AUDIO_SECONDS]. Opus in OGG,
@@ -198,6 +198,8 @@ object LinkContract {
     /** server.conf's default `SLEEP_IDLE`, used only until the server has been seen and said its own. */
     const val DEFAULT_SLEEP_IDLE_SECONDS = 300
 
+    /** Without [EXTRA_TIMEOUT_MS], for complete and rewrite (transcribe and decide have their own). */
+    const val DEFAULT_TIMEOUT_MS = 30_000
     const val MIN_TIMEOUT_MS = 1_000
     const val MAX_TIMEOUT_MS = 60_000
     const val CHECK_TIMEOUT_MS = 2_000

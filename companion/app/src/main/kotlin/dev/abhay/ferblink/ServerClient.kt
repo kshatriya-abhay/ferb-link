@@ -52,7 +52,7 @@ class ServerClient(
     /** The model to ask for (the router needs it named); looked up in `/v1/models` when empty. */
     private var model: String = "",
     connectTimeoutMs: Int = 3_000,
-    readTimeoutMs: Int = 30_000,
+    readTimeoutMs: Int = LinkContract.DEFAULT_TIMEOUT_MS,
     /** Gets one line of timings per HTTP request (Ferb Link logs them). */
     trace: ((String) -> Unit)? = null,
 ) {
