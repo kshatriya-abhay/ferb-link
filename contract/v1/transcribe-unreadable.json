@@ -1,0 +1,24 @@
+{
+  "method": "transcribe",
+  "note": "A recording Ferb Link can't read (here a WAV with no usable header) is turned down before anything is sent.",
+  "extras": {
+    "audio": {
+      "bytes": "unreadable"
+    },
+    "audio_mime": "audio/wav"
+  },
+  "result": {
+    "reply": {
+      "error": "bad request: unreadable recording",
+      "error_detail": "The WAV recording has no usable header",
+      "error_kind": "bad_request",
+      "heard": "",
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

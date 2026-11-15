@@ -86,7 +86,9 @@ class ContractTest {
         Case("check-unreachable", "check", "Nothing answers at the laptop's address.") { it.url = CLOSED },
         Case("check-auth", "check", "The laptop turns the API key down.") { it.key = "wrong" },
         Case("check-off", "check", "Turned off: no network, reachable false.") { it.enabled = false },
+        Case("check-not_set_up", "check", "No server set up: no network, reachable false.") { it.url = "" },
         Case("wake", "wake", "Returns at once; the model loads in the background if it's asleep."),
+        Case("wake-off", "wake", "Turned off: returns at once and sends nothing.") { it.enabled = false },
         Case("complete", "complete", "A typed Hinglish alarm: Ferb Link sends \"shaam 7:00 pm ka alarm lagao\" and the model calls set_alarm.",
             mapOf("request" to "shaam 7 baje ka alarm lagao", "tools" to TOOLS, "facts" to "date: 2026-10-14 (Wednesday)", "timeout_ms" to 10_000)) {
             chatReply = 200 to CALL
@@ -127,6 +129,14 @@ class ContractTest {
         Case("transcribe-bad_request", "transcribe", "No recording.", mapOf("audio_mime" to "audio/ogg")),
         Case("transcribe-server", "transcribe", "The server is in text mode and turns audio down.", mapOf("audio" to SPEECH, "audio_mime" to "audio/ogg")) {
             chatReply = 500 to """{"error": {"code": 500, "message": "audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj"}}"""
+        },
+        Case("transcribe-off", "transcribe", "Turned off in Ferb Link: no network.", mapOf("audio" to SPEECH, "audio_mime" to "audio/ogg")) { it.enabled = false },
+        Case("transcribe-too-big", "transcribe", "A recording over 512 KB is turned down before anything is sent.", mapOf("audio" to TOO_BIG, "audio_mime" to "audio/ogg")),
+        Case("transcribe-unreadable", "transcribe", "A recording Ferb Link can't read (here a WAV with no usable header) is turned down before anything is sent.",
+            mapOf("audio" to UNREADABLE, "audio_mime" to "audio/wav")),
+        Case("transcribe-timeout", "transcribe", "No answer within timeout_ms (1000, the least it takes).", mapOf("audio" to SPEECH, "audio_mime" to "audio/ogg", "timeout_ms" to 1000)) {
+            chatReply = 200 to transcript(hindi = false, heard = "set a timer for ten minutes", text = "Set a timer for 10 minutes")
+            chatDelayMs = 1_500
         },
         Case("rewrite", "rewrite", "Typed Hinglish as one English command; sava saat worked out as 7:15 before the model.",
             mapOf("request" to "kal subah sava saat baje ka alarm laga do", "now" to "2026-10-16T09:00 (Friday)", "timeout_ms" to 10_000)) {
@@ -486,7 +496,7 @@ class ContractTest {
     /** What the provider would put in its Bundle, as JSON: `reply` parsed, a throw as {"throws"}. */
     private fun run(case: Case, state: State): JSONObject {
         val extras = case.extras.mapValues { (_, value) -> if (value is Map<*, *>) recording(value["bytes"] as String) else value }
-        val calls = LinkCalls(state, Executor { it.run() }, debug = false, decode = { audio, _ -> audio }, now = { NOW })
+        val calls = LinkCalls(state, Executor { it.run() }, debug = false, decode = AudioDecoder::toWav, now = { NOW })
         val result = try {
             calls.answer(case.method, extras, "dev.abhay.assistant")
         } catch (e: IllegalArgumentException) {
@@ -528,6 +538,8 @@ class ContractTest {
         const val NOW = 1_800_000_000_000L
         val SPEECH = mapOf("bytes" to "speech")
         val SILENCE = mapOf("bytes" to "silence")
+        val TOO_BIG = mapOf("bytes" to "too-big")
+        val UNREADABLE = mapOf("bytes" to "unreadable")
         val BY_TYPE = setOf("ms", "confidence", "first", "mean")
 
         const val TOOLS = """[{"name": "set_alarm", "description": "Set an alarm", "parameters": {"type": "object", "properties": {"time": {"type": "string", "description": "The time, such as 7:30 am"}}, "required": ["time"]}}]"""
@@ -574,6 +586,8 @@ class ContractTest {
             .toString()
 
         fun recording(kind: String): ByteArray {
+            if (kind == "too-big") return ByteArray(LinkContract.MAX_AUDIO_BYTES + 1)
+            if (kind == "unreadable") return "not a recording".toByteArray()
             val random = Random(7)
             val samples = ShortArray(32_000) { i ->
                 if (kind == "silence") 0 else (random.nextDouble(-1.0, 1.0) * if (i % 4_000 < 1_920) 12_000 else 600).toInt().toShort()

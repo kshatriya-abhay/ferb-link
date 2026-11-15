@@ -1,0 +1,8 @@
+{
+  "method": "wake",
+  "note": "Turned off: returns at once and sends nothing.",
+  "extras": {},
+  "result": {
+    "version": 1
+  }
+}

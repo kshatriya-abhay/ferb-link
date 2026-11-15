@@ -1,0 +1,24 @@
+{
+  "method": "transcribe",
+  "note": "A recording over 512 KB is turned down before anything is sent.",
+  "extras": {
+    "audio": {
+      "bytes": "too-big"
+    },
+    "audio_mime": "audio/ogg"
+  },
+  "result": {
+    "reply": {
+      "error": "bad request: recording too big",
+      "error_detail": "The recording is over 512 KB",
+      "error_kind": "bad_request",
+      "heard": "",
+      "model": "",
+      "ms": 0,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}

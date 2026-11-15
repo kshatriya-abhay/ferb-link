@@ -1,0 +1,25 @@
+{
+  "method": "transcribe",
+  "note": "No answer within timeout_ms (1000, the least it takes).",
+  "extras": {
+    "audio": {
+      "bytes": "speech"
+    },
+    "audio_mime": "audio/ogg",
+    "timeout_ms": 1000
+  },
+  "result": {
+    "reply": {
+      "error": "timed out",
+      "error_detail": "Your computer took too long to answer",
+      "error_kind": "timeout",
+      "heard": "",
+      "model": "",
+      "ms": 1002,
+      "source": "laptop",
+      "success": false,
+      "text": ""
+    },
+    "version": 1
+  }
+}
