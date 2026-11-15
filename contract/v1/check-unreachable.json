@@ -7,7 +7,7 @@
     "error": "can't reach your computer",
     "error_detail": "Your computer doesn't answer. Is the server running?",
     "error_kind": "unreachable",
-    "model": "",
+    "model": "gemma-4-e2b",
     "model_state": "loaded",
     "reachable": false,
     "version": 1

@@ -7,7 +7,7 @@
     "error": "key refused",
     "error_detail": "Your computer turned down the API key",
     "error_kind": "auth",
-    "model": "",
+    "model": "gemma-4-e2b",
     "model_state": "loaded",
     "reachable": false,
     "version": 1

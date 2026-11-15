@@ -313,6 +313,14 @@ class ContractTest {
     }
 
     @Test
+    fun `check gives the last model seen when the laptop doesn't answer, as it does audio and model_state`() {
+        val result = run(Case("x", "check", ""), State(url = CLOSED))
+        assertThat(result.getBoolean("reachable")).isFalse()
+        assertThat(result.getString("model")).isEqualTo("gemma-4-e2b")
+        assertThat(result.getString("model_state")).isEqualTo(LinkContract.MODEL_LOADED)
+    }
+
+    @Test
     fun `an instructed rewrite sends the instructions and request as they are, greedy and capped`() {
         assumeFalse("rewriting the fixtures", write)
         chatReply = 200 to chatAnswer("Command: \"Turn on the flashlight\"\nextra")

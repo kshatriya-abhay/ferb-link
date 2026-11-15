@@ -54,7 +54,10 @@ object LinkContract {
     /**
      * Whether the laptop answers now: its `/health`, models and `/props`, [CHECK_TIMEOUT_MS] each.
      * Doesn't wake the model. Returns [RESULT_VERSION], [RESULT_REACHABLE], [RESULT_MODEL],
-     * [RESULT_AUDIO], [RESULT_MODEL_STATE] (live when reachable, else the last known), and [RESULT_ERROR], [RESULT_ERROR_DETAIL] and [RESULT_ERROR_KIND] when it isn't reachable.
+     * [RESULT_AUDIO] and [RESULT_MODEL_STATE], and [RESULT_ERROR], [RESULT_ERROR_DETAIL] and
+     * [RESULT_ERROR_KIND] when it isn't reachable. The model, audio and model state are what the
+     * laptop says now when it's reachable, and otherwise the last known, as in [METHOD_STATUS]
+     * (the model is empty only if none has been seen yet).
      */
     const val METHOD_CHECK = "check"
 

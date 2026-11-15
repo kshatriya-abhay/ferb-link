@@ -7,7 +7,7 @@
     "error": "turned off",
     "error_detail": "Ferb Link is off",
     "error_kind": "off",
-    "model": "",
+    "model": "gemma-4-e2b",
     "model_state": "loaded",
     "reachable": false,
     "version": 1

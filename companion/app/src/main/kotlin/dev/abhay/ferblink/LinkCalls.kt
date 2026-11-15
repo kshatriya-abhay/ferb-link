@@ -79,7 +79,7 @@ class LinkCalls(
             buildMap {
                 put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
                 put(LinkContract.RESULT_REACHABLE, health.ok)
-                put(LinkContract.RESULT_MODEL, health.model ?: "")
+                put(LinkContract.RESULT_MODEL, health.model ?: state.lastModel)
                 put(LinkContract.RESULT_AUDIO, state.audio)
                 state.modelStateNow(now())?.let { put(LinkContract.RESULT_MODEL_STATE, it) }
                 health.failure?.let {

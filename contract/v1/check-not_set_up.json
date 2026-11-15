@@ -7,7 +7,7 @@
     "error": "not set up",
     "error_detail": "Ferb Link has no server set up",
     "error_kind": "not_set_up",
-    "model": "",
+    "model": "gemma-4-e2b",
     "model_state": "loaded",
     "reachable": false,
     "version": 1
