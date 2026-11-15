@@ -12,26 +12,61 @@ import org.json.JSONObject
 object Instructed {
     const val NONE = "NONE"
 
-    fun body(model: String, instructions: String, request: String, maxTokens: Int, schema: JSONObject? = null): String = JSONObject()
+    /** How Ferb's prompt is answered: one command on the first line, or JSON in a schema. */
+    sealed interface Mode {
+        val instructions: String
+        val maxTokens: Int
+        val asked: RewriteAsked
+
+        data class Lines(override val instructions: String, override val maxTokens: Int) : Mode {
+            override val asked get() = RewriteAsked(instructions = true, schema = false)
+        }
+
+        data class Json(override val instructions: String, override val maxTokens: Int, val schema: JSONObject) : Mode {
+            override val asked get() = RewriteAsked(instructions = true, schema = true)
+        }
+    }
+
+    /**
+     * What a `rewrite` call's extras ask for: [asked], echoed in every reply; [mode], null for the
+     * old prompt (no instructions); or [failure], a bad request, before anything is sent.
+     */
+    data class Ask(val asked: RewriteAsked, val mode: Mode?, val failure: Failure?) {
+        companion object {
+            fun from(extras: Map<String, Any?>): Ask {
+                val instructions = (extras[LinkContract.EXTRA_INSTRUCTIONS] as? String)?.takeIf { it.isNotBlank() }
+                val schemaText = (extras[LinkContract.EXTRA_JSON_SCHEMA] as? String)?.takeIf { it.isNotBlank() }
+                val asked = RewriteAsked(instructions = instructions != null, schema = schemaText != null)
+                fun bad(message: String, short: String) = Ask(asked, null, Failure(ErrorKind.BadRequest, message, short))
+                return when {
+                    instructions != null && instructions.length > LinkContract.MAX_INSTRUCTIONS_CHARS ->
+                        bad("Instructions over ${LinkContract.MAX_INSTRUCTIONS_CHARS} characters", "bad request: instructions too long")
+                    schemaText != null && instructions == null -> bad("A JSON schema needs instructions", "bad request: schema without instructions")
+                    schemaText != null && schemaText.length > LinkContract.MAX_JSON_SCHEMA_CHARS ->
+                        bad("JSON schema over ${LinkContract.MAX_JSON_SCHEMA_CHARS} characters", "bad request: schema")
+                    instructions == null -> Ask(asked, null, null)
+                    schemaText == null -> Ask(asked, Mode.Lines(instructions, maxTokens(extras)), null)
+                    else -> runCatching { JSONObject(schemaText) }.getOrNull()?.let { Ask(asked, Mode.Json(instructions, maxTokens(extras), it), null) }
+                        ?: bad("The JSON schema isn't a JSON object", "bad request: schema")
+                }
+            }
+        }
+    }
+
+    fun body(model: String, request: String, mode: Mode): String = JSONObject()
         .put("model", model)
         .put("messages", JSONArray()
-            .put(JSONObject().put("role", "system").put("content", instructions))
+            .put(JSONObject().put("role", "system").put("content", mode.instructions))
             .put(JSONObject().put("role", "user").put("content", request)))
         .put("temperature", 0)
         .put("top_k", 1)
-        .put("max_tokens", maxTokens)
+        .put("max_tokens", mode.maxTokens)
         .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         .apply {
-            if (schema != null) put("response_format", JSONObject().put("type", "json_schema")
-                .put("json_schema", JSONObject().put("name", "answer").put("schema", schema)))
+            if (mode is Mode.Json) put("response_format", JSONObject().put("type", "json_schema")
+                .put("json_schema", JSONObject().put("name", "answer").put("schema", mode.schema)))
         }
         .toString()
-
-    /** [LinkContract.EXTRA_JSON_SCHEMA] as a JSON object, or null when absent or blank; throws when it isn't one. */
-    fun schema(extras: Map<String, Any?>): JSONObject? {
-        val text = (extras[LinkContract.EXTRA_JSON_SCHEMA] as? String)?.takeIf { it.isNotBlank() } ?: return null
-        return runCatching { JSONObject(text) }.getOrNull() ?: throw IllegalArgumentException("not a JSON object")
-    }
 
     /** A schema-shaped answer: the whole of [raw] as one JSON object. */
     fun parseJson(raw: String): JSONObject {

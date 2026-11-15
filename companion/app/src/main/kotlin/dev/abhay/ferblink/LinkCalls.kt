@@ -119,24 +119,13 @@ class LinkCalls(
         LinkContract.METHOD_REWRITE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
             val at = (extras[LinkContract.EXTRA_NOW] as? String)?.takeIf { it.isNotBlank() } ?: nowText(now())
-            val instructions = (extras[LinkContract.EXTRA_INSTRUCTIONS] as? String)?.takeIf { it.isNotBlank() }
-            val instructed = instructions != null
-            val schemaText = (extras[LinkContract.EXTRA_JSON_SCHEMA] as? String)?.takeIf { it.isNotBlank() }
-            val json = schemaText != null
-            val schema = runCatching { Instructed.schema(extras) }
+            val ask = Instructed.Ask.from(extras)
             val rewritten = when {
-                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request, instructed = instructed, schema = json)
-                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request, instructed = instructed, schema = json)
-                request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, instructed = instructed, schema = json)
-                instructions != null && instructions.length > LinkContract.MAX_INSTRUCTIONS_CHARS -> Rewritten.failed(
-                    Failure(ErrorKind.BadRequest, "Instructions over ${LinkContract.MAX_INSTRUCTIONS_CHARS} characters", "bad request: instructions too long"), request, instructed = true, schema = json)
-                schemaText != null && instructions == null -> Rewritten.failed(
-                    Failure(ErrorKind.BadRequest, "A JSON schema needs instructions", "bad request: schema without instructions"), request, schema = true)
-                schemaText != null && schemaText.length > LinkContract.MAX_JSON_SCHEMA_CHARS -> Rewritten.failed(
-                    Failure(ErrorKind.BadRequest, "JSON schema over ${LinkContract.MAX_JSON_SCHEMA_CHARS} characters", "bad request: schema"), request, instructed = true, schema = true)
-                schema.isFailure -> Rewritten.failed(
-                    Failure(ErrorKind.BadRequest, "The JSON schema isn't a JSON object", "bad request: schema"), request, instructed = true, schema = true)
-                instructions != null -> state.client(trace).rewriteInstructed(request, instructions, Instructed.maxTokens(extras), timeoutMs(extras), schema.getOrNull())
+                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request, ask.asked)
+                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request, ask.asked)
+                request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, ask.asked)
+                ask.failure != null -> Rewritten.failed(ask.failure, request, ask.asked)
+                ask.mode != null -> state.client(trace).rewriteInstructed(request, ask.mode, timeoutMs(extras))
                 else -> state.client(trace).rewrite(request, at, timeoutMs(extras))
             }.also {
                 if (it.failure == null && it.model.isNotEmpty()) {

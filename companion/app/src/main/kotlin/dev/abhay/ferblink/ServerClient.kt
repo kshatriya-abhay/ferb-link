@@ -139,13 +139,11 @@ data class Rewritten(
     val failure: Failure?,
     /** Facts in [commands] the request didn't hold ([Rewrite.invented]): ferb-manager's hard rule, counted apart on the bench. */
     val invented: List<String> = emptyList(),
-    /** Written with the caller's own prompt ([ServerClient.rewriteInstructed]): the reply keeps `raw` and says so. */
-    val instructed: Boolean = false,
+    /** What the request asked for, which the reply echoes, failed or not. */
+    val asked: RewriteAsked = RewriteAsked.LEGACY,
     /** Instructed only: the model stopped at the token cap (finish_reason "length"). */
     val truncated: Boolean = false,
-    /** Asked for JSON in a schema ([LinkContract.EXTRA_JSON_SCHEMA]): the reply says so, with [output]. */
-    val schema: Boolean = false,
-    /** With [schema]: the answer, parsed. */
+    /** A JSON answer ([RewriteAsked.schema]), parsed. */
     val output: JSONObject? = null,
 ) {
     fun toJson(): String = JSONObject()
@@ -172,8 +170,8 @@ data class Rewritten(
      */
     fun toReplyJson(): String = JSONObject(toJson()).apply {
         remove("sent")
-        if (instructed) put("instructions", true).put("truncated", truncated) else remove("raw")
-        if (schema) {
+        if (asked.instructions) put("instructions", true).put("truncated", truncated) else remove("raw")
+        if (asked.schema) {
             put("schema", true)
             output?.let { put("output", it) }
         }
@@ -181,8 +179,19 @@ data class Rewritten(
     }.toString()
 
     companion object {
-        fun failed(failure: Failure, sent: String, ms: Long = 0, raw: String = "", instructed: Boolean = false, schema: Boolean = false, truncated: Boolean = false) =
-            Rewritten(emptyList(), sent, raw, "", ms, failure, instructed = instructed, truncated = truncated, schema = schema)
+        fun failed(failure: Failure, sent: String, asked: RewriteAsked = RewriteAsked.LEGACY, ms: Long = 0, raw: String = "", truncated: Boolean = false) =
+            Rewritten(emptyList(), sent, raw, "", ms, failure, asked = asked, truncated = truncated)
+    }
+}
+
+/**
+ * Which extras a `rewrite` request gave, as its reply echoes them (`instructions`, `schema`): Ferb's
+ * own prompt or not, and a JSON schema or not. A schema without instructions is a bad request, but
+ * its reply still says a schema was asked for.
+ */
+data class RewriteAsked(val instructions: Boolean, val schema: Boolean) {
+    companion object {
+        val LEGACY = RewriteAsked(instructions = false, schema = false)
     }
 }
 
@@ -375,55 +384,58 @@ class ServerClient(
         return try {
             val (code, text) = send("POST", "/v1/chat/completions", body(modelName(timeoutMs), sent), auth = true, timeoutMs)
             val ms = msSince(started)
-            if (code != 200) return Rewritten.failed(problem(code, text), sent, ms)
+            if (code != 200) return Rewritten.failed(problem(code, text), sent, ms = ms)
             val reply = JSONObject(text)
             raw = reply.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
             val commands = Rewrite.parse(raw)
             Rewritten(commands, sent, raw, reply.optString("model"), ms, null, Rewrite.invented(request, sent, commands))
         } catch (e: IOException) {
-            Rewritten.failed(failureOf(e), sent, msSince(started))
+            Rewritten.failed(failureOf(e), sent, ms = msSince(started))
         } catch (e: Exception) {
-            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, msSince(started), raw)
+            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the commands: ${e.message}"), sent, ms = msSince(started), raw = raw)
         }
     }
 
     /**
-     * [request] as one command (or none) with the caller's own prompt: [Instructed]. With [schema],
-     * the answer is JSON in it, given back parsed as `output`.
+     * [request] as one command (or none) with the caller's own prompt: [Instructed]. In [Instructed.Mode.Json]
+     * the answer is JSON in its schema, given back parsed as `output`.
      */
-    fun rewriteInstructed(request: String, instructions: String, maxTokens: Int, timeoutMs: Int? = null, schema: JSONObject? = null): Rewritten {
+    fun rewriteInstructed(request: String, mode: Instructed.Mode, timeoutMs: Int? = null): Rewritten {
         val started = System.nanoTime()
-        val json = schema != null
-        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), request, instructed = true, schema = json)
+        val asked = mode.asked
+        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), request, asked)
         var raw = ""
         var truncated = false
         return try {
-            val (code, text) = send("POST", "/v1/chat/completions", Instructed.body(modelName(timeoutMs), instructions, request, maxTokens, schema), auth = true, timeoutMs)
+            val (code, text) = send("POST", "/v1/chat/completions", Instructed.body(modelName(timeoutMs), request, mode), auth = true, timeoutMs)
             val ms = msSince(started)
-            if (code != 200) return Rewritten.failed(if (json) schemaProblem(code, text) else problem(code, text), request, ms, instructed = true, schema = json)
+            if (code != 200) return Rewritten.failed(if (mode is Instructed.Mode.Json) schemaProblem(code, text) else problem(code, text), request, asked, ms)
             val reply = JSONObject(text)
             val choice = reply.getJSONArray("choices").getJSONObject(0)
             raw = choice.getJSONObject("message").optString("content")
             truncated = choice.optString("finish_reason") == "length"
-            if (json) {
-                // Cut JSON is half an answer, whatever it holds.
-                if (truncated) return Rewritten.failed(
-                    Failure(ErrorKind.BadReply, "The answer was cut off at $maxTokens tokens", "answer cut off"), request, ms, raw, instructed = true, schema = true, truncated = true)
-                val output = runCatching { Instructed.parseJson(raw) }.getOrNull() ?: return Rewritten.failed(
-                    Failure(ErrorKind.BadReply, "The answer isn't a JSON object", "not JSON"), request, ms, raw, instructed = true, schema = true)
-                return Rewritten(emptyList(), request, raw, reply.optString("model"), ms, null, emptyList(), instructed = true, schema = true, output = output)
+            when (mode) {
+                is Instructed.Mode.Json -> {
+                    // Cut JSON is half an answer, whatever it holds.
+                    if (truncated) return Rewritten.failed(
+                        Failure(ErrorKind.BadReply, "The answer was cut off at ${mode.maxTokens} tokens", "answer cut off"), request, asked, ms, raw, truncated = true)
+                    val output = runCatching { Instructed.parseJson(raw) }.getOrNull() ?: return Rewritten.failed(
+                        Failure(ErrorKind.BadReply, "The answer isn't a JSON object", "not JSON"), request, asked, ms, raw)
+                    Rewritten(emptyList(), request, raw, reply.optString("model"), ms, null, emptyList(), asked, output = output)
+                }
+                is Instructed.Mode.Lines -> {
+                    // A command cut off at the cap ("send bhaiya a message: main aaj") must not run.
+                    if (Instructed.cutOff(raw, choice.optString("finish_reason").ifEmpty { null })) return Rewritten.failed(
+                        Failure(ErrorKind.BadReply, "The command was cut off at ${mode.maxTokens} tokens", "answer cut off"), request, asked, ms, raw, truncated = true)
+                    // No `invented`: Ferb's prompt writes Hindi amounts as numbers ("sava saat" → 7:15),
+                    // which the check, without Amounts, would flag.
+                    Rewritten(listOfNotNull(Instructed.parse(raw)), request, raw, reply.optString("model"), ms, null, emptyList(), asked, truncated)
+                }
             }
-            // A command cut off at the cap ("send bhaiya a message: main aaj") must not run.
-            if (Instructed.cutOff(raw, choice.optString("finish_reason").ifEmpty { null })) return Rewritten.failed(
-                Failure(ErrorKind.BadReply, "The command was cut off at $maxTokens tokens", "answer cut off"), request, ms, raw, instructed = true, truncated = true)
-            val commands = listOfNotNull(Instructed.parse(raw))
-            // No `invented`: Ferb's prompt writes Hindi amounts as numbers ("sava saat" → 7:15),
-            // which the check, without Amounts, would flag.
-            Rewritten(commands, request, raw, reply.optString("model"), ms, null, emptyList(), instructed = true, truncated = truncated)
         } catch (e: IOException) {
-            Rewritten.failed(failureOf(e), request, msSince(started), instructed = true, schema = json)
+            Rewritten.failed(failureOf(e), request, asked, msSince(started))
         } catch (e: Exception) {
-            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the command: ${e.message}"), request, msSince(started), raw, instructed = true, schema = json, truncated = truncated)
+            Rewritten.failed(Failure(ErrorKind.BadReply, "Couldn't read the command: ${e.message}"), request, asked, msSince(started), raw, truncated)
         }
     }
 

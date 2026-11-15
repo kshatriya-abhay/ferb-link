@@ -197,8 +197,10 @@ class LaptopHarness {
             line.optString("method") == "rewrite" && (line.has("instructions") || line.has("instructions_file")) -> {
                 val instructions = line.optString("instructions").ifBlank { File(line.getString("instructions_file")).readText() }
                 val schema = line.optString("json_schema").ifBlank { line.optString("json_schema_file").takeIf { it.isNotBlank() }?.let { File(it).readText() } ?: "" }
-                val extras = mapOf(LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens"), LinkContract.EXTRA_JSON_SCHEMA to schema)
-                JSONObject(client.rewriteInstructed(line.getString("request"), instructions, Instructed.maxTokens(extras), timeout, Instructed.schema(extras)).toReplyJson())
+                val ask = Instructed.Ask.from(mapOf(LinkContract.EXTRA_INSTRUCTIONS to instructions, LinkContract.EXTRA_MAX_TOKENS to line.opt("max_tokens"), LinkContract.EXTRA_JSON_SCHEMA to schema))
+                val rewritten = ask.failure?.let { Rewritten.failed(it, line.getString("request"), ask.asked) }
+                    ?: client.rewriteInstructed(line.getString("request"), ask.mode!!, timeout)
+                JSONObject(rewritten.toReplyJson())
             }
             line.optString("method") == "rewrite" -> {
                 // "tools": names, or schemas as for complete; only their names are used (+tools).

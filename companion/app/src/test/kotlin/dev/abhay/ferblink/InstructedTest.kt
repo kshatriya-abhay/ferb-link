@@ -24,11 +24,11 @@ class InstructedTest {
     @Test
     fun `a schema goes as response_format, and only when given`() {
         val schema = JSONObject("""{"type": "object", "properties": {"command": {"type": "string"}}}""")
-        val body = JSONObject(Instructed.body("m", "x", "torch on", 40, schema))
+        val body = JSONObject(Instructed.body("m", "torch on", Instructed.Mode.Json("x", 40, schema)))
         val format = body.getJSONObject("response_format")
         assertThat(format.getString("type")).isEqualTo("json_schema")
         assertThat(format.getJSONObject("json_schema").getJSONObject("schema").toString()).isEqualTo(schema.toString())
-        assertThat(JSONObject(Instructed.body("m", "x", "torch on", 40)).has("response_format")).isFalse()
+        assertThat(JSONObject(Instructed.body("m", "torch on", Instructed.Mode.Lines("x", 40))).has("response_format")).isFalse()
     }
 
     @Test
@@ -42,13 +42,23 @@ class InstructedTest {
     }
 
     @Test
-    fun `a schema must be a JSON object, and blank is none`() {
-        assertThat(Instructed.schema(emptyMap())).isNull()
-        assertThat(Instructed.schema(mapOf(LinkContract.EXTRA_JSON_SCHEMA to " "))).isNull()
-        assertThat(Instructed.schema(mapOf(LinkContract.EXTRA_JSON_SCHEMA to """{"type": "object"}"""))!!.getString("type")).isEqualTo("object")
+    fun `the extras give the old prompt, lines or JSON, and a schema must be a JSON object with instructions`() {
+        val prompt = LinkContract.EXTRA_INSTRUCTIONS to "Rewrite it"
+        assertThat(Instructed.Ask.from(emptyMap())).isEqualTo(Instructed.Ask(RewriteAsked.LEGACY, null, null))
+        assertThat(Instructed.Ask.from(mapOf(prompt, LinkContract.EXTRA_JSON_SCHEMA to " ")).mode)
+            .isEqualTo(Instructed.Mode.Lines("Rewrite it", LinkContract.REWRITE_MAX_TOKENS))
+        val json = Instructed.Ask.from(mapOf(prompt, LinkContract.EXTRA_JSON_SCHEMA to """{"type": "object"}"""))
+        assertThat((json.mode as Instructed.Mode.Json).schema.getString("type")).isEqualTo("object")
+        assertThat(json.asked).isEqualTo(RewriteAsked(instructions = true, schema = true))
         for (bad in listOf("[1]", "{\"type\": ", "object")) {
-            assertThat(runCatching { Instructed.schema(mapOf(LinkContract.EXTRA_JSON_SCHEMA to bad)) }.isFailure).isTrue()
+            val ask = Instructed.Ask.from(mapOf(prompt, LinkContract.EXTRA_JSON_SCHEMA to bad))
+            assertThat(ask.mode).isNull()
+            assertThat(ask.failure?.kind).isEqualTo(ErrorKind.BadRequest)
         }
+        // Without instructions a schema is a bad request, and the reply still says a schema was asked for.
+        val alone = Instructed.Ask.from(mapOf(LinkContract.EXTRA_JSON_SCHEMA to """{"type": "object"}"""))
+        assertThat(alone.failure?.short).isEqualTo("bad request: schema without instructions")
+        assertThat(alone.asked).isEqualTo(RewriteAsked(instructions = false, schema = true))
     }
 
     @Test
