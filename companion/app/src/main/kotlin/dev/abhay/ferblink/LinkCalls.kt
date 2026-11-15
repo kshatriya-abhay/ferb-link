@@ -53,37 +53,14 @@ class LinkCalls(
             if (!state.jevOn && state.jevOffReason.isNotEmpty()) put(LinkContract.RESULT_JEV_OFF_REASON, state.jevOffReason)
         }
         LinkContract.METHOD_COMPLETE -> {
-            val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
-            val tools = extras[LinkContract.EXTRA_TOOLS] as? String ?: "[]"
-            val facts = extras[LinkContract.EXTRA_FACTS] as? String
-            val reply = when {
-                !state.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
-                !state.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
-                request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
-                request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
-                // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
-                else -> state.client(trace).complete(Amounts.forRequest(request), tools, facts, timeoutMs(extras)).also {
-                    if (it.failure == null) {
-                        state.lastModel = it.model
-                        state.saw(ModelState.Loaded, now())
-                        refreshAudio()
-                    }
-                    RecentRequests.add(caller, request, it)
-                }
-            }
+            val reply = complete(
+                (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty(), extras[LinkContract.EXTRA_TOOLS] as? String ?: "[]",
+                extras[LinkContract.EXTRA_FACTS] as? String, timeoutMs(extras), caller,
+            )
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to reply.toJson())
         }
         LinkContract.METHOD_CHECK -> {
-            val failure = when {
-                !state.enabled -> Failure(ErrorKind.Off, "Ferb Link is off")
-                !state.configured -> Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up")
-                else -> null
-            }
-            val health = failure?.let { Health(false, null, 0, it) } ?: state.client(trace).health(LinkContract.CHECK_TIMEOUT_MS)
-            health.model?.let { state.lastModel = it }
-            health.audio?.let { state.audio = it }
-            health.state?.let { state.saw(it, now()) }
-            health.sleepIdleSeconds?.let { state.sleepIdleSeconds = it }
+            val health = check(LinkContract.CHECK_TIMEOUT_MS)
             buildMap {
                 put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
                 put(LinkContract.RESULT_REACHABLE, health.ok)
@@ -179,6 +156,40 @@ class LinkCalls(
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to decision.toJson())
         }
         else -> throw IllegalArgumentException("Unknown method $method")
+    }
+
+    /**
+     * `complete`: the laptop's tool calls for [request]. Ferb's calls and Ferb Link's own Try box
+     * both come here, so they send the same thing (Hindi amounts worked out first) and note the same state.
+     */
+    fun complete(request: String, toolsJson: String, facts: String?, timeoutMs: Int?, caller: String): Reply = when {
+        !state.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
+        !state.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
+        request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
+        request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
+        // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
+        else -> state.client(trace).complete(Amounts.forRequest(request), toolsJson, facts, timeoutMs).also {
+            if (it.failure == null) {
+                state.lastModel = it.model
+                state.saw(ModelState.Loaded, now())
+                refreshAudio()
+            }
+            RecentRequests.add(caller, request, it)
+        }
+    }
+
+    /** `check`: whether the laptop answers, without waking the model, noting what it said. [timeoutMs] null: the client's. */
+    fun check(timeoutMs: Int?): Health {
+        val health = when {
+            !state.enabled -> Health(false, null, 0, Failure(ErrorKind.Off, "Ferb Link is off"))
+            !state.configured -> Health(false, null, 0, Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"))
+            else -> state.client(trace).health(timeoutMs)
+        }
+        health.model?.let { state.lastModel = it }
+        health.audio?.let { state.audio = it }
+        health.state?.let { state.saw(it, now()) }
+        health.sleepIdleSeconds?.let { state.sleepIdleSeconds = it }
+        return health
     }
 
     /**

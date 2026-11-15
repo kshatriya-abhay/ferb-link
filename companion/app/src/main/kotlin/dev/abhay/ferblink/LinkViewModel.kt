@@ -99,7 +99,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(jev = it.jev.copy(testing = true)) }
         viewModelScope.launch {
             val decision = withContext(Dispatchers.IO) {
-                LinkCalls(settings, { it.run() }, BuildConfig.DEBUG).decide(SAMPLE_REQUEST, SAMPLE_TOOLS, LinkContract.MAX_DECIDE_TIMEOUT_MS, test = true)
+                calls().decide(SAMPLE_REQUEST, SAMPLE_TOOLS, LinkContract.MAX_DECIDE_TIMEOUT_MS, test = true)
             }
             val tested = decision.failure?.message
                 ?: getApplication<Application>().getString(R.string.jev_tested, decision.choice, decision.probabilities[decision.choice] ?: 0.0, decision.ms, decision.billed.usd)
@@ -169,17 +169,18 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     fun setEnabled(enabled: Boolean) {
         settings.enabled = enabled
         _state.update { it.copy(enabled = enabled) }
+        // A check while off answers "off" without asking the laptop: ask it now.
+        if (enabled) check()
     }
+
+    /** The same calls Ferb's requests get ([LinkCalls]), so the screen shows and notes what Ferb would. */
+    private fun calls() = LinkCalls(settings, { it.run() }, BuildConfig.DEBUG)
 
     fun check() {
         if (!settings.configured) return
         _state.update { it.copy(checking = true, unloadError = null) }
         viewModelScope.launch {
-            val health = withContext(Dispatchers.IO) { settings.client(null).health() }
-            health.model?.let { settings.lastModel = it }
-            health.audio?.let { settings.audio = it }
-            health.state?.let { settings.saw(it, System.currentTimeMillis()) }
-            health.sleepIdleSeconds?.let { settings.sleepIdleSeconds = it }
+            val health = withContext(Dispatchers.IO) { calls().check(timeoutMs = null) }
             _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive(), privateDns = privateDns()) }
         }
     }
@@ -196,14 +197,12 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Sends [request] to the laptop with [SAMPLE_TOOLS], as Ferb would. */
+    /** Sends [request] to the laptop with [SAMPLE_TOOLS] through Ferb's own path ([LinkCalls.complete]). */
     fun tryRequest(request: String) {
         if (!settings.configured || request.isBlank()) return
         _state.update { it.copy(trying = true) }
         viewModelScope.launch {
-            val reply = withContext(Dispatchers.IO) { settings.client(null).complete(request, SAMPLE_TOOLS) }
-            if (reply.failure == null) settings.lastModel = reply.model
-            RecentRequests.add("this app", request, reply)
+            val reply = withContext(Dispatchers.IO) { calls().complete(request, SAMPLE_TOOLS, facts = null, timeoutMs = null, caller = "this app") }
             _state.update { it.copy(trying = false, tried = request to reply) }
             check() // the request may have woken or loaded the model
         }
