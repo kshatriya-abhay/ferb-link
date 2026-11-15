@@ -343,7 +343,7 @@ private fun ModelState.label(): Int = when (this) {
 private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
     val health = state.health
     val colors = MaterialTheme.colorScheme
-    // The error's words come from the contract (ServerClient), shared with Ferb's chat bubbles.
+    // The error's words come from the contract (LinkReplies), shared with Ferb's chat bubbles.
     val (container, icon, title, detail) = when {
         !state.enabled -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_off), stringResource(R.string.status_off_detail))
         state.serverUrl.isBlank() || state.apiKey.isBlank() -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_not_set_up), null)
