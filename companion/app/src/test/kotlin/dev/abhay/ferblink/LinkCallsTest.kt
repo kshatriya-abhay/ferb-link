@@ -14,6 +14,7 @@ class LinkCallsTest {
         override var audio = false
         override var modelState = ""
         override var modelStateAt = 0L
+        override var sleepIdleSeconds = 0
         override var jevOn = false
         override val jevConfigured = false
         override var jevOffReason = ""
@@ -39,8 +40,16 @@ class LinkCallsTest {
         val state = State()
         assertThat(state.modelStateNow(1_000)).isNull()
         state.saw(ModelState.Loaded, at = 1_000)
-        assertThat(state.modelStateNow(1_000 + LinkContract.LOADED_FOR_MS)).isEqualTo("loaded")
-        assertThat(state.modelStateNow(1_001 + LinkContract.LOADED_FOR_MS)).isEqualTo("asleep")
+        // Before the server has said how long it idles: server.conf's default, 300 s, less the margin.
+        assertThat(state.modelStateNow(1_000 + 270_000)).isEqualTo("loaded")
+        assertThat(state.modelStateNow(1_001 + 270_000)).isEqualTo("asleep")
+        // The server's own setting, once seen (its --sleep-idle-seconds).
+        state.sleepIdleSeconds = 600
+        assertThat(state.modelStateNow(1_000 + 570_000)).isEqualTo("loaded")
+        assertThat(state.modelStateNow(1_001 + 570_000)).isEqualTo("asleep")
+        state.sleepIdleSeconds = -1 // never sleeps
+        assertThat(state.modelStateNow(Long.MAX_VALUE)).isEqualTo("loaded")
+        state.saw(ModelState.Loaded, at = 1_000)
         state.saw(ModelState.Loading, at = 1_000)
         assertThat(state.modelStateNow(1_000)).isEqualTo("asleep")
         state.saw(ModelState.Unloaded, at = 1_000)

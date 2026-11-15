@@ -49,6 +49,12 @@ class LinkSettings(context: Context) : LinkState {
         get() = prefs.getLong(KEY_MODEL_STATE_AT, 0)
         set(value) = prefs.edit { putLong(KEY_MODEL_STATE_AT, value) }
 
+    override var sleepIdleSeconds: Int
+        get() = prefs.getInt(KEY_SLEEP_IDLE, 0)
+        set(value) {
+            if (value != sleepIdleSeconds) prefs.edit { putInt(KEY_SLEEP_IDLE, value) }
+        }
+
     /** First-use hints the user has dismissed ([Hint] names). */
     var hintsSeen: Set<String>
         get() = prefs.getStringSet(KEY_HINTS_SEEN, emptySet()).orEmpty().toSet()
@@ -92,6 +98,7 @@ class LinkSettings(context: Context) : LinkState {
         private const val KEY_HINTS_SEEN = "hints_seen"
         private const val KEY_MODEL_STATE = "model_state"
         private const val KEY_MODEL_STATE_AT = "model_state_at"
+        private const val KEY_SLEEP_IDLE = "sleep_idle_seconds"
         private const val KEY_JEV_ON = "jev_on"
         private const val KEY_JEV_KEY = "jev_key"
         private const val KEY_JEV_OFF_REASON = "jev_off_reason"

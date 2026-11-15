@@ -19,6 +19,7 @@ class ServerClientTest {
     private var chatDelayMs = 0L
     private var props = """{"is_sleeping": false, "modalities": {"vision": true, "audio": true}}"""
     private var modelStatus = "loaded"
+    private var modelArgs = ""
     private val propsQueries = mutableListOf<String?>()
     private var unloads = 0
 
@@ -30,7 +31,7 @@ class ServerClientTest {
         server.createContext("/health") { it.answer(200, """{"status":"ok"}""") }
         server.createContext("/v1/models") { exchange ->
             if (exchange.requestHeaders.getFirst("Authorization") != "Bearer secret") exchange.answer(401, """{"error":{"message":"Invalid API Key"}}""")
-            else exchange.answer(200, """{"data":[{"id":"gemma-4-e2b","status":{"value":"$modelStatus"}}]}""")
+            else exchange.answer(200, """{"data":[{"id":"gemma-4-e2b","status":{"value":"$modelStatus"$modelArgs}}]}""")
         }
         server.createContext("/props") {
             propsQueries += it.requestURI.query
@@ -260,6 +261,16 @@ class ServerClientTest {
         assertThat(ServerClient(url, "secret").wake()).isEqualTo(Props(ModelState.Unloaded, audio = null))
         assertThat(received.map { JSONObject(it.second).getInt("max_tokens") }).containsExactly(1, 1)
         assertThat(received.map { JSONObject(it.second).getString("model") }).containsExactly("gemma-4-e2b", "gemma-4-e2b")
+    }
+
+    @Test
+    fun `props reads how long the server idles before it sleeps`() {
+        // The router lists each running model's command line: run.sh passes SLEEP_IDLE as --sleep-idle-seconds.
+        modelArgs = ""","args":["llama-server","--port","50417","--sleep-idle-seconds","420","--metrics"]"""
+        assertThat(ServerClient(url, "secret").props()?.sleepIdleSeconds).isEqualTo(420)
+        assertThat(ServerClient(url, "secret").health().sleepIdleSeconds).isEqualTo(420)
+        modelArgs = ""
+        assertThat(ServerClient(url, "secret").props()?.sleepIdleSeconds).isNull()
     }
 
     @Test

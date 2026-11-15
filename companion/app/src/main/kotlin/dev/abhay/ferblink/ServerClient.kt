@@ -108,6 +108,8 @@ data class Health(
     val failure: Failure?,
     val state: ModelState? = null,
     val audio: Boolean? = null,
+    /** The server's `--sleep-idle-seconds` (-1: never), when the router listed it. */
+    val sleepIdleSeconds: Int? = null,
 ) {
     val message: String get() = failure?.message ?: "Connected"
     val short: String get() = failure?.short ?: "connected"
@@ -121,8 +123,11 @@ enum class ModelState(val words: String) {
     Unloaded("unloaded"),
 }
 
-/** What the server says about its model without loading it. [audio] is null when it can't tell (unloaded). */
-data class Props(val state: ModelState, val audio: Boolean?)
+/**
+ * What the server says about its model without loading it. [audio] is null when it can't tell
+ * (unloaded); [sleepIdleSeconds] when the router lists the model's command line.
+ */
+data class Props(val state: ModelState, val audio: Boolean?, val sleepIdleSeconds: Int? = null)
 
 /** [ServerClient.rewrite]'s answer: the commands (empty: no action asked), what was [sent], and the model's [raw] text. */
 data class Rewritten(
@@ -236,7 +241,7 @@ class ServerClient(
             val model = JSONObject(models).optJSONArray("data")?.optJSONObject(0)?.optString("id")
             if (!model.isNullOrEmpty()) this.model = model
             val props = props(timeoutMs)
-            Health(true, model, msSince(started), null, props?.state, props?.audio)
+            Health(true, model, msSince(started), null, props?.state, props?.audio, props?.sleepIdleSeconds)
         } catch (e: IOException) {
             Health(false, null, msSince(started), failureOf(e))
         } catch (e: Exception) {
@@ -278,10 +283,11 @@ class ServerClient(
     fun props(timeoutMs: Int? = null): Props? = try {
         val (code, body) = send("GET", "/v1/models", null, auth = true, timeoutMs)
         val entry = if (code == 200) JSONObject(body).optJSONArray("data")?.optJSONObject(0) else null
+        val sleep = entry?.optJSONObject("status")?.optJSONArray("args")?.let(::sleepIdleSeconds)
         when (entry?.optJSONObject("status")?.optString("value")) {
             null -> null
-            "unloaded" -> Props(ModelState.Unloaded, null)
-            "loading" -> Props(ModelState.Loading, null)
+            "unloaded" -> Props(ModelState.Unloaded, null, sleep)
+            "loading" -> Props(ModelState.Loading, null, sleep)
             else -> {
                 val name = entry.getString("id").also { model = it }
                 val (propsCode, propsBody) = send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
@@ -289,6 +295,7 @@ class ServerClient(
                     Props(
                         if (it.optBoolean("is_sleeping")) ModelState.Asleep else ModelState.Loaded,
                         it.optJSONObject("modalities")?.optBoolean("audio") == true,
+                        sleep,
                     )
                 }
             }
@@ -528,6 +535,10 @@ In "text", write other amounts as numbers too: half is 50 percent, a quarter 25 
 
         /** Whether [heard] has a Hindi word in it (see [HINDI_WORDS]). */
         fun soundsHindi(heard: String) = heard.lowercase().split(Regex("[^a-z]+")).any { it in HINDI_WORDS }
+
+        /** The value after `--sleep-idle-seconds` in a model's command line, as the router lists it. */
+        private fun sleepIdleSeconds(args: JSONArray): Int? = (0 until args.length() - 1)
+            .firstOrNull { args.optString(it) == "--sleep-idle-seconds" }?.let { args.optString(it + 1).toIntOrNull() }
 
         /** The smallest request that loads the model. */
         private fun wakeBody(model: String) = JSONObject()

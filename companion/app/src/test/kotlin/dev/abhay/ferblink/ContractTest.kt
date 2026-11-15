@@ -51,6 +51,7 @@ class ContractTest {
         override var audio: Boolean = true,
         override var modelState: String = LinkContract.MODEL_LOADED,
         override var modelStateAt: Long = NOW - 60_000,
+        override var sleepIdleSeconds: Int = 300,
         override var jevOn: Boolean = false,
         var jevKey: String = "",
         override var jevOffReason: String = "",
@@ -77,7 +78,7 @@ class ContractTest {
     private val cases = listOf(
         Case("status", "status", "On, set up, last saw gemma-4-e2b, which takes audio."),
         Case("status-asleep", "status", "Last seen loaded over 270 s ago: the server has likely put it to sleep, so a request may wait for a cold load.") {
-            it.modelStateAt = NOW - LinkContract.LOADED_FOR_MS - 1
+            it.modelStateAt = NOW - 270_000 - 1
         },
         Case("status-off", "status", "Turned off in Ferb Link.") { it.enabled = false },
         Case("status-not-set-up", "status", "No server set up yet: no model seen.") { it.url = ""; it.lastModel = ""; it.audio = false; it.modelState = "" },

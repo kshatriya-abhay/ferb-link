@@ -177,8 +177,10 @@ object LinkContract {
     const val RESULT_JSON_SCHEMA = "json_schema"
     /**
      * Whether the laptop's model is ready: [MODEL_LOADED], [MODEL_ASLEEP] (also while it loads) or
-     * [MODEL_UNLOADED]. "loaded" only if seen loaded within [LOADED_FOR_MS]: the server puts it to
-     * sleep after idling without telling the phone. Missing when no state has been seen yet.
+     * [MODEL_UNLOADED]. "loaded" only if seen loaded within the server's idle time less
+     * [LOADED_MARGIN_MS]: the server puts it to sleep after idling without telling the phone. Ferb
+     * Link reads that time from the server (`SLEEP_IDLE` in server/server.conf, which run.sh passes as
+     * `--sleep-idle-seconds`); until it has, [DEFAULT_SLEEP_IDLE_SECONDS]. Missing when no state has been seen yet.
      * Anything but loaded can take far longer to answer (a cold load), so Ferb waits longer.
      */
     const val RESULT_MODEL_STATE = "model_state"
@@ -190,8 +192,10 @@ object LinkContract {
     const val MODEL_LOADED = "loaded"
     const val MODEL_ASLEEP = "asleep"
     const val MODEL_UNLOADED = "unloaded"
-    /** The server sleeps after 300 s idle (`SLEEP_IDLE` in server/server.conf); a margin below that. */
-    const val LOADED_FOR_MS = 270_000L
+    /** How long before the server's sleep "loaded" stops being reported. */
+    const val LOADED_MARGIN_MS = 30_000L
+    /** server.conf's default `SLEEP_IDLE`, used only until the server has been seen and said its own. */
+    const val DEFAULT_SLEEP_IDLE_SECONDS = 300
 
     const val MIN_TIMEOUT_MS = 1_000
     const val MAX_TIMEOUT_MS = 60_000

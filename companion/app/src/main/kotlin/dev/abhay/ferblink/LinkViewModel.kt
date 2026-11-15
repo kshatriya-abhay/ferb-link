@@ -179,6 +179,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
             health.model?.let { settings.lastModel = it }
             health.audio?.let { settings.audio = it }
             health.state?.let { settings.saw(it, System.currentTimeMillis()) }
+            health.sleepIdleSeconds?.let { settings.sleepIdleSeconds = it }
             _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive(), privateDns = privateDns()) }
         }
     }

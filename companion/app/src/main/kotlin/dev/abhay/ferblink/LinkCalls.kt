@@ -13,6 +13,8 @@ interface LinkState {
     /** The model's state as last seen ([LinkContract.RESULT_MODEL_STATE]'s words; empty if none yet), and when. */
     var modelState: String
     var modelStateAt: Long
+    /** The server's `--sleep-idle-seconds` as last seen (-1: never sleeps); 0 until seen. */
+    var sleepIdleSeconds: Int
     fun client(trace: ((String) -> Unit)? = null): ServerClient
 
     /** Jev: the user's switch (turned off by itself at the cap, [jevOffReason] then says why), and a key. */
@@ -81,6 +83,7 @@ class LinkCalls(
             health.model?.let { state.lastModel = it }
             health.audio?.let { state.audio = it }
             health.state?.let { state.saw(it, now()) }
+            health.sleepIdleSeconds?.let { state.sleepIdleSeconds = it }
             buildMap {
                 put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
                 put(LinkContract.RESULT_REACHABLE, health.ok)
@@ -98,7 +101,7 @@ class LinkCalls(
             if (state.enabled && state.configured && waking.compareAndSet(false, true)) {
                 background.execute {
                     try {
-                        state.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.audio?.let { state.audio = it }
+                        state.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.let(state::heard)
                     } finally {
                         waking.set(false)
                     }
@@ -217,7 +220,7 @@ class LinkCalls(
 
     /** Reads `/props` again in the background, so `status` notices the laptop switching modes. */
     private fun refreshAudio() = background.execute {
-        state.client(trace).props(LinkContract.CHECK_TIMEOUT_MS)?.audio?.let { state.audio = it }
+        state.client(trace).props(LinkContract.CHECK_TIMEOUT_MS)?.let(state::heard)
     }
 
     companion object {
@@ -266,7 +269,15 @@ fun LinkState.saw(model: ModelState, at: Long) {
     modelStateAt = at
 }
 
+/** Notes what the server said about itself in [props]: audio, and how long it idles before sleeping. */
+fun LinkState.heard(props: Props) {
+    props.audio?.let { audio = it }
+    props.sleepIdleSeconds?.let { sleepIdleSeconds = it }
+}
+
 /** The last state seen, with "loaded" turned "asleep" once the server would have put it to sleep; null if none. */
 fun LinkState.modelStateNow(now: Long): String? = modelState.ifEmpty { null }?.let {
-    if (it == LinkContract.MODEL_LOADED && now - modelStateAt > LinkContract.LOADED_FOR_MS) LinkContract.MODEL_ASLEEP else it
+    val sleepAfter = sleepIdleSeconds.takeIf { it != 0 } ?: LinkContract.DEFAULT_SLEEP_IDLE_SECONDS
+    val asleep = sleepAfter > 0 && now - modelStateAt > sleepAfter * 1000L - LinkContract.LOADED_MARGIN_MS
+    if (it == LinkContract.MODEL_LOADED && asleep) LinkContract.MODEL_ASLEEP else it
 }

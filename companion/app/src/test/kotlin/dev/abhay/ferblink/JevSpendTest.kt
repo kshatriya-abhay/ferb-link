@@ -23,6 +23,7 @@ class JevSpendTest {
         override var audio = false
         override var modelState = ""
         override var modelStateAt = 0L
+        override var sleepIdleSeconds = 0
         override fun client(trace: ((String) -> Unit)?) = ServerClient("http://127.0.0.1:9", "key")
         override var jevOn = true
         override val jevConfigured = true
