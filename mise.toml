@@ -99,11 +99,7 @@ description = "Start the model server (systemd user service) and wait until it a
 run = '''
 set -euo pipefail
 source server/server.conf
-# Models run one at a time: never start while Ferb's bench holds its lock.
-LOCK="$FERB_REPO/build/bench/.lock"
-if [ -e "$LOCK" ] && ! flock -n "$LOCK" true; then
-  echo "Ferb's bench is running; start the server after it finishes."; exit 1
-fi
+# Also refuses while Ferb's bench holds its lock (as every start of the unit does).
 server/run.sh check
 systemctl --user reset-failed ferb-llama 2>/dev/null || true
 systemctl --user start ferb-llama
@@ -233,6 +229,10 @@ curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE"
   "temperature": 0, "max_tokens": 128, "logprobs": true
 }' | jq '{model, tool_calls: .choices[0].message.tool_calls, content: .choices[0].message.content, timings}'
 '''
+
+[tasks."server:test"]
+description = "Tests for the server scripts: no model, GPU or network"
+run = "server/test.sh"
 
 [tasks."companion:harness"]
 tools = { java = "temurin-21" }

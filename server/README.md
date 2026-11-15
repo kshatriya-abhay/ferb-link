@@ -10,7 +10,7 @@ llama.cpp's `llama-server` running Gemma 4 E2B as a systemd user service (`ferb-
 
 **Unloading.** llama-server runs as a router. `--models-preset` is written from `server.conf` to `server/build/preset.ini` on each start. The router answers on the port and runs the model in a child process, started by the first request. `mise run server:unload`, or Unload in Ferb Link, stops that process at once and frees all of it (0.1 GB of GPU memory left, against 0.2 GB asleep). The next request starts it again, like a wake. Because of the router, every request names the model (`"model": "gemma-4-e2b"`; without it the router answers 400), and `/props` takes `?model=gemma-4-e2b&autoload=false`.
 
-**One model at a time.** A served model shares the CPU, GPU and memory with anything else running models, so a benchmark's timings mean nothing while the server runs. If you have Ferb's repo next to this one, `server:start` refuses to start while Ferb's bench holds its lock, and the bench refuses to run while `ferb-llama` is active. Stop the server before a bench.
+**One model at a time.** A served model shares the CPU, GPU and memory with anything else running models, so a benchmark's timings mean nothing while the server runs. If you have Ferb's repo next to this one, the server refuses to start while Ferb's bench holds its lock (from `server:start`, at login or on a restart: `run.sh` checks), and the bench refuses to run while `ferb-llama` is active. Stop the server before a bench.
 
 **Why not Docker.** The GPU in a container needs the NVIDIA Container Toolkit and a running Docker daemon, and the CUDA image is several GB. The release build runs directly on the installed driver, its version is pinned with a checksum, and systemd handles restarts and logs.
 

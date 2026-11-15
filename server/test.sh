@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Tests for the server scripts that need no model, GPU or network (`mise run server:test`).
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+T=$(mktemp -d)
+trap 'rm -rf "$T"' EXIT
+fails=0
+check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi; }
+
+# run.sh refuses while Ferb's bench holds its lock, whoever starts it (server:start, or systemd at
+# login and on restart), and checking never creates the lock file.
+export FERB_REPO="$T/ferb"
+LOCK="$FERB_REPO/build/bench/.lock"
+mkdir -p "$(dirname "$LOCK")"
+
+out=$("$ROOT/server/run.sh" check 2>&1 || true)
+check "no lock file: not refused for the bench" '! grep -q "bench is running" <<<"$out"'
+check "no lock file: the check doesn't create one" '[ ! -e "$LOCK" ]'
+
+touch "$LOCK"
+out=$("$ROOT/server/run.sh" check 2>&1 || true)
+check "free lock: not refused for the bench" '! grep -q "bench is running" <<<"$out"'
+
+flock "$LOCK" sleep 30 & holder=$!
+for _ in $(seq 50); do flock -n "$LOCK" true || break; sleep 0.1; done
+status=0; out=$("$ROOT/server/run.sh" check 2>&1) || status=$?
+check "held lock: refused" '[ "$status" != 0 ] && grep -q "bench is running" <<<"$out"'
+kill "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true
+
+[ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

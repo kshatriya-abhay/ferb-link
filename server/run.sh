@@ -9,6 +9,14 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/server/server.conf"
 
+# Models run one at a time: never while Ferb's bench holds its lock. Checked here, so systemd's
+# start at login and its restarts honour it too, not only `server:start`. `flock -n` on an existing
+# file only, so checking never creates the lock.
+BENCH_LOCK="$FERB_REPO/build/bench/.lock"
+if [ -e "$BENCH_LOCK" ] && ! flock -n "$BENCH_LOCK" true; then
+  echo "Ferb's bench is running; start the server after it finishes." >&2; exit 1
+fi
+
 [ -n "$MODEL" ] || { echo "Set MODEL in server/server.conf to a name from server/models.txt" >&2; exit 1; }
 read -r _ _ _ FILE _ < <(grep "^$MODEL " "$ROOT/server/models.txt") || { echo "No model $MODEL in server/models.txt" >&2; exit 1; }
 # MODELS_DIR (the SSD), or where files were before it existed.

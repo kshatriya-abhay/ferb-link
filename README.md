@@ -128,6 +128,7 @@ For changing Ferb Link or the server. You also need:
 mise run companion:install                   # build and install a debug Ferb Link over USB
 mise run companion:pair                      # pair it over USB instead of the QR code
 mise run companion:test                      # unit and contract tests
+mise run server:test                         # the server scripts' checks (no model)
 mise run companion:send-over-tailscale <phone>   # install over Taildrop instead of USB
 mise run companion:try "set a timer for 5"   # ask Ferb Link through adb, as Ferb would (debug builds)
 ```
