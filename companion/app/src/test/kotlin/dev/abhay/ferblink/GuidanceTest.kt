@@ -53,9 +53,9 @@ class GuidanceTest {
     @Test
     fun `the status card's hints follow what the computer can do`() {
         assertThat(Hint.forStatus(null)).isEmpty()
-        assertThat(Hint.forStatus(Health(false, null, 0, Failure(ErrorKind.Timeout, "x")))).isEmpty()
-        assertThat(Hint.forStatus(Health(true, "m", 0, null, ModelState.Loaded, audio = true))).containsExactly(Hint.Voice, Hint.Unload).inOrder()
-        assertThat(Hint.forStatus(Health(true, "m", 0, null, ModelState.Asleep, audio = false))).containsExactly(Hint.TextOnly, Hint.Unload).inOrder()
-        assertThat(Hint.forStatus(Health(true, "m", 0, null, ModelState.Unloaded, audio = null))).isEmpty()
+        assertThat(Hint.forStatus(Health(null, 0, Failure(ErrorKind.Timeout, "x")))).isEmpty()
+        assertThat(Hint.forStatus(Health("m", 0, null, ModelState.Loaded, audio = true))).containsExactly(Hint.Voice, Hint.Unload).inOrder()
+        assertThat(Hint.forStatus(Health("m", 0, null, ModelState.Asleep, audio = false))).containsExactly(Hint.TextOnly, Hint.Unload).inOrder()
+        assertThat(Hint.forStatus(Health("m", 0, null, ModelState.Unloaded, audio = null))).isEmpty()
     }
 }

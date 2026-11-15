@@ -167,8 +167,8 @@ class LinkCalls(
     /** `check`: whether the laptop answers, without waking the model, noting what it said. [timeoutMs] null: the client's. */
     fun check(timeoutMs: Int?): Health {
         val health = when {
-            !state.enabled -> Health(false, null, 0, Failure(ErrorKind.Off, "Ferb Link is off"))
-            !state.configured -> Health(false, null, 0, Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"))
+            !state.enabled -> Health(null, 0, Failure(ErrorKind.Off, "Ferb Link is off"))
+            !state.configured -> Health(null, 0, Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"))
             else -> state.client(trace).health(timeoutMs)
         }
         health.model?.let { state.lastModel = it }

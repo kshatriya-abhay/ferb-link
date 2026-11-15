@@ -14,7 +14,6 @@ import kotlin.math.exp
  * are null when the server didn't say.
  */
 data class Health(
-    val ok: Boolean,
     val model: String?,
     val ms: Long,
     val failure: Failure?,
@@ -23,6 +22,7 @@ data class Health(
     /** The server's `--sleep-idle-seconds` (-1: never), when the router listed it. */
     val sleepIdleSeconds: Int? = null,
 ) {
+    val ok: Boolean get() = failure == null
     val message: String get() = failure?.message ?: "Connected"
     val short: String get() = failure?.short ?: "connected"
 }
@@ -63,18 +63,18 @@ class ServerClient(
         val started = System.nanoTime()
         return try {
             val (code, body) = http.send("GET", "/health", null, auth = false, timeoutMs)
-            if (code == 503) return Health(false, null, msSince(started), Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"))
-            if (code != 200) return Health(false, null, msSince(started), problem(code, body))
+            if (code == 503) return Health(null, msSince(started), Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"))
+            if (code != 200) return Health(null, msSince(started), problem(code, body))
             val (modelsCode, models) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
-            if (modelsCode != 200) return Health(false, null, msSince(started), problem(modelsCode, models))
+            if (modelsCode != 200) return Health(null, msSince(started), problem(modelsCode, models))
             val model = JSONObject(models).optJSONArray("data")?.optJSONObject(0)?.optString("id")
             if (!model.isNullOrEmpty()) this.model = model
             val props = props(timeoutMs)
-            Health(true, model, msSince(started), null, props?.state, props?.audio, props?.sleepIdleSeconds)
+            Health(model, msSince(started), null, props?.state, props?.audio, props?.sleepIdleSeconds)
         } catch (e: IOException) {
-            Health(false, null, msSince(started), failureOf(e))
+            Health(null, msSince(started), failureOf(e))
         } catch (e: Exception) {
-            Health(false, null, msSince(started), Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}"))
+            Health(null, msSince(started), Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}"))
         }
     }
 

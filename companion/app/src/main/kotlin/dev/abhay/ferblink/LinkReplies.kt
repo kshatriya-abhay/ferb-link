@@ -108,7 +108,9 @@ data class Rewritten(
     /** A JSON answer ([RewriteAsked.schema]), parsed. */
     val output: JSONObject? = null,
 ) {
-    fun toJson(): String = JSONObject()
+    fun toJson(): String = json().toString()
+
+    private fun json(): JSONObject = JSONObject()
         .put("success", failure == null)
         .put("commands", JSONArray(commands))
         .put("invented", JSONArray(invented))
@@ -123,14 +125,13 @@ data class Rewritten(
                 put("error_kind", it.kind.wire)
             }
         }
-        .toString()
 
     /**
      * What `rewrite` gives Ferb: the commands and `invented`, without the harness's `sent`. `raw`
      * only for an instructed rewrite, which Ferb parses itself, with `"instructions": true` and
      * `truncated`; with a schema, also `"schema": true` and `output`.
      */
-    fun toReplyJson(): String = JSONObject(toJson()).apply {
+    fun toReplyJson(): String = json().apply {
         remove("sent")
         if (asked.instructions) put("instructions", true).put("truncated", truncated) else remove("raw")
         if (asked.schema) {
