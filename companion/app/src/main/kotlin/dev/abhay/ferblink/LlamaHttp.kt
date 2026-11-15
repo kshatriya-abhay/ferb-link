@@ -8,6 +8,8 @@ import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
 import java.net.UnknownServiceException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * HTTP to llama-server: one request at a time, with its timings traced, and every way it can go
@@ -33,14 +35,33 @@ class LlamaHttp(
     }
 
     /**
-     * POSTs [body] to [path] with the key. [body] is built inside, so a failure while building it
-     * (looking up the model's name) is one too. An answer other than 200 fails by [problemOf].
+     * One call's time limit, shared by all its requests (looking up the model's name, then the
+     * answer), so the call as a whole ends by then.
      */
-    fun post(path: String, timeoutMs: Int?, problemOf: (Int, String) -> Failure = { code, text -> problem(code, text) }, body: () -> String): Exchange {
+    class Deadline(ms: Int) {
+        private val end = System.nanoTime() + ms * 1_000_000L
+
+        /** The ms left; a [SocketTimeoutException] (a timeout) once none are. */
+        fun left(): Int {
+            val left = (end - System.nanoTime()) / 1_000_000
+            if (left <= 0) throw SocketTimeoutException("No time left")
+            return left.toInt()
+        }
+    }
+
+    /**
+     * POSTs [body] to [path] with the key, all within [timeoutMs] (the client's read timeout
+     * without it). [body] is built inside with the call's [Deadline], so a failure while building
+     * it (looking up the model's name) is one too, and takes its time from the same limit. An
+     * answer other than 200 fails by [problemOf].
+     */
+    fun post(path: String, timeoutMs: Int?, problemOf: (Int, String) -> Failure = { code, text -> problem(code, text) }, body: (Deadline) -> String): Exchange {
         val started = System.nanoTime()
+        val deadline = Deadline(timeoutMs ?: readTimeoutMs)
         return try {
-            val (code, text) = send("POST", path, body(), auth = true, timeoutMs)
-            if (code == 200) Exchange.Answer(text, msSince(started)) else Exchange.Failed(problemOf(code, text), msSince(started))
+            val text = body(deadline)
+            val (code, answer) = send("POST", path, text, auth = true, deadline.left())
+            if (code == 200) Exchange.Answer(answer, msSince(started)) else Exchange.Failed(problemOf(code, answer), msSince(started))
         } catch (e: IOException) {
             Exchange.Failed(failureOf(e), msSince(started))
         } catch (e: Exception) {
@@ -57,6 +78,10 @@ class LlamaHttp(
         val started = System.nanoTime()
         val connection = URL(base + path).openConnection() as HttpURLConnection
         var ok = false
+        // Connect and read time out apart, so together they could take twice [timeoutMs]: past
+        // it, the connection is closed, and the request is a timeout.
+        val cutOff = timeoutMs?.let { WATCHDOG.schedule({ connection.disconnect() }, it.toLong(), TimeUnit.MILLISECONDS) }
+        fun overdue() = cutOff?.let { it.isDone && !it.isCancelled } == true
         try {
             connection.requestMethod = method
             connection.connectTimeout = timeoutMs?.let { minOf(it, connectTimeoutMs) } ?: connectTimeoutMs
@@ -70,6 +95,7 @@ class LlamaHttp(
             try {
                 connection.connect()
             } catch (e: IOException) {
+                if (overdue()) throw SocketTimeoutException("Timed out connecting")
                 throw NotConnected(e)
             }
             val connected = System.nanoTime()
@@ -89,8 +115,9 @@ class LlamaHttp(
             return code to text
         } catch (e: IOException) {
             trace?.invoke("$method $path failed after ${ms(started, System.nanoTime())} ms: $e")
-            throw e
+            throw if (overdue() && e !is SocketTimeoutException) SocketTimeoutException("Timed out after $timeoutMs ms") else e
         } finally {
+            cutOff?.cancel(false)
             if (!ok) connection.disconnect()
         }
     }
@@ -98,6 +125,9 @@ class LlamaHttp(
     private fun ms(from: Long, to: Long) = (to - from) / 1_000_000
 
     companion object {
+        /** Closes requests that run past their time ([send]); one daemon thread for the process. */
+        private val WATCHDOG = Executors.newSingleThreadScheduledExecutor { Thread(it, "ferblink-http-deadline").apply { isDaemon = true } }
+
         /** Unreachable details that already say what to do ([Guidance] adds nothing to them). */
         const val NO_NAME = "Can't find your computer's name. Is Tailscale on?"
         const val HTTP_NEEDS_TAILSCALE_NAME = "Plain HTTP only works with your computer's Tailscale name (….ts.net)"

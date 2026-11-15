@@ -88,7 +88,7 @@ class ServerClient(
         } catch (e: Exception) {
             return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
         }
-        val exchange = http.post(CHAT, timeoutMs) { Prompts.requestBody(modelName(timeoutMs), request, tools, facts).toString() }
+        val exchange = http.post(CHAT, timeoutMs) { Prompts.requestBody(modelName(it.left()), request, tools, facts).toString() }
         return read(exchange, { failure, ms -> Reply.failed(failure, ms) }) { parse(JSONObject(it.text), it.ms) }
     }
 
@@ -164,7 +164,7 @@ class ServerClient(
 
     /** [transcribe] with the request [body] given the model's name (the bench types heard lines in place of audio). */
     internal fun transcribe(body: (model: String) -> String, timeoutMs: Int?): Transcript =
-        read(http.post(CHAT, timeoutMs) { body(modelName(timeoutMs)) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
+        read(http.post(CHAT, timeoutMs) { body(modelName(it.left())) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
 
     /**
      * [request] as one command (or none) with the caller's own prompt: [Instructed]. In [Instructed.Mode.Json]
@@ -176,7 +176,7 @@ class ServerClient(
         var raw = ""
         var truncated = false
         val problemOf = if (mode is Instructed.Mode.Json) LlamaHttp.Companion::schemaProblem else LlamaHttp.Companion::problem
-        val exchange = http.post(CHAT, timeoutMs, problemOf) { Instructed.body(modelName(timeoutMs), request, mode) }
+        val exchange = http.post(CHAT, timeoutMs, problemOf) { Instructed.body(modelName(it.left()), request, mode) }
         return read(exchange, { failure, ms -> Rewritten.failed(failure, request, asked, ms, raw, truncated) }, "the command") { answer ->
             val ms = answer.ms
             val reply = JSONObject(answer.text)

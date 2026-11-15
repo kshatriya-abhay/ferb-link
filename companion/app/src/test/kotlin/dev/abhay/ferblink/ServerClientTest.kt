@@ -370,6 +370,36 @@ class ServerClientTest {
     }
 
     @Test
+    fun `timeout_ms bounds the whole call, the model's lookup included`() {
+        val slow = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        slow.createContext("/v1/models") { it.sleepThenAnswer(800, """{"data":[{"id":"gemma-4-e2b","status":{"value":"loaded"}}]}""") }
+        slow.createContext("/v1/chat/completions") {
+            it.requestBody.readAllBytes()
+            it.sleepThenAnswer(800, """{"model":"gemma-4-e2b","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}]}""")
+        }
+        slow.executor = java.util.concurrent.Executors.newCachedThreadPool()
+        slow.start()
+        try {
+            val started = System.nanoTime()
+            val reply = ServerClient("http://127.0.0.1:${slow.address.port}", "secret").complete("hello", "[]", null, 1_000)
+            val ms = (System.nanoTime() - started) / 1_000_000
+            assertThat(reply.failure?.kind).isEqualTo(ErrorKind.Timeout)
+            assertThat(ms).isLessThan(1_400)
+        } finally {
+            slow.stop(0)
+        }
+    }
+
+    private fun HttpExchange.sleepThenAnswer(ms: Long, body: String) {
+        runCatching { Thread.sleep(ms) }
+        val bytes = body.toByteArray()
+        runCatching {
+            sendResponseHeaders(200, bytes.size.toLong())
+            responseBody.use { it.write(bytes) }
+        }
+    }
+
+    @Test
     fun `server chat script sends Ferb Link's system prompt`() {
         val line = File("../../server/chat.sh").readLines().single { it.startsWith("FERB_SYSTEM=") }
         assertThat(line.removePrefix("FERB_SYSTEM=\"").removeSuffix("\"")).isEqualTo(Prompts.SYSTEM)
