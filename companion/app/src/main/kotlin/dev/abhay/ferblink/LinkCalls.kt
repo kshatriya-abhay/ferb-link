@@ -39,7 +39,22 @@ class LinkCalls(
     private val decode: (ByteArray, String?) -> ByteArray = AudioDecoder::toWav,
     private val trace: ((String) -> Unit)? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    private val shared: Shared = Shared.PROCESS,
 ) {
+    /**
+     * What every call in this process shares, though a [LinkCalls] is made per call (the provider's
+     * binder threads, and the screen): one wake at a time, and one Jev call (check, call, count) at
+     * a time, so calls at once can't each pass the cap. Tests pass their own.
+     */
+    class Shared {
+        internal val waking = AtomicBoolean(false)
+        internal val spending = Any()
+
+        companion object {
+            val PROCESS = Shared()
+        }
+    }
+
     fun answer(method: String, extras: Map<String, Any?>, caller: String): Map<String, Any?> = when (method) {
         LinkContract.METHOD_STATUS -> buildMap {
             put(LinkContract.RESULT_VERSION, LinkContract.VERSION)
@@ -75,12 +90,12 @@ class LinkCalls(
             }
         }
         LinkContract.METHOD_WAKE -> {
-            if (state.enabled && state.configured && waking.compareAndSet(false, true)) {
+            if (state.enabled && state.configured && shared.waking.compareAndSet(false, true)) {
                 background.execute {
                     try {
                         state.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.let(state::heard)
                     } finally {
-                        waking.set(false)
+                        shared.waking.set(false)
                     }
                 }
             }
@@ -185,7 +200,7 @@ class LinkCalls(
     fun decide(request: String, toolsJson: String, timeoutMs: Int, test: Boolean = false): JevClient.Decision =
         // One Jev call at a time, checked and counted under the lock: calls at once can't each pass
         // the cap. A call goes only if its cost's ceiling still fits under the cap.
-        synchronized(spending) {
+        synchronized(shared.spending) {
             val off = when {
                 !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
                 !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
@@ -236,10 +251,6 @@ class LinkCalls(
 
         /** `adb shell`'s user id (android.os.Process.SHELL_UID isn't public). */
         const val SHELL_UID = 2000
-
-        private val waking = AtomicBoolean(false)
-        /** Calls run on several binder threads: one Jev call (check, call, count) at a time. */
-        private val spending = Any()
 
         /** The caller's answer timeout (an Int, or a Long), clamped; null without one. */
         fun timeoutMs(extras: Map<String, Any?>): Int? {

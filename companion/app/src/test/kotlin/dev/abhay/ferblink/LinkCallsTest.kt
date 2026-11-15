@@ -99,9 +99,11 @@ class LinkCallsTest {
     fun `wake goes to the laptop once at a time, and not when off`() {
         val queued = mutableListOf<Runnable>()
         val state = State()
-        val calls = LinkCalls(state, Executor { queued += it }, debug = false)
+        val shared = LinkCalls.Shared()
+        val calls = LinkCalls(state, Executor { queued += it }, debug = false, shared = shared)
         calls.answer("wake", emptyMap(), "ferb")
-        calls.answer("wake", emptyMap(), "ferb")
+        // Another call's LinkCalls, as the provider makes one per call: still one wake at a time.
+        LinkCalls(state, Executor { queued += it }, debug = false, shared = shared).answer("wake", emptyMap(), "ferb")
         assertThat(queued).hasSize(1)
         queued.single().run()
         calls.answer("wake", emptyMap(), "ferb")
