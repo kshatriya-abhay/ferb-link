@@ -43,9 +43,45 @@ object AudioDecoder {
 
     /** [wav] as it is, if its header says it's at most [LinkContract.MAX_AUDIO_SECONDS] long. */
     internal fun checkWav(wav: ByteArray): ByteArray {
-        if (wav.size < 44 || ByteBuffer.wrap(wav, 28, 4).order(ByteOrder.LITTLE_ENDIAN).int <= 0) throw Unreadable("The WAV recording has no usable header")
-        if (seconds(wav) > LinkContract.MAX_AUDIO_SECONDS + 1) throw Unreadable(TOO_LONG)
+        val header = readWav(wav)?.takeIf { it.byteRate > 0 } ?: throw Unreadable("The WAV recording has no usable header")
+        if (header.seconds > LinkContract.MAX_AUDIO_SECONDS + 1) throw Unreadable(TOO_LONG)
         return wav
+    }
+
+    /** A WAV file's format, and where its samples are: [dataSize] bytes from [dataStart], within the file. */
+    internal class WavHeader(val format: Int, val channels: Int, val rate: Int, val byteRate: Int, val bits: Int, val dataStart: Int, val dataSize: Int) {
+        val seconds get() = if (byteRate <= 0) 0.0 else dataSize.toDouble() / byteRate
+    }
+
+    /**
+     * [wav]'s header, read by walking its chunks (a recorder may put LIST or JUNK before `fmt `),
+     * or null when it has no whole `fmt ` chunk before its `data` chunk. Every read is in bounds,
+     * so a malformed file is null, never an exception. The one WAV reader: [SpeechCheck] uses it too.
+     */
+    internal fun readWav(wav: ByteArray): WavHeader? {
+        if (!isWav(wav)) return null
+        val buffer = ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN)
+        var fmt: WavHeader? = null
+        var at = 12L
+        while (at + 8 <= wav.size) {
+            val chunk = at.toInt()
+            val id = String(wav, chunk, 4, Charsets.US_ASCII)
+            val size = buffer.getInt(chunk + 4).toLong() and 0xFFFF_FFFFL
+            val body = chunk + 8
+            when (id) {
+                "fmt " -> {
+                    if (size < 16 || body + 16 > wav.size) return null
+                    fmt = WavHeader(buffer.getShort(body).toInt() and 0xFFFF, buffer.getShort(body + 2).toInt(), buffer.getInt(body + 4),
+                        buffer.getInt(body + 8), buffer.getShort(body + 14).toInt(), 0, 0)
+                }
+                "data" -> {
+                    val f = fmt ?: return null
+                    return WavHeader(f.format, f.channels, f.rate, f.byteRate, f.bits, body, minOf(size, (wav.size - body).toLong()).toInt())
+                }
+            }
+            at = body + size + (size and 1)
+        }
+        return null
     }
 
     /**
@@ -61,12 +97,8 @@ object AudioDecoder {
     internal const val MAX_DECODED_BYTES = 48_000L * 2 * 2 * (LinkContract.MAX_AUDIO_SECONDS + 1)
     internal val TOO_LONG = "The recording is over ${LinkContract.MAX_AUDIO_SECONDS} s"
 
-    /** About how long a WAV file is, from its header's bytes per second. */
-    fun seconds(wav: ByteArray): Double {
-        if (wav.size < 44) return 0.0
-        val byteRate = ByteBuffer.wrap(wav, 28, 4).order(ByteOrder.LITTLE_ENDIAN).int
-        return if (byteRate <= 0) 0.0 else (wav.size - 44).toDouble() / byteRate
-    }
+    /** How long a WAV file is, from its header's bytes per second; 0 when it has no usable header. */
+    fun seconds(wav: ByteArray): Double = readWav(wav)?.seconds ?: 0.0
 
     internal val WAV_TYPES = setOf("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave")
 

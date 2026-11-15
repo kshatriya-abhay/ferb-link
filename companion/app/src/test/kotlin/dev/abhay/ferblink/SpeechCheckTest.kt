@@ -49,4 +49,10 @@ class SpeechCheckTest {
             samples.forEach { putShort(it) }
         }.array()
     }
+
+    @Test
+    fun `a WAV whose fmt chunk is cut short can't be told, and doesn't throw`() {
+        assertThat(SpeechCheck.spreadDb(AudioDecoderTest.BARE_FMT)).isNull()
+        assertThat(SpeechCheck.mayHoldSpeech(AudioDecoderTest.BARE_FMT)).isTrue()
+    }
 }

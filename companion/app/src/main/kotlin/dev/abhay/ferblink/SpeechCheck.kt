@@ -33,40 +33,18 @@ object SpeechCheck {
     /** False only when the spread says no speech; true when it can't tell (not 16-bit PCM WAV). */
     fun mayHoldSpeech(wav: ByteArray): Boolean = (spreadDb(wav) ?: Double.MAX_VALUE) >= MIN_SPREAD_DB
 
-    /** The samples (channels mixed down) and rate of a 16-bit PCM WAV file. */
+    /** The samples (channels mixed down) and rate of a 16-bit PCM WAV file ([AudioDecoder.readWav]). */
     private fun pcm16Mono(wav: ByteArray): Pair<ShortArray, Int>? {
-        if (wav.size < 12 || String(wav, 0, 4, Charsets.US_ASCII) != "RIFF" || String(wav, 8, 4, Charsets.US_ASCII) != "WAVE") return null
+        val header = AudioDecoder.readWav(wav) ?: return null
+        val channels = header.channels
+        if (header.format != 1 || header.bits != 16 || channels < 1 || header.rate <= 0) return null
         val buffer = ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN)
-        var at = 12
-        var channels = 0
-        var rate = 0
-        var bits = 0
-        while (at + 8 <= wav.size) {
-            val id = String(wav, at, 4, Charsets.US_ASCII)
-            val size = buffer.getInt(at + 4)
-            if (size < 0) return null
-            val body = at + 8
-            when (id) {
-                "fmt " -> {
-                    if (buffer.getShort(body).toInt() != 1) return null // PCM only
-                    channels = buffer.getShort(body + 2).toInt()
-                    rate = buffer.getInt(body + 4)
-                    bits = buffer.getShort(body + 14).toInt()
-                }
-                "data" -> {
-                    if (bits != 16 || channels < 1 || rate <= 0) return null
-                    val end = minOf(body + size, wav.size)
-                    val count = (end - body) / 2 / channels
-                    val samples = ShortArray(count) { i ->
-                        var sum = 0
-                        for (c in 0 until channels) sum += buffer.getShort(body + (i * channels + c) * 2)
-                        (sum / channels).toShort()
-                    }
-                    return samples to rate
-                }
-            }
-            at = body + size + (size and 1)
+        val count = header.dataSize / 2 / channels
+        val samples = ShortArray(count) { i ->
+            var sum = 0
+            for (c in 0 until channels) sum += buffer.getShort(header.dataStart + (i * channels + c) * 2)
+            (sum / channels).toShort()
         }
-        return null
+        return samples to header.rate
     }
 }

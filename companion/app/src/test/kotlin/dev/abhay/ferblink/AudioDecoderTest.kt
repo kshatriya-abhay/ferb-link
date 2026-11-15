@@ -62,4 +62,38 @@ class AudioDecoderTest {
         val seconds = LinkContract.MAX_AUDIO_SECONDS + 2
         assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.fromPcm(ShortArray(16_000 * seconds), 16_000, 1) }
     }
+
+    @Test
+    fun `a WAV with a chunk before fmt goes on as it is`() {
+        val plain = AudioDecoder.wav(ShortArray(16_000), 16_000)
+        val junk = ByteBuffer.allocate(36).order(ByteOrder.LITTLE_ENDIAN).put("JUNK".toByteArray()).putInt(28).array()
+        val wav = plain.copyOfRange(0, 12) + junk + plain.copyOfRange(12, plain.size)
+        ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN).putInt(4, wav.size - 8)
+        assertThat(AudioDecoder.toWav(wav, "audio/wav")).isSameInstanceAs(wav)
+        assertThat(AudioDecoder.seconds(wav)).isWithin(0.01).of(1.0)
+    }
+
+    @Test
+    fun `a WAV whose fmt chunk is cut short is unreadable, not passed on`() {
+        val e = assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.toWav(BARE_FMT, "audio/wav") }
+        assertThat(e.message).contains("no usable header")
+    }
+
+    @Test
+    fun `a WAV with no data chunk is unreadable`() {
+        val noData = AudioDecoder.wav(ShortArray(16_000), 16_000).copyOfRange(0, 36)
+        assertThrows(AudioDecoder.Unreadable::class.java) { AudioDecoder.toWav(noData, "audio/wav") }
+    }
+
+    companion object {
+        /**
+         * 60 bytes that the old fixed-offset check passed: RIFF/WAVE, a LIST chunk over bytes 20-52
+         * (so offset 28 reads 32000), then "fmt " with size 0 and no body at the very end.
+         */
+        val BARE_FMT: ByteArray = ByteBuffer.allocate(60).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(52); put("WAVE".toByteArray())
+            put("LIST".toByteArray()); putInt(32); putInt(0); putInt(0); putInt(32_000)
+            position(52); put("fmt ".toByteArray()); putInt(0)
+        }.array()
+    }
 }
