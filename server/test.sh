@@ -27,4 +27,12 @@ status=0; out=$("$ROOT/server/run.sh" check 2>&1) || status=$?
 check "held lock: refused" '[ "$status" != 0 ] && grep -q "bench is running" <<<"$out"'
 kill "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true
 
+# server:mode's choice goes in server.local.conf (gitignored), which server.conf reads last, so
+# switching modes never edits the tracked file.
+mkdir -p "$T/repo/server"
+cp "$ROOT/server/server.conf" "$T/repo/server/"
+check "without server.local.conf: the tracked default" '[ "$(bash -c "source $T/repo/server/server.conf; echo \$CAPABILITIES")" = full ]'
+echo "CAPABILITIES=text" > "$T/repo/server/server.local.conf"
+check "server.local.conf overrides it" '[ "$(bash -c "source $T/repo/server/server.conf; echo \$CAPABILITIES")" = text ]'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

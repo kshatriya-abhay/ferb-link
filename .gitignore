@@ -1,5 +1,7 @@
 # Downloaded by `mise run server:install` and `server:model` (pinned and SHA-256 checked)
 server/build/
+# This computer's server settings (mise run server:mode writes it); server.conf reads it last
+server/server.local.conf
 *.part
 
 # Local instructions for coding agents; they point into a private notes vault
