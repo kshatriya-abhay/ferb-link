@@ -82,10 +82,13 @@ mkdir -p "$MODELS_DIR"
 # Ferb's bench may have it already (on /data): move it to the SSD and leave the bench a symlink, so
 # the file is stored once. Agreed with Ferb's session; the bench reads it through the link.
 CACHED="$FERB_REPO/build/bench/models/$FILE"
-if [ ! -f "$DEST" ] && [ -f "$CACHED" ] && [ ! -L "$CACHED" ] && echo "$SHA  $CACHED" | sha256sum -c --quiet 2>/dev/null; then
-  cp "$CACHED" "$DEST.part" && echo "$SHA  $DEST.part" | sha256sum -c --quiet && mv "$DEST.part" "$DEST" && ln -sf "$DEST" "$CACHED"
+bench_copy() { [ -f "$CACHED" ] && [ ! -L "$CACHED" ] && echo "$SHA  $CACHED" | sha256sum -c --quiet 2>/dev/null; }
+if [ ! -f "$DEST" ] && bench_copy; then
+  cp "$CACHED" "$DEST.part" && echo "$SHA  $DEST.part" | sha256sum -c --quiet && mv "$DEST.part" "$DEST"
 fi
 server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "$DEST" "$SHA"
+# Linked whenever the bench still has its own checked copy, whichever run put the file here.
+if bench_copy; then ln -sf "$DEST" "$CACHED"; fi
 echo "$usage_name is in $DEST."
 # In full mode the server also needs the model's projector (images and audio in).
 if [ "$CAPABILITIES" = full ] && read -r _ REPO REV PFILE PSHA < <(grep "^$usage_name " server/projectors.txt); then
