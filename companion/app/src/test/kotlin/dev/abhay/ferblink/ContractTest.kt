@@ -238,6 +238,7 @@ class ContractTest {
 
     private val dir = File(System.getProperty("contract.dir") ?: "../../contract/v1")
     private val write = System.getProperty("contract.write") == "true"
+    private val MANIFEST = "SHA256SUMS"
 
     @Before
     fun start() {
@@ -279,7 +280,14 @@ class ContractTest {
             val file = File(dir, "${case.name}.json")
             if (write) {
                 val fixture = JSONObject().put("method", case.method).put("extras", toJson(case.extras)).put("result", result).put("note", case.note)
-                file.writeText(ordered(fixture) + "\n")
+                // Unchanged but for example timings and confidences (compared by type): keep the file, so
+                // a rewrite's diff (and SHA256SUMS) shows only real changes.
+                val same = file.exists() && runCatching {
+                    val old = JSONObject(file.readText())
+                    check(old.getString("note") == case.note && canonical(old.getJSONObject("extras")) == canonical(toJson(case.extras)))
+                    assertSame(case.name, old.getJSONObject("result"), result)
+                }.isSuccess
+                if (!same) file.writeText(ordered(fixture) + "\n")
                 continue
             }
             assertWithMessage("${file.path} is missing (mise run companion:contract-write)").that(file.exists()).isTrue()
@@ -402,6 +410,29 @@ class ContractTest {
         val reply = run(Case("x", "rewrite", "", mapOf("request" to "alarm laga do", "instructions" to INSTRUCTIONS)), State(url = url)).getJSONObject("reply")
         assertThat(reply.getString("error_kind")).isEqualTo("server")
         assertThat(reply.has("schema")).isFalse()
+    }
+
+    /**
+     * `SHA256SUMS`, next to the fixtures: each fixture's SHA-256, as `sha256sum` writes it ("<hex>  <name>",
+     * sorted by name), so Ferb can check its copy is whole and is the one this Ferb Link answers.
+     * `contract-write` rewrites it with the fixtures.
+     */
+    @Test
+    fun `SHA256SUMS lists every fixture with its hash`() {
+        if (write) {
+            // After the fixtures are written: JUnit runs tests in no fixed order.
+            `Ferb Link answers each fixture's extras with its result`()
+            File(dir, MANIFEST).writeText(manifest())
+            return
+        }
+        val file = File(dir, MANIFEST)
+        assertWithMessage("${file.path} is missing (mise run companion:contract-write)").that(file.exists()).isTrue()
+        assertWithMessage("${file.path} is out of date (mise run companion:contract-write)").that(file.readText()).isEqualTo(manifest())
+    }
+
+    private fun manifest(): String = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().sortedBy { it.name }.joinToString("") { file ->
+        val hex = java.security.MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+        "$hex  ${file.name}\n"
     }
 
     @Test
