@@ -239,6 +239,10 @@ class ContractTest {
     private val dir = File(System.getProperty("contract.dir") ?: "../../contract/v1")
     private val write = System.getProperty("contract.write") == "true"
     private val MANIFEST = "SHA256SUMS"
+    private val LIMITS = "limits.json"
+
+    /** The fixtures: every `.json` here but [LIMITS]. */
+    private fun fixtureFiles() = dir.listFiles { f -> f.name.endsWith(".json") && f.name != LIMITS }.orEmpty()
 
     @Before
     fun start() {
@@ -422,12 +426,34 @@ class ContractTest {
         if (write) {
             // After the fixtures are written: JUnit runs tests in no fixed order.
             `Ferb Link answers each fixture's extras with its result`()
+            File(dir, LIMITS).writeText(limits())
             File(dir, MANIFEST).writeText(manifest())
             return
         }
         val file = File(dir, MANIFEST)
         assertWithMessage("${file.path} is missing (mise run companion:contract-write)").that(file.exists()).isTrue()
         assertWithMessage("${file.path} is out of date (mise run companion:contract-write)").that(file.readText()).isEqualTo(manifest())
+    }
+
+    /**
+     * `limits.json`: every number in [LinkContract] (limits, timeouts, token caps, VERSION), by name,
+     * so a change shows in `SHA256SUMS` and Ferb can test its own copies against it.
+     */
+    @Test
+    fun `limits json holds every number in LinkContract`() {
+        assumeFalse("rewriting the fixtures", write)
+        val file = File(dir, LIMITS)
+        assertWithMessage("${file.path} is missing (mise run companion:contract-write)").that(file.exists()).isTrue()
+        assertWithMessage("${file.path} is out of date (mise run companion:contract-write)").that(file.readText()).isEqualTo(limits())
+        assertThat(JSONObject(file.readText()).getInt("MAX_REQUEST_CHARS")).isEqualTo(LinkContract.MAX_REQUEST_CHARS)
+    }
+
+    private fun limits(): String {
+        val numbers = LinkContract::class.java.declaredFields
+            .filter { java.lang.reflect.Modifier.isStatic(it.modifiers) && !it.isSynthetic && !it.name.startsWith("$") && (it.type == Int::class.javaPrimitiveType || it.type == Long::class.javaPrimitiveType) }
+            .sortedBy { it.name }
+            .map { "  ${JSONObject.quote(it.name)}: ${it.get(null)}" }
+        return numbers.joinToString(",\n", "{\n", "\n}\n")
     }
 
     private fun manifest(): String = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().sortedBy { it.name }.joinToString("") { file ->
@@ -438,7 +464,7 @@ class ContractTest {
     @Test
     fun `every fixture is a case here, or synthetic`() {
         assumeFalse("rewriting the fixtures", write)
-        val files = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
+        val files = fixtureFiles()
         assertThat(files).isNotEmpty()
         for (file in files) {
             val fixture = JSONObject(file.readText())
@@ -450,7 +476,7 @@ class ContractTest {
     @Test
     fun `every error kind has a fixture`() {
         assumeFalse("rewriting the fixtures", write)
-        val kinds = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().mapNotNull { file ->
+        val kinds = fixtureFiles().mapNotNull { file ->
             val result = JSONObject(file.readText()).getJSONObject("result")
             result.optJSONObject("reply")?.optString("error_kind")?.ifEmpty { null } ?: result.optString("error_kind").ifEmpty { null }
         }.toSet()
