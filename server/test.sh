@@ -81,4 +81,15 @@ check "server.local.conf overrides it" '[ "$(bash -c "source $T/repo/server/serv
 # but not the systemd unit. FERB_REPO is the exception (these tests set it).
 check "MODELS_DIR in the environment doesn't change it" '[ "$(MODELS_DIR=/elsewhere bash -c "source $T/repo/server/server.conf; echo \$MODELS_DIR")" != /elsewhere ]'
 
+# server:mode writes its choice with local-conf.sh: only that setting's line changes, the user's
+# other lines stay, and running it twice gives the same file.
+cp "$ROOT/server/local-conf.sh" "$T/repo/server/" 2>/dev/null || true
+printf 'MODEL=qwen3.5-2b\nCAPABILITIES=full\n# a note\n' > "$T/repo/server/server.local.conf"
+"$T/repo/server/local-conf.sh" CAPABILITIES text >/dev/null 2>&1 || true
+"$T/repo/server/local-conf.sh" CAPABILITIES text >/dev/null 2>&1 || true
+check "local-conf.sh: replaces the setting once, keeps the rest" '[ "$(cat "$T/repo/server/server.local.conf")" = "$(printf "MODEL=qwen3.5-2b\n# a note\nCAPABILITIES=text")" ]'
+rm "$T/repo/server/server.local.conf"
+"$T/repo/server/local-conf.sh" CAPABILITIES full >/dev/null 2>&1 || true
+check "local-conf.sh: creates the file when missing" '[ "$(cat "$T/repo/server/server.local.conf" 2>/dev/null)" = CAPABILITIES=full ]'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

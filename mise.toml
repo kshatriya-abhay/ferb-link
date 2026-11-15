@@ -148,11 +148,7 @@ if [ "$usage_capabilities" = full ]; then
   server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "$MODELS_DIR/$MODEL-$FILE" "$SHA"
 fi
 # This computer's choice, in the gitignored server.local.conf: the tracked server.conf keeps its default.
-LOCAL=server/server.local.conf
-touch "$LOCAL"
-grep -v '^CAPABILITIES=' "$LOCAL" > "$LOCAL.new" || true
-echo "CAPABILITIES=$usage_capabilities" >> "$LOCAL.new"
-mv "$LOCAL.new" "$LOCAL"
+server/local-conf.sh CAPABILITIES "$usage_capabilities"
 echo "CAPABILITIES=$usage_capabilities"
 if systemctl --user -q is-active ferb-llama; then
   systemctl --user stop ferb-llama
