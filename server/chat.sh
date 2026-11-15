@@ -18,7 +18,7 @@ SAMPLE_TOOLS='[
  {"name": "set_alarm", "description": "Set an alarm for a time of day", "parameters": {"type": "object", "properties": {"time": {"type": "string", "description": "The time, e.g. 6:30 am"}}, "required": ["time"]}},
  {"name": "set_flashlight", "description": "Turn the flashlight on or off", "parameters": {"type": "object", "properties": {"on": {"type": "boolean"}}, "required": ["on"]}}
 ]'
-# Ferb Link's system prompt (ServerClient.SYSTEM), the same as Ferb's bench.
+# Ferb Link's system prompt (Prompts.SYSTEM; ServerClientTest checks they match), the same as Ferb's bench.
 FERB_SYSTEM="You are Ferb, an assistant on an Android phone. When the user asks for something one of the tools does, call that tool with the arguments in the user's words. If no tool fits, or the user isn't asking for an action, reply in a few words without calling a tool."
 
 DIM=$'\e[2m' BOLD=$'\e[1m' CYAN=$'\e[36m' GREEN=$'\e[32m' RED=$'\e[31m' OFF=$'\e[0m'
@@ -49,11 +49,13 @@ tools_json() {
 }
 
 help() {
+  local ferb="not built yet, so the sample tools"
+  [ -f "$FERB_TOOLS" ] && ferb="$(jq length "$FERB_TOOLS")"
   cat <<EOF
 ${BOLD}Commands${OFF}
   /chat             a conversation (the default); the model sees everything said so far
   /tools [ferb|sample]
-                    each line is one request with tools, as Ferb sends it: Ferb's 15 tools
+                    each line is one request with tools, as Ferb sends it: Ferb's tools ($ferb)
                     (from $FERB_TOOLS, once Ferb has run tool-check), or 3 sample tools
   /image FILE [text]   send a picture, with a question or without (CAPABILITIES=full)
   /audio FILE [text]   send a recording: wav or mp3, anything else is converted with ffmpeg

@@ -7,6 +7,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 import java.net.InetSocketAddress
 import kotlin.math.ln
 
@@ -366,6 +367,12 @@ class ServerClientTest {
         val bytes = body.toByteArray()
         sendResponseHeaders(code, bytes.size.toLong())
         responseBody.use { it.write(bytes) }
+    }
+
+    @Test
+    fun `server chat script sends Ferb Link's system prompt`() {
+        val line = File("../../server/chat.sh").readLines().single { it.startsWith("FERB_SYSTEM=") }
+        assertThat(line.removePrefix("FERB_SYSTEM=\"").removeSuffix("\"")).isEqualTo(Prompts.SYSTEM)
     }
 
     private companion object {
