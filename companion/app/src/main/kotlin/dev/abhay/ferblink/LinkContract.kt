@@ -155,7 +155,9 @@ object LinkContract {
     const val EXTRA_TIMEOUT_MS = "timeout_ms"
     /**
      * A ByteArray: the recording, at most [MAX_AUDIO_BYTES] and [MAX_AUDIO_SECONDS]. Opus in OGG,
-     * AAC, or anything Android decodes; WAV is sent on as it is.
+     * AAC, or anything Android decodes; WAV is sent on as it is. Ferb Link lets one more second
+     * through, so a recording stopped at [MAX_AUDIO_SECONDS] isn't turned down for the encoder's
+     * padding or a rounded length in its header; send at most [MAX_AUDIO_SECONDS].
      */
     const val EXTRA_AUDIO = "audio"
     /** The recording's type, such as "audio/ogg" or "audio/mp4"; only "audio/wav" changes anything. */
