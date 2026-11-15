@@ -90,34 +90,35 @@ object LinkContract {
     const val METHOD_DECIDE = "decide"
 
     /**
-     * A typed request (Hinglish, as Ferb sends it) as plain English commands, one per action, for
-     * Needle 3, or none when it asks for nothing. The laptop's model writes them with [Rewrite]'s
-     * v2 prompt (on the held-out suite v2.1 ran one wrong action; Ferb now sends its own prompt, so
-     * this is only for an older Ferb); Hindi amounts are worked out in code first. Takes
-     * [EXTRA_REQUEST], [EXTRA_NOW] (optional: the phone's clock without it), [EXTRA_TIMEOUT_MS];
-     * returns [RESULT_REPLY], [RESULT_VERSION]. The reply: `success`, `commands` (a list of
-     * strings, empty when nothing is asked), `invented` (numbers and names in the commands that
-     * the request didn't hold: don't run those), `model`, `ms`, `source: "laptop"`, and `error`,
-     * `error_detail`, `error_kind` on failure, as for [METHOD_COMPLETE].
+     * A typed request (Hinglish, as Ferb sends it) as plain English commands for Needle 3, one per
+     * action. Takes [EXTRA_REQUEST], [EXTRA_TIMEOUT_MS], and per mode the extras below; returns
+     * [RESULT_REPLY], [RESULT_VERSION]. Every reply has `success`, `commands` (a list of strings,
+     * empty when nothing is asked), `invented`, `model`, `ms`, `source: "laptop"`, and `error`,
+     * `error_detail`, `error_kind` on failure, as for [METHOD_COMPLETE]. Three modes (the last two are [Instructed.Mode]):
      *
-     * With [EXTRA_INSTRUCTIONS] it runs the caller's own prompt instead (Ferb's GeminiRewrite, so
-     * Gemma and Gemini Nano share one prompt): the instructions as the system message, the request
-     * verbatim as the user message, greedy, at most [EXTRA_MAX_TOKENS] tokens, and no pre-pass
-     * ([EXTRA_NOW] is ignored). `commands` then holds the first line as one command, or nothing
-     * for NONE, and `invented` is always empty (Ferb's prompt writes Hindi amounts as numbers, so
-     * the check would flag right answers); the reply adds `raw` (the model's text, for the caller's own parsing) and
-     * `"instructions": true`. A first line cut off at the token cap fails ("answer cut off",
-     * bad_reply), so half a command never runs. An older Ferb Link ignores the extra and answers with v2, without
-     * that echo. Every instructed reply has `truncated`: whether the model stopped at the token cap.
+     * - **Ferb Link's prompt** (no [EXTRA_INSTRUCTIONS]; only an older Ferb uses it): [Rewrite]'s
+     *   prompt, with Hindi amounts worked out in code first and [EXTRA_NOW] (the phone's clock
+     *   without it). `invented` lists numbers and names in the commands that the request didn't
+     *   hold: don't run those.
+     * - **The caller's prompt** ([EXTRA_INSTRUCTIONS]; Ferb's GeminiRewrite, so Gemma and Gemini
+     *   Nano share one prompt): the instructions as the system message, the request verbatim as the
+     *   user message, greedy, at most [EXTRA_MAX_TOKENS] tokens, no pre-pass, [EXTRA_NOW] ignored.
+     *   `commands` holds the first line as one command, or nothing for NONE; `invented` is always
+     *   empty (Ferb's prompt writes Hindi amounts as numbers, so the check would flag right
+     *   answers). The reply adds `raw` (the model's text), `"instructions": true` and `truncated`
+     *   (the model stopped at the token cap). A first line cut off at the cap fails ("answer cut
+     *   off", bad_reply), so half a command never runs.
+     * - **The caller's prompt and a schema** ([EXTRA_INSTRUCTIONS] and [EXTRA_JSON_SCHEMA]): the
+     *   answer is JSON in that schema (llama-server turns it into a grammar). The reply adds
+     *   `"schema": true` and `output`, the parsed JSON object; `commands` stays empty (Ferb reads
+     *   `output`). An answer that hit the token cap always fails ("answer cut off", `truncated:
+     *   true`), as cut JSON is half an answer; one that isn't a JSON object is bad_reply ("not
+     *   JSON"). Ferb Link doesn't check `output` against the schema. A schema llama-server can't
+     *   use is bad_request ("bad request: schema not supported").
      *
-     * With [EXTRA_JSON_SCHEMA] too, the answer is JSON in that schema (llama-server turns it into a
-     * grammar): the reply adds `"schema": true` and `output`, the parsed JSON object, and
-     * `commands` stays empty (Ferb reads `output`). An answer that hit the token cap always fails
-     * ("answer cut off", `truncated: true`), as cut JSON is half an answer; one that isn't a JSON
-     * object is bad_reply ("not JSON"). Ferb Link doesn't check `output` against the schema. A
-     * schema llama-server can't use is bad_request ("bad request: schema not supported"). An
-     * older Ferb Link ignores the extra, with no `schema` echo and no [RESULT_JSON_SCHEMA] in
-     * status: Ferb checks status first and uses a line prompt then.
+     * An older Ferb Link ignores [EXTRA_INSTRUCTIONS] and [EXTRA_JSON_SCHEMA] and answers in the
+     * first mode, without the `instructions` or `schema` echo; it also has no [RESULT_JSON_SCHEMA]
+     * in status, so Ferb checks status first and uses a line prompt then.
      */
     const val METHOD_REWRITE = "rewrite"
 
