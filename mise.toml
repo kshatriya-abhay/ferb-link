@@ -88,7 +88,7 @@ fi
 server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$FILE" "$DEST" "$SHA"
 echo "$usage_name is in $DEST."
 # In full mode the server also needs the model's projector (images and audio in).
-if [ "${CAPABILITIES:-text}" = full ] && read -r _ REPO REV PFILE PSHA < <(grep "^$usage_name " server/projectors.txt); then
+if [ "$CAPABILITIES" = full ] && read -r _ REPO REV PFILE PSHA < <(grep "^$usage_name " server/projectors.txt); then
   server/fetch.sh "https://huggingface.co/$REPO/resolve/$REV/$PFILE" "$MODELS_DIR/$usage_name-$PFILE" "$PSHA"
   echo "Its projector is in $MODELS_DIR/$usage_name-$PFILE."
 fi
@@ -138,7 +138,7 @@ usage = 'arg "[capabilities]" help="text or full; without it, shows the current 
 run = '''
 set -euo pipefail
 source server/server.conf
-if [ -z "${usage_capabilities:-}" ]; then echo "CAPABILITIES=${CAPABILITIES:-text} (model $MODEL)"; exit 0; fi
+if [ -z "${usage_capabilities:-}" ]; then echo "CAPABILITIES=$CAPABILITIES (model $MODEL)"; exit 0; fi
 case "$usage_capabilities" in text|full) ;; *) echo "text or full"; exit 1 ;; esac
 if [ "$usage_capabilities" = full ]; then
   read -r _ REPO REV FILE SHA < <(grep "^$MODEL " server/projectors.txt) || { echo "No projector for $MODEL in server/projectors.txt"; exit 1; }

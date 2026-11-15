@@ -47,6 +47,12 @@ check "server running: it holds the lock, so a bench can't start" '[ -e "$T/serv
 kill "$server"; wait "$server" 2>/dev/null || true
 check "server stopped: a bench can start" 'bench_could_start'
 
+# A CAPABILITIES other than text or full is refused, not quietly run as text.
+echo "CAPABILITIES=ful" >> "$F/server/server.local.conf"
+status=0; out=$("$F/server/run.sh" check 2>&1) || status=$?
+check "CAPABILITIES=ful: refused, exit 1" '[ "$status" = 1 ] && grep -q "CAPABILITIES" <<<"$out"'
+sed -i '$d' "$F/server/server.local.conf"
+
 # server:chat asks about the model without loading it: `/props` with autoload=false, as the app
 # does, against a stand-in router whose model is unloaded. What the model takes in then comes from
 # CAPABILITIES.

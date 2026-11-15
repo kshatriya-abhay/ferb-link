@@ -28,8 +28,9 @@ MODEL_PATH=$(model_file "$FILE")
 [ -f "$MODEL_PATH" ] || { echo "$FILE is missing: mise run server:model $MODEL" >&2; exit 1; }
 [ -x "$ROOT/server/build/llama/llama-server" ] || { echo "llama-server is missing: mise run server:install" >&2; exit 1; }
 [ -s "$KEY_FILE" ] || { echo "No API key in $KEY_FILE: mise run server:install" >&2; exit 1; }
+case "$CAPABILITIES" in text|full) ;; *) echo "CAPABILITIES is text or full, not $CAPABILITIES (server/server.conf)" >&2; exit 1 ;; esac
 PROJECTOR=
-if [ "${CAPABILITIES:-text}" = full ]; then
+if [ "$CAPABILITIES" = full ]; then
   read -r _ _ _ PFILE _ < <(grep "^$MODEL " "$ROOT/server/projectors.txt") || { echo "No projector for $MODEL in server/projectors.txt" >&2; exit 1; }
   PROJECTOR=$(model_file "$MODEL-$PFILE")
   [ -f "$PROJECTOR" ] || { echo "The projector is missing: mise run server:mode full" >&2; exit 1; }
