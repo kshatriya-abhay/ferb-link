@@ -209,7 +209,7 @@ description = "Unload the model now, freeing its GPU memory and RAM; the next re
 run = '''
 set -euo pipefail
 source server/server.conf
-curl -sS -X POST "http://127.0.0.1:$PORT/models/unload" -H "Authorization: Bearer $(cat "$KEY_FILE")" \
+curl -sS -X POST "http://127.0.0.1:$PORT/models/unload" -H @<(printf 'Authorization: Bearer %s\n' "$(cat "$KEY_FILE")") \
   -H "Content-Type: application/json" -d "{\"model\": \"$MODEL\"}" | jq -r 'if .success then "Unloaded" else .error.message end'
 '''
 
@@ -226,7 +226,7 @@ case "$usage_where" in
   tailnet) URL="http://$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')" ;;
   *) echo "where: local or tailnet"; exit 1 ;;
 esac
-curl -fsS "$URL/v1/chat/completions" -H "Authorization: Bearer $(cat "$KEY_FILE")" -H "Content-Type: application/json" -d '{
+curl -fsS "$URL/v1/chat/completions" -H @<(printf 'Authorization: Bearer %s\n' "$(cat "$KEY_FILE")") -H "Content-Type: application/json" -d '{
   "model": "'"$MODEL"'",
   "messages": [{"role": "user", "content": "set a timer for 5 minutes"}],
   "tools": [{"type": "function", "function": {"name": "set_timer", "description": "Start a countdown timer",

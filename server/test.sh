@@ -38,7 +38,7 @@ mkdir -p "$F/server/build/llama" "$T/models"
 cp "$ROOT/server/run.sh" "$ROOT/server/server.conf" "$ROOT/server/models.txt" "$F/server/"
 read -r FAKE_MODEL _ _ FAKE_FILE _ < <(grep -v '^#' "$ROOT/server/models.txt" | head -1)
 printf 'MODEL=%s\nCAPABILITIES=text\nMODELS_DIR=%s\nKEY_FILE=%s\n' "$FAKE_MODEL" "$T/models" "$T/key" > "$F/server/server.local.conf"
-touch "$T/models/$FAKE_FILE"; echo fake > "$T/key"
+touch "$T/models/$FAKE_FILE"; FAKE_KEY="not-a-real-key-$RANDOM$RANDOM"; echo "$FAKE_KEY" > "$T/key"
 printf '#!/usr/bin/env bash\ntouch "%s"\nexec sleep 30\n' "$T/serving" > "$F/server/build/llama/llama-server"
 chmod +x "$F/server/build/llama/llama-server"
 "$F/server/run.sh" >/dev/null 2>&1 & server=$!
@@ -53,9 +53,15 @@ check "server stopped: a bench can start" 'bench_could_start'
 cp "$ROOT/server/chat.sh" "$F/server/"
 python3 "$ROOT/server/testdata/stub-server.py" "$T/requests" "$T/port" & stub=$!
 for _ in $(seq 50); do [ -s "$T/port" ] && break; sleep 0.1; done
-out=$("$F/server/chat.sh" "http://127.0.0.1:$(cat "$T/port")" </dev/null 2>&1 || true)
+# A curl that notes its arguments, to show the key never is one (any local user can read them).
+mkdir -p "$T/bin"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s"\nexec %s "$@"\n' "$T/curl-args" "$(command -v curl)" > "$T/bin/curl"
+chmod +x "$T/bin/curl"
+out=$(PATH="$T/bin:$PATH" "$F/server/chat.sh" "http://127.0.0.1:$(cat "$T/port")" </dev/null 2>&1 || true)
 kill "$stub"; wait "$stub" 2>/dev/null || true
 check "server:chat: /props never loads the model" 'grep -q "^/props" "$T/requests" && ! grep "^/props" "$T/requests" | grep -vq "autoload=false"'
+check "server:chat: the key is never in curl's arguments or the output" '[ -s "$T/curl-args" ] && ! grep -qF "$FAKE_KEY" "$T/curl-args" && ! grep -qF "$FAKE_KEY" <<<"$out"'
+check "no script puts the key in curl's arguments" '! grep -nE "Bearer (\\\$\\(|\\\$KEY)" "$ROOT/mise.toml" "$ROOT"/server/*.sh'
 check "server:chat: an unloaded model's inputs come from CAPABILITIES" 'grep -q "taking text\." <<<"$out"'
 
 # server:mode's choice goes in server.local.conf (gitignored), which server.conf reads last, so

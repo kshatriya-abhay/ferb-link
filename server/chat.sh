@@ -7,6 +7,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/server/server.conf"
 URL=${1:-http://127.0.0.1:$PORT}
 KEY=$(cat "$KEY_FILE" 2>/dev/null) || { echo "No API key in $KEY_FILE: mise run server:install" >&2; exit 1; }
+# The key goes to curl as a header file (-H @<(auth)), never as an argument: any local user can
+# read a process's arguments.
+auth() { printf 'Authorization: Bearer %s\n' "$KEY"; }
 
 # Ferb's tool schemas, as its bench builds them; a few sample tools when they aren't there.
 FERB_TOOLS="$FERB_REPO/app/build/tool-check/all.json"
@@ -21,10 +24,10 @@ FERB_SYSTEM="You are Ferb, an assistant on an Android phone. When the user asks 
 DIM=$'\e[2m' BOLD=$'\e[1m' CYAN=$'\e[36m' GREEN=$'\e[32m' RED=$'\e[31m' OFF=$'\e[0m'
 
 curl -fs --max-time 3 "$URL/health" >/dev/null || { echo "The server doesn't answer at $URL. Start it: mise run server:start" >&2; exit 1; }
-MODEL=$(curl -fs --max-time 3 -H "Authorization: Bearer $KEY" "$URL/v1/models" | jq -r '.data[0].id // "?"')
+MODEL=$(curl -fs --max-time 3 -H @<(auth) "$URL/v1/models" | jq -r '.data[0].id // "?"')
 # What the server takes in besides text (CAPABILITIES=full loads the projector). autoload=false, as
 # Ferb Link asks, so this doesn't load the model; while it isn't loaded, server.conf says.
-read -r VISION AUDIO < <(curl -fs --max-time 3 -H "Authorization: Bearer $KEY" "$URL/props?model=$MODEL&autoload=false" | jq -r '"\(.modalities.vision // false) \(.modalities.audio // false)"')
+read -r VISION AUDIO < <(curl -fs --max-time 3 -H @<(auth) "$URL/props?model=$MODEL&autoload=false" | jq -r '"\(.modalities.vision // false) \(.modalities.audio // false)"')
 if [ -z "${VISION:-}" ]; then
   VISION=false AUDIO=false; [ "$CAPABILITIES" = full ] && VISION=true AUDIO=true
 fi
@@ -117,7 +120,7 @@ chat_turn() {
     if [ -n "$r" ]; then $thinking || printf '%s' "$DIM"; thinking=true; printf '%s' "$r"; fi
     if [ -n "$c" ]; then $thinking && { printf '%s\n\n' "$OFF"; thinking=false; }; printf '%s' "$c"; reply+=$c; fi
     [ -n "$t" ] && timings=$t
-  done < <(curl -sN -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" "$URL/v1/chat/completions" --data-binary @"$TMP/body.json")
+  done < <(curl -sN -H @<(auth) -H "Content-Type: application/json" "$URL/v1/chat/completions" --data-binary @"$TMP/body.json")
   printf '%s\n' "$OFF"
   jq --arg text "$reply" '. + [{role: "assistant", content: $text}]' "$TMP/messages.json" > "$TMP/m.json" && mv "$TMP/m.json" "$TMP/messages.json"
   if $stats && [ -n "$timings" ]; then
@@ -138,7 +141,7 @@ tools_turn() {
     tools: [$tools[0][] | {type: "function", function: .}], tool_choice: "auto",
     temperature: 0, max_tokens: 256, logprobs: true, chat_template_kwargs: {enable_thinking: $think}}' > "$TMP/body.json"
   started=$(date +%s%N)
-  curl -s -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" "$URL/v1/chat/completions" --data-binary @"$TMP/body.json" > "$TMP/reply.json"
+  curl -s -H @<(auth) -H "Content-Type: application/json" "$URL/v1/chat/completions" --data-binary @"$TMP/body.json" > "$TMP/reply.json"
   ms=$(( ($(date +%s%N) - started) / 1000000 ))
   if jq -e '.error' "$TMP/reply.json" >/dev/null 2>&1; then echo "${RED}$(jq -r '.error.message' "$TMP/reply.json")${OFF}"; return; fi
   jq -r --arg green "$GREEN" --arg dim "$DIM" --arg off "$OFF" '
