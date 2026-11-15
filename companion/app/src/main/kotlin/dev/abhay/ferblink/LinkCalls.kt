@@ -90,7 +90,7 @@ class LinkCalls(
             }
         }
         LinkContract.METHOD_WAKE -> {
-            if (state.enabled && state.configured && shared.waking.compareAndSet(false, true)) {
+            if (laptopOff() == null && shared.waking.compareAndSet(false, true)) {
                 background.execute {
                     try {
                         state.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.let(state::heard)
@@ -107,9 +107,9 @@ class LinkCalls(
                 ?: (extras[DEBUG_AUDIO_BASE64] as? String)?.takeIf { debug }?.let { Base64.getDecoder().decode(it) }
             val mime = extras[LinkContract.EXTRA_AUDIO_MIME] as? String
             var recording = "Recording"
+            val off = laptopOff()
             val transcript = when {
-                !state.enabled -> Transcript.failed(ErrorKind.Off, "Ferb Link is off")
-                !state.configured -> Transcript.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
+                off != null -> Transcript.failed(off)
                 audio == null || audio.isEmpty() -> Transcript.failed(ErrorKind.BadRequest, "No recording", short = "bad request: no audio")
                 audio.size > LinkContract.MAX_AUDIO_BYTES -> Transcript.failed(ErrorKind.BadRequest, "The recording is over ${LinkContract.MAX_AUDIO_BYTES / 1024} KB", short = "bad request: recording too big")
                 else -> try {
@@ -135,9 +135,9 @@ class LinkCalls(
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
             val at = (extras[LinkContract.EXTRA_NOW] as? String)?.takeIf { it.isNotBlank() } ?: nowText(now())
             val ask = Instructed.Ask.from(extras)
+            val off = laptopOff()
             val rewritten = when {
-                !state.enabled -> Rewritten.failed(Failure(ErrorKind.Off, "Ferb Link is off"), request, ask.asked)
-                !state.configured -> Rewritten.failed(Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"), request, ask.asked)
+                off != null -> Rewritten.failed(off, request, ask.asked)
                 request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, ask.asked)
                 ask.failure != null -> Rewritten.failed(ask.failure, request, ask.asked)
                 ask.mode != null -> state.client(trace).rewriteInstructed(request, ask.mode, timeoutMs(extras))
@@ -159,31 +159,40 @@ class LinkCalls(
         else -> throw IllegalArgumentException("Unknown method $method")
     }
 
+    /** Why no method may go to the laptop now (Ferb Link off, or no server set up); null when it may. */
+    private fun laptopOff(): Failure? = when {
+        !state.enabled -> Failure(ErrorKind.Off, "Ferb Link is off")
+        !state.configured -> Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up")
+        else -> null
+    }
+
     /**
      * `complete`: the laptop's tool calls for [request]. Ferb's calls and Ferb Link's own Try box
      * both come here, so they send the same thing (Hindi amounts worked out first) and note the same state.
      */
-    fun complete(request: String, toolsJson: String, facts: String?, timeoutMs: Int?, caller: String): Reply = when {
-        !state.enabled -> Reply.failed(ErrorKind.Off, "Ferb Link is off")
-        !state.configured -> Reply.failed(ErrorKind.NotSetUp, "Ferb Link has no server set up")
-        request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
-        request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
-        // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
-        else -> state.client(trace).complete(Amounts.forRequest(request), toolsJson, facts, timeoutMs).also {
-            if (it.failure == null) {
-                state.lastModel = it.model
-                state.saw(ModelState.Loaded, now())
-                refreshAudio()
+    fun complete(request: String, toolsJson: String, facts: String?, timeoutMs: Int?, caller: String): Reply {
+        val off = laptopOff()
+        return when {
+            off != null -> Reply.failed(off)
+            request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
+            request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
+            // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
+            else -> state.client(trace).complete(Amounts.forRequest(request), toolsJson, facts, timeoutMs).also {
+                if (it.failure == null) {
+                    state.lastModel = it.model
+                    state.saw(ModelState.Loaded, now())
+                    refreshAudio()
+                }
+                RecentRequests.add(caller, request, it)
             }
-            RecentRequests.add(caller, request, it)
         }
     }
 
     /** `check`: whether the laptop answers, without waking the model, noting what it said. [timeoutMs] null: the client's. */
     fun check(timeoutMs: Int?): Health {
+        val off = laptopOff()
         val health = when {
-            !state.enabled -> Health(null, 0, Failure(ErrorKind.Off, "Ferb Link is off"))
-            !state.configured -> Health(null, 0, Failure(ErrorKind.NotSetUp, "Ferb Link has no server set up"))
+            off != null -> Health(null, 0, off)
             else -> state.client(trace).health(timeoutMs)
         }
         health.model?.let { state.lastModel = it }
