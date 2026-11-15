@@ -12,14 +12,14 @@ object TranscribeText {
     fun body(model: String, heard: String): String = JSONObject()
         .put("model", model)
         .put("messages", JSONArray()
-            .put(JSONObject().put("role", "system").put("content", ServerClient.TRANSCRIBE))
+            .put(JSONObject().put("role", "system").put("content", Prompts.TRANSCRIBE))
             .put(JSONObject().put("role", "user").put("content", "(The recording, as heard:) $heard")))
         .put("temperature", 0)
         .put("max_tokens", 300)
         .put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
-        .put("response_format", ServerClient.FORMAT_SLOT)
+        .put("response_format", Prompts.FORMAT_SLOT)
         .toString()
-        .replace("\"${ServerClient.FORMAT_SLOT}\"", ServerClient.TRANSCRIBE_FORMAT)
+        .replace("\"${Prompts.FORMAT_SLOT}\"", Prompts.TRANSCRIBE_FORMAT)
 
     /** [heard] through the transcribe prompt, then the same steps as [Voice.transcribe] after the model. */
     fun transcribe(client: ServerClient, heard: String, timeoutMs: Int?): Transcript {
