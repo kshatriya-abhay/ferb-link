@@ -7,26 +7,45 @@ trap 'rm -rf "$T"' EXIT
 fails=0
 check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi; }
 
-# run.sh refuses while Ferb's bench holds its lock, whoever starts it (server:start, or systemd at
-# login and on restart), and checking never creates the lock file.
+# Models run one at a time, through one lock: Ferb's bench holds build/bench/.lock exclusively
+# (`exec 9> …; flock -n 9`), and run.sh holds it shared for the server's whole life, however it
+# starts (server:start, server:run, systemd at login and on restart). So each refuses while the
+# other runs. Busy is exit 75, which systemd retries; a config error is 1, which it doesn't.
 export FERB_REPO="$T/ferb"
 LOCK="$FERB_REPO/build/bench/.lock"
-mkdir -p "$(dirname "$LOCK")"
+bench_could_start() { flock -n "$LOCK" true; }
 
-out=$("$ROOT/server/run.sh" check 2>&1 || true)
-check "no lock file: not refused for the bench" '! grep -q "bench is running" <<<"$out"'
-check "no lock file: the check doesn't create one" '[ ! -e "$LOCK" ]'
+status=0; out=$(FERB_REPO="$T/none" "$ROOT/server/run.sh" check 2>&1) || status=$?
+check "no Ferb repo: not refused for the bench" '[ "$status" != 75 ] && ! grep -q "bench is running" <<<"$out"'
+check "no Ferb repo: nothing created" '[ ! -e "$T/none" ]'
 
-touch "$LOCK"
-out=$("$ROOT/server/run.sh" check 2>&1 || true)
-check "free lock: not refused for the bench" '! grep -q "bench is running" <<<"$out"'
+mkdir -p "$FERB_REPO"
+status=0; out=$("$ROOT/server/run.sh" check 2>&1) || status=$?
+check "no lock file: not refused for the bench" '[ "$status" != 75 ] && ! grep -q "bench is running" <<<"$out"'
+check "no lock file: run.sh creates it, so the bench sees the server" '[ -f "$LOCK" ]'
 
-# Held by this shell, as the bench holds it (`exec 9> …; flock 9`), so nothing outlives the test.
+# Held by this shell, as the bench holds it, so nothing outlives the test.
 exec 9<"$LOCK"; flock 9
 status=0; out=$("$ROOT/server/run.sh" check 2>&1 9<&-) || status=$?
-check "held lock: refused" '[ "$status" != 0 ] && grep -q "bench is running" <<<"$out"'
+check "bench running: refused, exit 75" '[ "$status" = 75 ] && grep -q "bench is running" <<<"$out"'
 exec 9<&-
-check "held lock: released when the test lets go" 'flock -n "$LOCK" true'
+check "bench done: the lock is free" 'bench_could_start'
+
+# The other way round, run.sh past its checks, on a copy of the repo with a stand-in llama-server
+# that only waits: while it runs, a bench can't take the lock; once it exits, it can.
+F="$T/fake"
+mkdir -p "$F/server/build/llama" "$T/models"
+cp "$ROOT/server/run.sh" "$ROOT/server/server.conf" "$ROOT/server/models.txt" "$F/server/"
+read -r FAKE_MODEL _ _ FAKE_FILE _ < <(grep -v '^#' "$ROOT/server/models.txt" | head -1)
+printf 'MODEL=%s\nCAPABILITIES=text\nMODELS_DIR=%s\nKEY_FILE=%s\n' "$FAKE_MODEL" "$T/models" "$T/key" > "$F/server/server.local.conf"
+touch "$T/models/$FAKE_FILE"; echo fake > "$T/key"
+printf '#!/usr/bin/env bash\ntouch "%s"\nexec sleep 30\n' "$T/serving" > "$F/server/build/llama/llama-server"
+chmod +x "$F/server/build/llama/llama-server"
+"$F/server/run.sh" >/dev/null 2>&1 & server=$!
+for _ in $(seq 50); do [ -e "$T/serving" ] && break; sleep 0.1; done
+check "server running: it holds the lock, so a bench can't start" '[ -e "$T/serving" ] && ! bench_could_start'
+kill "$server"; wait "$server" 2>/dev/null || true
+check "server stopped: a bench can start" 'bench_could_start'
 
 # server:mode's choice goes in server.local.conf (gitignored), which server.conf reads last, so
 # switching modes never edits the tracked file.

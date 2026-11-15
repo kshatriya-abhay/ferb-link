@@ -9,12 +9,15 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/server/server.conf"
 
-# Models run one at a time: never while Ferb's bench holds its lock. Checked here, so systemd's
-# start at login and its restarts honour it too, not only `server:start`. `flock -n` on an existing
-# file only, so checking never creates the lock.
-BENCH_LOCK="$FERB_REPO/build/bench/.lock"
-if [ -e "$BENCH_LOCK" ] && ! flock -n "$BENCH_LOCK" true; then
-  echo "Ferb's bench is running; start the server after it finishes." >&2; exit 1
+# Models run one at a time, through Ferb's bench lock: the bench holds it exclusively, and the
+# server holds it shared for its whole life (fd 9 passes through exec to llama-server and its model
+# process), however it starts. So each refuses while the other runs. Busy exits 75, which the unit
+# retries; every other refusal here exits 1, which it doesn't (ferb-llama.service.in).
+if [ -d "$FERB_REPO" ]; then
+  BENCH_LOCK="$FERB_REPO/build/bench/.lock"
+  mkdir -p "$(dirname "$BENCH_LOCK")"
+  exec 9>>"$BENCH_LOCK"
+  flock -n -s 9 || { echo "Ferb's bench is running; start the server after it finishes." >&2; exit 75; }
 fi
 
 [ -n "$MODEL" ] || { echo "Set MODEL in server/server.conf to a name from server/models.txt" >&2; exit 1; }

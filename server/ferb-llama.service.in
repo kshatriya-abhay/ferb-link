@@ -1,19 +1,19 @@
 # Installed to ~/.config/systemd/user/ and enabled by `mise run server:unit` (@ROOT@ is this repo).
 # Starts at login, so Ferb Link works after a restart; the router loads the model only on the
-# first request, so it costs almost nothing idle. Ferb's bench refuses to run while it's active:
-# `mise run server:stop` first (models run one at a time). The other way round, run.sh refuses to
-# start while the bench holds its lock, so a start at login or a restart during a bench fails
-# (and gives up after three tries) instead of loading a second model.
+# first request, so it costs almost nothing idle. Models run one at a time, through Ferb's bench
+# lock (run.sh): while the bench runs, run.sh exits 75 and the unit tries again every 30 s, so the
+# server comes back by itself once the bench ends. Any other failure to start (no model, no key, a
+# bad setting: exit 1) isn't retried; `mise run server:start` shows why.
 [Unit]
 Description=llama-server for Ferb (ferb-link)
-# Give up after 3 failed starts in a minute (e.g. no model set) instead of retrying forever.
-StartLimitIntervalSec=60
-StartLimitBurst=3
+# No start limit: the 30 s wait is the limit, and a bench can take an hour.
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=@ROOT@/server/run.sh
 Restart=on-failure
-RestartSec=5
+RestartSec=30
+RestartPreventExitStatus=1
 
 [Install]
 WantedBy=default.target
