@@ -1,4 +1,5 @@
-# Ferb Link's unit and contract tests and Android lint, on every push and pull request.
+# Ferb Link's unit and contract tests, Android lint and the server scripts' tests, on every push
+# and pull request.
 # No secrets and no signing: releases are built and signed on the maintainer's computer
 # (README, Releases). No model, server or phone either (companion/README.md, Testing).
 name: CI
@@ -15,6 +16,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Server script tests (no model, GPU or network)
+        run: server/test.sh
+
   companion:
     runs-on: ubuntu-latest
     timeout-minutes: 30

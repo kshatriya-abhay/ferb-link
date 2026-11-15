@@ -21,11 +21,12 @@ touch "$LOCK"
 out=$("$ROOT/server/run.sh" check 2>&1 || true)
 check "free lock: not refused for the bench" '! grep -q "bench is running" <<<"$out"'
 
-flock "$LOCK" sleep 30 & holder=$!
-for _ in $(seq 50); do flock -n "$LOCK" true || break; sleep 0.1; done
-status=0; out=$("$ROOT/server/run.sh" check 2>&1) || status=$?
+# Held by this shell, as the bench holds it (`exec 9> …; flock 9`), so nothing outlives the test.
+exec 9<"$LOCK"; flock 9
+status=0; out=$("$ROOT/server/run.sh" check 2>&1 9<&-) || status=$?
 check "held lock: refused" '[ "$status" != 0 ] && grep -q "bench is running" <<<"$out"'
-kill "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true
+exec 9<&-
+check "held lock: released when the test lets go" 'flock -n "$LOCK" true'
 
 # server:mode's choice goes in server.local.conf (gitignored), which server.conf reads last, so
 # switching modes never edits the tracked file.
