@@ -4,6 +4,9 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
@@ -23,6 +26,8 @@ class LlamaHttp(
     private val readTimeoutMs: Int,
     /** Gets one line of timings per HTTP request (Ferb Link logs them). */
     private val trace: ((String) -> Unit)?,
+    /** How a name is looked up (tests pass their own). */
+    private val resolve: (String) -> Array<InetAddress> = InetAddress::getAllByName,
 ) {
     private val base = baseUrl.trim().trimEnd('/')
 
@@ -91,6 +96,16 @@ class LlamaHttp(
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
             }
+            // Plain HTTP is safe only inside the tailnet (WireGuard encrypts it): a ….ts.net name that
+            // resolves anywhere else (Tailscale off, a spoofed answer) would get the key in the clear.
+            if (connection.url.protocol == "http") {
+                val addresses = try {
+                    resolve(connection.url.host)
+                } catch (e: IOException) {
+                    throw NotConnected(e)
+                }
+                if (addresses.isEmpty() || !addresses.all(::insideTailnet)) throw Refused(Failure(ErrorKind.Unreachable, NOT_ON_TAILNET))
+            }
             // Connect before sending, so a failure here is "unreachable" and a timeout later is "timeout".
             try {
                 connection.connect()
@@ -130,6 +145,20 @@ class LlamaHttp(
 
         /** Unreachable details that already say what to do ([Guidance] adds nothing to them). */
         const val NO_NAME = "Can't find your computer's name. Is Tailscale on?"
+        const val NOT_ON_TAILNET = "Your computer's name didn't lead into your tailnet, so nothing was sent. Is Tailscale on?"
+
+        /**
+         * Whether [address] is inside a tailnet: Tailscale's 100.64.0.0/10 or fd7a:115c:a1e0::/48,
+         * or this device itself (loopback, for tests and `adb reverse`), where nothing leaves it.
+         */
+        fun insideTailnet(address: InetAddress): Boolean {
+            val b = address.address
+            return address.isLoopbackAddress ||
+                (address is Inet4Address && b[0] == 100.toByte() && (b[1].toInt() and 0xC0) == 64) ||
+                (address is Inet6Address && b[0] == 0xfd.toByte() && b[1] == 0x7a.toByte() && b[2] == 0x11.toByte() &&
+                    b[3] == 0x5c.toByte() && b[4] == 0xa1.toByte() && b[5] == 0xe0.toByte())
+        }
+
         const val HTTP_NEEDS_TAILSCALE_NAME = "Plain HTTP only works with your computer's Tailscale name (….ts.net)"
 
         fun problem(code: Int, body: String): Failure {

@@ -15,7 +15,7 @@ object Guidance {
         null, ErrorKind.Off, ErrorKind.NotSetUp, ErrorKind.BadRequest -> null
         ErrorKind.Unreachable -> when {
             // "Is Tailscale on?" with no VPN up, or "plain HTTP needs the Tailscale name": said already.
-            failure.message == LlamaHttp.HTTP_NEEDS_TAILSCALE_NAME -> null
+            failure.message == LlamaHttp.HTTP_NEEDS_TAILSCALE_NAME || failure.message == LlamaHttp.NOT_ON_TAILNET -> null
             vpnActive == false && failure.message == LlamaHttp.NO_NAME -> null
             vpnActive == false -> R.string.guide_tailscale_off
             privateDns && failure.message == LlamaHttp.NO_NAME -> R.string.guide_private_dns
