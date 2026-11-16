@@ -28,7 +28,8 @@ git merge-base --is-ancestor HEAD origin/main || fail "Push $(git rev-parse --sh
 echo "Publishing $APK as $TAG at $(git rev-parse --short HEAD) on $(gh repo view --json url -q .url)."
 read -rp "Type $VERSION to publish: " ANSWER
 [ "$ANSWER" = "$VERSION" ] || fail "Not published."
-gh release create "$TAG" "$APK" "$APK.sha256" --target "$(git rev-parse HEAD)" --title "Ferb Link $VERSION" --notes "Ferb Link $VERSION, signed with the same key as Ferb's releases (certificate SHA-256 $(cat "$CERT_FILE")).
+# The tag goes on the commit the APK was built from (checked above), wherever GitHub's default branch is.
+gh release create "$TAG" "$APK" "$APK.sha256" --target "$BUILT" --title "Ferb Link $VERSION" --notes "Ferb Link $VERSION, signed with the same key as Ferb's releases (certificate SHA-256 $(cat "$CERT_FILE")).
 
 Install it with Ferb from [Ferb's releases](https://github.com/kshatriya-abhay/ferb/releases/latest); set up your computer with the [quick start](https://github.com/kshatriya-abhay/ferb-link#quick-start).
 
