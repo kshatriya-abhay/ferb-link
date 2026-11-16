@@ -346,7 +346,7 @@ private fun StatusCard(state: LinkViewModel.State, viewModel: LinkViewModel) {
     // The error's words come from the contract (LinkReplies), shared with Ferb's chat bubbles.
     val (container, icon, title, detail) = when {
         !state.enabled -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_off), stringResource(R.string.status_off_detail))
-        state.serverUrl.isBlank() || state.apiKey.isBlank() -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_not_set_up), null)
+        !state.configured -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_not_set_up), null)
         health == null -> Status(colors.surfaceContainerHigh, Icons.Filled.Info, stringResource(R.string.status_checking), null)
         health.ok -> Status(colors.primaryContainer, Icons.Filled.CheckCircle, stringResource(R.string.status_connected), health.model)
         else -> Status(colors.errorContainer, Icons.Filled.Warning, health.short.replaceFirstChar { it.uppercase() }, health.message)
