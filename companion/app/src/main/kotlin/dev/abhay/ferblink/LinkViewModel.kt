@@ -168,7 +168,8 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setEnabled(enabled: Boolean) {
         settings.enabled = enabled
-        _state.update { it.copy(enabled = enabled) }
+        // Off, the last check no longer describes what Ferb gets: drop it (and Unload with it).
+        _state.update { it.copy(enabled = enabled, health = if (enabled) it.health else null) }
         // A check while off answers "off" without asking the laptop: ask it now.
         if (enabled) check()
     }
