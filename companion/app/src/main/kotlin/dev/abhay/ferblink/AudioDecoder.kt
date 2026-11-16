@@ -19,6 +19,7 @@ object AudioDecoder {
 
     private const val TARGET_RATE = 16_000
     private const val TIMEOUT_US = 10_000L
+    private const val DECODE_BUDGET_MS = 10_000L
 
     /** WAV as it is; anything else decoded. Throws [Unreadable], with a reason for the user. */
     fun toWav(audio: ByteArray, mime: String?): ByteArray {
@@ -129,7 +130,10 @@ object AudioDecoder {
             val out = ByteArrayOutputStream()
             val info = MediaCodec.BufferInfo()
             var inputDone = false
+            // A file that decodes slowly (or never ends) stops within this, so the call can't hang.
+            val giveUp = System.nanoTime() + DECODE_BUDGET_MS * 1_000_000L
             while (true) {
+                if (System.nanoTime() > giveUp) throw Unreadable("The recording took too long to read")
                 if (!inputDone) {
                     val index = codec.dequeueInputBuffer(TIMEOUT_US)
                     if (index >= 0) {

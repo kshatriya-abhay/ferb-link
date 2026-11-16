@@ -182,7 +182,9 @@ object Amounts {
 
     private fun clock(hours: Double): String {
         val minutes = Math.round(hours * 60).toInt()
-        var h = minutes / 60 % 12
+        // "saade 13 baje" is 13:30, not 1:30 (which Ferb would read as am).
+        var h = minutes / 60
+        if (h !in 13..23) h %= 12
         if (h == 0) h = 12
         return "%d:%02d".format(h, minutes % 60)
     }

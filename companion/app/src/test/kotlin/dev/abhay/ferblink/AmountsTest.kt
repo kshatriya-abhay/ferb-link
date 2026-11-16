@@ -194,4 +194,10 @@ class AmountsTest {
     fun `the model's a_m_ isn't doubled`() {
         assertThat(Amounts.normalize("subah sava saat baje utha dena", "Wake me up at 7 a.m.")).isEqualTo("Wake me up at 7:15 am")
     }
+
+    @Test
+    fun `an hour after 12 stays on the 24-hour clock`() {
+        assertThat(Amounts.forRequest("saade 13 baje ka alarm")).isEqualTo("13:30 ka alarm")
+        assertThat(Amounts.forRequest("saade 12 baje ka alarm")).isEqualTo("12:30 ka alarm")
+    }
 }
