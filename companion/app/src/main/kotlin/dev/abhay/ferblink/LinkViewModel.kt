@@ -176,10 +176,12 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     /** The same calls Ferb's requests get ([LinkCalls]), so the screen shows and notes what Ferb would. */
     private fun calls() = LinkCalls(settings, { it.run() }, BuildConfig.DEBUG)
 
+    private val checks = LatestJob(viewModelScope)
+
     fun check() {
         if (!settings.configured) return
         _state.update { it.copy(checking = true, unloadError = null) }
-        viewModelScope.launch {
+        checks.launch {
             val health = withContext(Dispatchers.IO) { calls().check(timeoutMs = null) }
             _state.update { it.copy(checking = false, health = health, vpnActive = vpnActive(), privateDns = privateDns()) }
         }
