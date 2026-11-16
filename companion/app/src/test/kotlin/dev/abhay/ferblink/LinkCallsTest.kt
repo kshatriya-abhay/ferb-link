@@ -129,4 +129,12 @@ class LinkCallsTest {
         val reply = JSONObject(calls.answer("transcribe", mapOf(LinkCalls.DEBUG_AUDIO_BASE64 to "not base64!!"), "shell")["reply"] as String)
         assertThat(reply.getString("error")).isEqualTo("bad request: no audio")
     }
+
+    @Test
+    fun `Jev may run with a key and room under the cap, and not at the cap or without a key`() {
+        class Jev(override val jevConfigured: Boolean, override var jevSpentUsd: Double, override val jevCapUsd: Double) : LinkState by State()
+        assertThat(Jev(jevConfigured = true, jevSpentUsd = 2.99, jevCapUsd = 3.0).jevMayRun).isTrue()
+        assertThat(Jev(jevConfigured = true, jevSpentUsd = 3.0, jevCapUsd = 3.0).jevMayRun).isFalse()
+        assertThat(Jev(jevConfigured = false, jevSpentUsd = 0.0, jevCapUsd = 3.0).jevMayRun).isFalse()
+    }
 }

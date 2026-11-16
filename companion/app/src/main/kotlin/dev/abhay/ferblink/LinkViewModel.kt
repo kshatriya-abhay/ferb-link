@@ -79,7 +79,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Turns Jev on or off. On needs a key and room under the cap; turning it on clears a cap stop. */
     fun setJevOn(on: Boolean) {
-        if (on && (!settings.jevConfigured || settings.jevSpentUsd >= settings.jevCapUsd)) return
+        if (on && !settings.jevMayRun) return
         settings.jevOn = on
         if (on) settings.jevOffReason = ""
         _state.update { it.copy(jev = jev()) }
@@ -89,7 +89,7 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     fun saveJev(key: String?, capUsd: Double) {
         key?.let { settings.jevKey = it }
         settings.jevCapUsd = capUsd.coerceAtLeast(0.0)
-        if (!settings.jevConfigured || settings.jevSpentUsd >= settings.jevCapUsd) settings.jevOn = false
+        if (!settings.jevMayRun) settings.jevOn = false
         _state.update { it.copy(jev = jev().copy(tested = null)) }
     }
 

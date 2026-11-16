@@ -227,7 +227,7 @@ class LinkCalls(
                 !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
                 !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
                 !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
-                state.jevSpentUsd >= state.jevCapUsd -> {
+                !state.jevUnderCap -> {
                     turnJevOff()
                     capReached()
                 }
@@ -241,7 +241,7 @@ class LinkCalls(
             if (off != null) return@run JevClient.Decision.failed(off)
             state.jev(trace).decide(request, toolsJson, timeoutMs).also { decision ->
                 state.jevSpentUsd += decision.billed.usd
-                if (state.jevSpentUsd >= state.jevCapUsd) turnJevOff()
+                if (!state.jevUnderCap) turnJevOff()
             }
         }
 
@@ -286,6 +286,12 @@ class LinkCalls(
             uid == myUid || (debug && uid == SHELL_UID) || signatureMatches()
     }
 }
+
+/** Jev's spend is under its cap: there's room for another call. */
+val LinkState.jevUnderCap get() = jevSpentUsd < jevCapUsd
+
+/** Jev may run: it has a TypeSafe key and room under its cap. The screen's switch and every call read this. */
+val LinkState.jevMayRun get() = jevConfigured && jevUnderCap
 
 /** Notes the model's state, seen at [at] (ms). */
 fun LinkState.saw(model: ModelState, at: Long) {
