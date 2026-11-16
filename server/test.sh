@@ -92,4 +92,17 @@ rm "$T/repo/server/server.local.conf"
 "$T/repo/server/local-conf.sh" CAPABILITIES full >/dev/null 2>&1 || true
 check "local-conf.sh: creates the file when missing" '[ "$(cat "$T/repo/server/server.local.conf" 2>/dev/null)" = CAPABILITIES=full ]'
 
+# companion:pair sends the pairing link (it holds the API key) to the phone on adb's stdin, never as
+# an argument, which any local user could read. Its own script from mise.toml, with a stub adb and a
+# stub pair-link.sh: nothing reaches a phone.
+P="$T/pair"
+mkdir -p "$P/server" "$P/bin"
+printf '#!/usr/bin/env bash\necho "ferblink://pair?url=http%%3A%%2F%%2Flaptop.example.ts.net&key=%s"\n' "$FAKE_KEY" > "$P/server/pair-link.sh"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/adb-args"\ncat >> "%s/adb-stdin"\n' "$P" "$P" > "$P/bin/adb"
+chmod +x "$P/server/pair-link.sh" "$P/bin/adb"
+python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["tasks"]["companion:pair"]["run"])' "$ROOT/mise.toml" > "$P/pair.sh"
+(cd "$P" && PATH="$P/bin:$PATH" bash pair.sh </dev/null >/dev/null 2>&1) || true
+check "companion:pair: the key is never in adb's arguments" '[ -s "$P/adb-args" ] && ! grep -qF "$FAKE_KEY" "$P/adb-args"'
+check "companion:pair: the link reaches the phone on stdin" 'grep -qF "key=$FAKE_KEY" "$P/adb-stdin"'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

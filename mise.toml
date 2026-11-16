@@ -325,8 +325,9 @@ description = "Connect Ferb Link on the phone (USB) to this computer: it asks on
 run = '''
 set -euo pipefail
 LINK=$(server/pair-link.sh)
-# adb shell joins its arguments into one remote command line: quote the link for the phone's shell.
-adb shell am start -a android.intent.action.VIEW -d "'$LINK'" dev.abhay.ferblink >/dev/null
+# The link holds the API key: it goes on adb's stdin, never as an argument (any local user can read
+# a process's arguments), and the phone's shell reads it there.
+printf '%s\n' "$LINK" | adb shell 'read -r L; am start -a android.intent.action.VIEW -d "$L" dev.abhay.ferblink' >/dev/null
 echo "Sent. On the phone, Ferb Link asks to connect: check the computer's name and tap Connect."
 '''
 
