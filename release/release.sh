@@ -46,7 +46,8 @@ VERSION=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' companion/app/build.gradle.k
 [ -n "$VERSION" ] || fail "No versionName in companion/app/build.gradle.kts"
 
 # Unsigned: Gradle has no signingConfig, so it never sees the key.
-(cd companion && ./gradlew -q --no-daemon :app:assembleRelease)
+# Under the lock every Gradle task here takes, so builds never run at once.
+(cd companion && flock /tmp/ferb-link-gradle.lock ./gradlew -q --no-daemon :app:assembleRelease)
 UNSIGNED=companion/app/build/outputs/apk/release/app-release-unsigned.apk
 [ -f "$UNSIGNED" ] || fail "No $UNSIGNED"
 # Classes Android creates by name (manifest, androidx.startup, ServiceLoader) must survive R8.
