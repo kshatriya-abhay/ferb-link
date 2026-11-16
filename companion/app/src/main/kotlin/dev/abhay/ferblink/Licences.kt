@@ -48,6 +48,7 @@ internal object Licences {
         Component("Guava ListenableFuture", "https://github.com/google/guava"),
         Component("JetBrains Java Annotations", "https://github.com/JetBrains/java-annotations"),
         Component("JSpecify", "https://github.com/jspecify/jspecify"),
+        Component("Error Prone annotations", "https://github.com/google/error-prone"),
     )
 
     /** [text]'s paragraphs (blank-line separated), each on one line so it wraps to the screen. */
