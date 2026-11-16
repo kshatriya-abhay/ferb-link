@@ -90,8 +90,11 @@ class LlamaHttp(
         var ok = false
         // Connect and read time out apart, so together they could take twice [timeoutMs]: past
         // it, the connection is closed, and the request is a timeout.
-        val cutOff = timeoutMs?.let { WATCHDOG.schedule({ connection.disconnect() }, it.toLong(), TimeUnit.MILLISECONDS) }
-        fun overdue() = cutOff?.let { it.isDone && !it.isCancelled } == true
+        // Set before the disconnect, so the read it breaks always finds it: the scheduler's own "done"
+        // comes only after disconnect() returns, too late for that read.
+        val overdueFlag = java.util.concurrent.atomic.AtomicBoolean(false)
+        val cutOff = timeoutMs?.let { WATCHDOG.schedule({ overdueFlag.set(true); connection.disconnect() }, it.toLong(), TimeUnit.MILLISECONDS) }
+        fun overdue() = overdueFlag.get()
         try {
             connection.requestMethod = method
             connection.connectTimeout = timeoutMs?.let { minOf(it, connectTimeoutMs) } ?: connectTimeoutMs
