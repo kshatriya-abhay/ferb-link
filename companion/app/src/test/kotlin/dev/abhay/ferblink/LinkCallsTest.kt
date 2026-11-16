@@ -122,4 +122,11 @@ class LinkCallsTest {
         state.heard(Props(ModelState.Unloaded, null))
         assertThat(state.lastModel).isEqualTo("qwen3.5-2b")
     }
+
+    @Test
+    fun `debug base64 that isn't base64 is no recording, not an exception`() {
+        val calls = LinkCalls(State(), Executor { it.run() }, debug = true)
+        val reply = JSONObject(calls.answer("transcribe", mapOf(LinkCalls.DEBUG_AUDIO_BASE64 to "not base64!!"), "shell")["reply"] as String)
+        assertThat(reply.getString("error")).isEqualTo("bad request: no audio")
+    }
 }

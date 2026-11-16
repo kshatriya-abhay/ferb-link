@@ -55,4 +55,28 @@ class TransportPinTest {
             assertThat(failure.message).startsWith("Couldn't read your computer's answer: ")
         }
     }
+
+    @Test
+    fun `a check reads the model list once`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        var listed = 0
+        fun answer(exchange: com.sun.net.httpserver.HttpExchange, body: String) {
+            val bytes = body.toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.createContext("/health") { answer(it, """{"status":"ok"}""") }
+        server.createContext("/v1/models") { listed++; answer(it, """{"data":[{"id":"gemma-4-e2b","status":{"value":"loaded"}}]}""") }
+        server.createContext("/props") { answer(it, """{"is_sleeping": false, "modalities": {"audio": true}}""") }
+        server.start()
+        try {
+            val health = ServerClient("http://127.0.0.1:${server.address.port}", "secret").health(2_000)
+            assertThat(health.model).isEqualTo("gemma-4-e2b")
+            assertThat(health.state).isEqualTo(ModelState.Loaded)
+            assertThat(health.audio).isTrue()
+            assertThat(listed).isEqualTo(1)
+        } finally {
+            server.stop(0)
+        }
+    }
 }

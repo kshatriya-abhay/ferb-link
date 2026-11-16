@@ -63,9 +63,10 @@ class ServerClient(
         val up = http.exchange("/health", timeoutMs, auth = false)
         if (up is LlamaHttp.Exchange.Failed) return failed(up.failure, up.ms)
         return read(http.exchange("/v1/models", timeoutMs), failed) { models ->
-            val model = JSONObject(models.text).optJSONArray("data")?.optJSONObject(0)?.optString("id")
+            val entry = JSONObject(models.text).optJSONArray("data")?.optJSONObject(0)
+            val model = entry?.optString("id")
             if (!model.isNullOrEmpty()) this.model = model
-            val props = props(timeoutMs)
+            val props = runCatching { propsOf(entry, timeoutMs) }.getOrNull()
             Health(model, msSince(started), null, props?.state, props?.audio, props?.sleepIdleSeconds)
         }
     }
@@ -90,9 +91,15 @@ class ServerClient(
      */
     fun props(timeoutMs: Int? = null): Props? = try {
         val models = http.exchange("/v1/models", timeoutMs) as? LlamaHttp.Exchange.Answer
-        val entry = models?.let { JSONObject(it.text).optJSONArray("data")?.optJSONObject(0) }
+        propsOf(models?.let { JSONObject(it.text).optJSONArray("data")?.optJSONObject(0) }, timeoutMs)
+    } catch (e: Exception) {
+        null
+    }
+
+    /** [props] from the router's `/v1/models` entry for the model ([entry]); `/props` only when it's running. */
+    private fun propsOf(entry: JSONObject?, timeoutMs: Int?): Props? {
         val sleep = entry?.optJSONObject("status")?.optJSONArray("args")?.let(::sleepIdleSeconds)
-        when (entry?.optJSONObject("status")?.optString("value")) {
+        return when (entry?.optJSONObject("status")?.optString("value")) {
             null -> null
             "unloaded" -> Props(ModelState.Unloaded, null, sleep, entry.optString("id").ifEmpty { null })
             "loading" -> Props(ModelState.Loading, null, sleep, entry.optString("id").ifEmpty { null })
@@ -109,8 +116,6 @@ class ServerClient(
                 }
             }
         }
-    } catch (e: Exception) {
-        null
     }
 
     /**

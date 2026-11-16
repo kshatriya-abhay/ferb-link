@@ -89,7 +89,7 @@ class LinkCalls(
             if (laptopOff() == null && shared.waking.compareAndSet(false, true)) {
                 background.execute {
                     try {
-                        state.client(trace).wake(LinkContract.TRANSCRIBE_TIMEOUT_MS * 2)?.let(state::heard)
+                        state.client(trace).wake(WAKE_TIMEOUT_MS)?.let(state::heard)
                     } finally {
                         shared.waking.set(false)
                     }
@@ -100,7 +100,7 @@ class LinkCalls(
         LinkContract.METHOD_TRANSCRIBE -> {
             // `adb shell content call` can't pass a ByteArray, so debug builds also take base64 text.
             val audio = extras[LinkContract.EXTRA_AUDIO] as? ByteArray
-                ?: (extras[DEBUG_AUDIO_BASE64] as? String)?.takeIf { debug }?.let { Base64.getDecoder().decode(it) }
+                ?: (extras[DEBUG_AUDIO_BASE64] as? String)?.takeIf { debug }?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             val mime = extras[LinkContract.EXTRA_AUDIO_MIME] as? String
             var recording = "Recording"
             val off = laptopOff()
@@ -262,6 +262,9 @@ class LinkCalls(
     companion object {
         /** Debug builds only: the recording as base64 text, for trying `transcribe` from `adb shell`. */
         const val DEBUG_AUDIO_BASE64 = "audio_base64"
+
+        /** How long a background wake may take: a cold load from disk can pass 10 s. */
+        private const val WAKE_TIMEOUT_MS = 30_000
 
         const val TOO_LONG = "bad request: too long"
         val REQUEST_TOO_LONG = "The request is over ${LinkContract.MAX_REQUEST_CHARS} characters"

@@ -121,7 +121,7 @@ class LinkSettings(context: Context) : LinkState {
             return when {
                 parsed.scheme == "https" -> null
                 parsed.scheme != "http" -> R.string.url_bad_scheme
-                !host.endsWith(".ts.net") -> R.string.url_needs_tailscale_name
+                !host.lowercase().endsWith(".ts.net") -> R.string.url_needs_tailscale_name
                 else -> null
             }
         }
