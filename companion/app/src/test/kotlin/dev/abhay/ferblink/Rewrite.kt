@@ -58,7 +58,7 @@ object Rewrite {
     fun invented(request: String, sent: String, commands: List<String>): List<String> {
         val given = (request + " " + sent).lowercase()
         val givenWords = given.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }.toSet()
-        val givenNumbers = Regex("\\d+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet() +
+        val givenNumbers = Regex("\\p{Nd}+").findAll(given).map { it.value.trimStart('0').ifEmpty { "0" } }.toSet() +
             givenWords.mapNotNull { numberWords[it]?.toString() }
         return commands.flatMap { command ->
             // Split as the request is, so "I'll" is "I" and "ll", neither of them a fact.
@@ -68,7 +68,7 @@ object Rewrite {
                 val lower = word.lowercase()
                 when {
                     word.first().isDigit() -> {
-                        val number = Regex("\\d+").find(word)!!.value.trimStart('0').ifEmpty { "0" }
+                        val number = word.takeWhile { it.isDigit() }.trimStart('0').ifEmpty { "0" }
                         number !in givenNumbers && !(dated && number.toInt() in 1..31) && !(number.length == 4 && dated)
                     }
                     word.first().isUpperCase() -> lower !in givenWords && lower !in months && lower !in weekdays && lower !in clockWords && word != "I" &&

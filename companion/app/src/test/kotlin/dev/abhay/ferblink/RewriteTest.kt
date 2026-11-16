@@ -148,4 +148,9 @@ class LeakedClosingTest {
         assertThat(trimmed).isTrue()
         assertThat(SchemaCall.clean(org.json.JSONObject().put("name", "pizza hut")).second).isFalse()
     }
+
+    @Test
+    fun `the bench's invented check reads a Devanagari digit without throwing`() {
+        assertThat(Rewrite.invented("alarm ७ baje", "alarm ७ baje", listOf("Set an alarm for ७ am"))).isEmpty()
+    }
 }
