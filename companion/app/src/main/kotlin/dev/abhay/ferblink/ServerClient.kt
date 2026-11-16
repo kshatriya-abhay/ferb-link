@@ -154,7 +154,6 @@ class ServerClient(
      */
     fun rewriteInstructed(request: String, mode: Instructed.Mode, timeoutMs: Int? = null): Rewritten {
         val asked = mode.asked
-        if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), request, asked)
         var raw = ""
         var truncated = false
         val problemOf = if (mode is Instructed.Mode.Json) LlamaHttp.Companion::schemaProblem else LlamaHttp.Companion::problem

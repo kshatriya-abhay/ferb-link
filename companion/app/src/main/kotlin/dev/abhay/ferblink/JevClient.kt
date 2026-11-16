@@ -38,7 +38,6 @@ class JevClient(
         }
         // Nothing to choose but "none": not worth a paid call.
         if (tools.isEmpty()) return Decision.failed(Failure(ErrorKind.BadRequest, "No tools to choose from", "bad request: no tools"))
-        if (request.isBlank()) return Decision.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"))
         val options = options(request, tools.map { it.first })
         val body = body(request, tools.toMap(), options, model)
         val estimate = estimateTokens(body, options.size)

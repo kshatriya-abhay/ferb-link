@@ -141,7 +141,6 @@ class JevClientTest {
         assertThat(closed.billed.inputTokens).isEqualTo(0)
 
         assertThat(client().decide("set a timer", "{}").failure!!.kind).isEqualTo(ErrorKind.BadRequest)
-        assertThat(client().decide(" ", tools).failure!!.kind).isEqualTo(ErrorKind.BadRequest)
         assertThat(client().decide("x", """[{"name": "none"}]""").failure!!.kind).isEqualTo(ErrorKind.BadRequest)
     }
 

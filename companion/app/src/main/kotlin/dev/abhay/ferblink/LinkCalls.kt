@@ -130,10 +130,9 @@ class LinkCalls(
         LinkContract.METHOD_REWRITE -> {
             val request = (extras[LinkContract.EXTRA_REQUEST] as? String).orEmpty()
             val ask = Instructed.Ask.from(extras)
-            val off = laptopOff()
+            val refused = laptopOff() ?: requestProblem(request)
             val rewritten = when {
-                off != null -> Rewritten.failed(off, request, ask.asked)
-                request.length > LinkContract.MAX_REQUEST_CHARS -> Rewritten.failed(Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG), request, ask.asked)
+                refused != null -> Rewritten.failed(refused, request, ask.asked)
                 ask.mode == null -> Rewritten.failed(checkNotNull(ask.failure), request, ask.asked)
                 else -> state.client(trace).rewriteInstructed(request, ask.mode, timeoutMs(extras))
             }.also {
@@ -153,6 +152,13 @@ class LinkCalls(
         else -> throw IllegalArgumentException("Unknown method $method")
     }
 
+    /** Why [request] can't go (complete, rewrite, decide): blank, or over [LinkContract.MAX_REQUEST_CHARS]; null when it can. */
+    private fun requestProblem(request: String): Failure? = when {
+        request.isBlank() -> Failure(ErrorKind.BadRequest, "No request", "bad request: no request")
+        request.length > LinkContract.MAX_REQUEST_CHARS -> Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG)
+        else -> null
+    }
+
     /** Why no method may go to the laptop now (Ferb Link off, or no server set up); null when it may. */
     private fun laptopOff(): Failure? = when {
         !state.enabled -> Failure(ErrorKind.Off, "Ferb Link is off")
@@ -165,11 +171,9 @@ class LinkCalls(
      * both come here, so they send the same thing (Hindi amounts worked out first) and note the same state.
      */
     fun complete(request: String, toolsJson: String, facts: String?, timeoutMs: Int?, caller: String): Reply {
-        val off = laptopOff()
+        val refused = laptopOff() ?: requestProblem(request)
         return when {
-            off != null -> Reply.failed(off)
-            request.isBlank() -> Reply.failed(ErrorKind.BadRequest, "No request", short = "bad request: no request")
-            request.length > LinkContract.MAX_REQUEST_CHARS -> Reply.failed(ErrorKind.BadRequest, REQUEST_TOO_LONG, short = TOO_LONG)
+            refused != null -> Reply.failed(refused)
             // Hindi amounts and times worked out, as for spoken requests (Amounts.forRequest).
             else -> state.client(trace).complete(Amounts.forRequest(request), toolsJson, facts, timeoutMs).also {
                 if (it.failure == null) {
@@ -227,7 +231,7 @@ class LinkCalls(
                     turnJevOff()
                     capReached()
                 }
-                request.length > LinkContract.MAX_REQUEST_CHARS -> Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG)
+                requestProblem(request) != null -> requestProblem(request)
                 // Under the cap, but this call might take it over: refuse it, and leave Jev on for smaller ones.
                 state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> Failure(
                     ErrorKind.Off, "This request could cost more than what's left under Jev's limit; a shorter one may still go.", "Jev's limit near",
