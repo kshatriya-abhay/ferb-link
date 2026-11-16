@@ -144,7 +144,7 @@ class LinkCalls(
                 if (it.failure == null && it.model.isNotEmpty()) {
                     state.lastModel = it.model
                     state.saw(ModelState.Loaded, now())
-                }
+                } else if (it.failure?.kind == ErrorKind.Server) refreshAudio()
             }
             mapOf(LinkContract.RESULT_VERSION to LinkContract.VERSION, LinkContract.RESULT_REPLY to rewritten.toReplyJson())
         }
@@ -180,7 +180,7 @@ class LinkCalls(
                     state.lastModel = it.model
                     state.saw(ModelState.Loaded, now())
                     refreshAudio()
-                }
+                } else if (it.failure.kind == ErrorKind.Server) refreshAudio()
                 RecentRequests.add(caller, request, it)
             }
         }
@@ -296,6 +296,8 @@ fun LinkState.saw(model: ModelState, at: Long) {
 
 /** Notes what the server said about itself in [props]: audio, and how long it idles before sleeping. */
 fun LinkState.heard(props: Props) {
+    // The laptop may serve another model now: name it next time, or every request fails.
+    props.model?.let { lastModel = it }
     props.audio?.let { audio = it }
     props.sleepIdleSeconds?.let { sleepIdleSeconds = it }
 }

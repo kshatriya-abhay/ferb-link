@@ -39,7 +39,7 @@ enum class ModelState(val words: String) {
  * What the server says about its model without loading it. [audio] is null when it can't tell
  * (unloaded); [sleepIdleSeconds] when the router lists the model's command line.
  */
-data class Props(val state: ModelState, val audio: Boolean?, val sleepIdleSeconds: Int? = null)
+data class Props(val state: ModelState, val audio: Boolean?, val sleepIdleSeconds: Int? = null, val model: String? = null)
 
 /**
  * llama.cpp's server on the laptop, through its OpenAI-style API, asked the way Ferb's bench asks
@@ -102,8 +102,8 @@ class ServerClient(
         val sleep = entry?.optJSONObject("status")?.optJSONArray("args")?.let(::sleepIdleSeconds)
         when (entry?.optJSONObject("status")?.optString("value")) {
             null -> null
-            "unloaded" -> Props(ModelState.Unloaded, null, sleep)
-            "loading" -> Props(ModelState.Loading, null, sleep)
+            "unloaded" -> Props(ModelState.Unloaded, null, sleep, entry.optString("id").ifEmpty { null })
+            "loading" -> Props(ModelState.Loading, null, sleep, entry.optString("id").ifEmpty { null })
             else -> {
                 val name = entry.getString("id").also { model = it }
                 val (propsCode, propsBody) = http.send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
@@ -112,6 +112,7 @@ class ServerClient(
                         if (it.optBoolean("is_sleeping")) ModelState.Asleep else ModelState.Loaded,
                         it.optJSONObject("modalities")?.optBoolean("audio") == true,
                         sleep,
+                        name,
                     )
                 }
             }

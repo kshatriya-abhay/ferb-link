@@ -253,13 +253,13 @@ class ServerClientTest {
     @Test
     fun `wake sends a request only when the model is asleep or unloaded`() {
         chatReply = 200 to """{"choices": [{"message": {"content": "Hi"}}]}"""
-        assertThat(ServerClient(url, "secret").wake()).isEqualTo(Props(ModelState.Loaded, audio = true))
+        assertThat(ServerClient(url, "secret").wake()).isEqualTo(Props(ModelState.Loaded, audio = true, model = "gemma-4-e2b"))
         assertThat(received).isEmpty()
 
         props = """{"is_sleeping": true, "modalities": {"audio": true}}"""
         assertThat(ServerClient(url, "secret").wake()?.state).isEqualTo(ModelState.Asleep)
         modelStatus = "unloaded"
-        assertThat(ServerClient(url, "secret").wake()).isEqualTo(Props(ModelState.Unloaded, audio = null))
+        assertThat(ServerClient(url, "secret").wake()).isEqualTo(Props(ModelState.Unloaded, audio = null, model = "gemma-4-e2b"))
         assertThat(received.map { JSONObject(it.second).getInt("max_tokens") }).containsExactly(1, 1)
         assertThat(received.map { JSONObject(it.second).getString("model") }).containsExactly("gemma-4-e2b", "gemma-4-e2b")
     }

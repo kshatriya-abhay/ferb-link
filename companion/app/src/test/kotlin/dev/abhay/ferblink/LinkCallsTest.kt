@@ -113,4 +113,13 @@ class LinkCallsTest {
         val reply = JSONObject(LinkCalls(State(), Executor { it.run() }, debug = false).answer("complete", mapOf("request" to 42), "ferb")["reply"] as String)
         assertThat(reply.getString("error_kind")).isEqualTo("bad_request")
     }
+
+    @Test
+    fun `the model the laptop names now is the one asked for next`() {
+        val state = State().apply { lastModel = "gemma-4-e2b" }
+        state.heard(Props(ModelState.Loaded, true, 300, model = "qwen3.5-2b"))
+        assertThat(state.lastModel).isEqualTo("qwen3.5-2b")
+        state.heard(Props(ModelState.Unloaded, null))
+        assertThat(state.lastModel).isEqualTo("qwen3.5-2b")
+    }
 }
