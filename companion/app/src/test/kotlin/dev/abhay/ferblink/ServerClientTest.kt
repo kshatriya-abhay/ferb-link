@@ -408,4 +408,19 @@ class ServerClientTest {
     private companion object {
         val TOOLS = LinkViewModel.SAMPLE_TOOLS
     }
+
+    @Test
+    fun `a logprob above zero is read as a probability of 1, never infinity`() {
+        chatReply = 200 to """{"model":"gemma-4-e2b","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ok"},"logprobs":{"content":[{"token":"ok","logprob":800.0}]}}]}"""
+        val reply = ServerClient(url, "secret").complete("hello", "[]")
+        assertThat(reply.confidence).isEqualTo(1.0)
+        assertThat(org.json.JSONObject(reply.toJson()).getDouble("confidence")).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `Serve's 502 for a stopped server says the server isn't running`() {
+        val failure = LlamaHttp.problem(502, "")
+        assertThat(failure.kind).isEqualTo(ErrorKind.Unreachable)
+        assertThat(failure.message).isEqualTo(LlamaHttp.SERVER_STOPPED)
+    }
 }

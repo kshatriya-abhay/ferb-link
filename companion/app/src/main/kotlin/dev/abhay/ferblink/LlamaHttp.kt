@@ -145,6 +145,7 @@ class LlamaHttp(
 
         /** Unreachable details that already say what to do ([Guidance] adds nothing to them). */
         const val NO_NAME = "Can't find your computer's name. Is Tailscale on?"
+        const val SERVER_STOPPED = "Your computer doesn't answer. Is the server running?"
         const val NOT_ON_TAILNET = "Your computer's name didn't lead into your tailnet, so nothing was sent. Is Tailscale on?"
 
         /**
@@ -169,6 +170,8 @@ class LlamaHttp(
                     Failure(ErrorKind.BadRequest, "Too long for the model's context on your computer", "bad request: too long")
                 else -> when (code) {
                 401 -> Failure(ErrorKind.Auth, "Your computer turned down the API key")
+                // Tailscale Serve answers 502 when nothing listens behind it: the server is stopped.
+                502 -> Failure(ErrorKind.Unreachable, SERVER_STOPPED)
                 503 -> Failure(ErrorKind.Server, "Your computer is loading the model", "model loading")
                 else -> Failure(ErrorKind.Server, "Your computer answered $code" + (message?.let { ": $it" } ?: ""), "server error $code")
                 }
@@ -191,7 +194,7 @@ class LlamaHttp(
                 is UnknownHostException -> NO_NAME
                 // Android's network security config: plain HTTP only to Tailscale names.
                 is UnknownServiceException -> HTTP_NEEDS_TAILSCALE_NAME
-                is ConnectException, is SocketTimeoutException -> "Your computer doesn't answer. Is the server running?"
+                is ConnectException, is SocketTimeoutException -> SERVER_STOPPED
                 else -> cause?.message ?: e.toString()
             })
             e is SocketTimeoutException -> Failure(ErrorKind.Timeout, "Your computer took too long to answer")

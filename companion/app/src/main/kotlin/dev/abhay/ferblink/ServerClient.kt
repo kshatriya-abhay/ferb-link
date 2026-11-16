@@ -271,7 +271,7 @@ class ServerClient(
             }.orEmpty()
             val tokens = choice.optJSONObject("logprobs")?.optJSONArray("content")
             val probabilities = (0 until (tokens?.length() ?: 0)).mapNotNull { i ->
-                tokens!!.getJSONObject(i).optDouble("logprob").takeUnless { it.isNaN() }?.let { exp(it) }
+                tokens!!.getJSONObject(i).optDouble("logprob").takeUnless { it.isNaN() }?.let { exp(it.coerceAtMost(0.0)) }
             }
             return Reply(
                 calls = calls,
