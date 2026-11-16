@@ -107,7 +107,7 @@ When the user does ask:
         val sent = Amounts.forRequest(request)
         if (request.isBlank()) return Rewritten.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"), sent)
         val http = LlamaHttp(url, key, 3_000, LinkContract.DEFAULT_TIMEOUT_MS, null)
-        return when (val exchange = http.post("/v1/chat/completions", timeoutMs) { body(model, sent, now, variant, toolNames) }) {
+        return when (val exchange = http.exchange("/v1/chat/completions", timeoutMs) { body(model, sent, now, variant, toolNames) }) {
             is LlamaHttp.Exchange.Failed -> Rewritten.failed(exchange.failure, sent, ms = exchange.ms)
             is LlamaHttp.Exchange.Answer -> {
                 val reply = JSONObject(exchange.text)

@@ -2,9 +2,7 @@ package dev.abhay.ferblink
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 import java.net.URLEncoder
-import dev.abhay.ferblink.LlamaHttp.Companion.failureOf
 import dev.abhay.ferblink.LlamaHttp.Companion.msSince
 import dev.abhay.ferblink.LlamaHttp.Companion.problem
 import kotlin.math.exp
@@ -61,20 +59,14 @@ class ServerClient(
     /** `/health`, then `/v1/models` with the key, both within [timeoutMs] each (default: the client's). */
     fun health(timeoutMs: Int? = null): Health {
         val started = System.nanoTime()
-        return try {
-            val (code, body) = http.send("GET", "/health", null, auth = false, timeoutMs)
-            if (code == 503) return Health(null, msSince(started), Failure(ErrorKind.Server, "Your computer is loading the model", "model loading"))
-            if (code != 200) return Health(null, msSince(started), problem(code, body))
-            val (modelsCode, models) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
-            if (modelsCode != 200) return Health(null, msSince(started), problem(modelsCode, models))
-            val model = JSONObject(models).optJSONArray("data")?.optJSONObject(0)?.optString("id")
+        val failed = { failure: Failure, _: Long -> Health(null, msSince(started), failure) }
+        val up = http.exchange("/health", timeoutMs, auth = false)
+        if (up is LlamaHttp.Exchange.Failed) return failed(up.failure, up.ms)
+        return read(http.exchange("/v1/models", timeoutMs), failed) { models ->
+            val model = JSONObject(models.text).optJSONArray("data")?.optJSONObject(0)?.optString("id")
             if (!model.isNullOrEmpty()) this.model = model
             val props = props(timeoutMs)
             Health(model, msSince(started), null, props?.state, props?.audio, props?.sleepIdleSeconds)
-        } catch (e: IOException) {
-            Health(null, msSince(started), failureOf(e))
-        } catch (e: Exception) {
-            Health(null, msSince(started), Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}"))
         }
     }
 
@@ -88,7 +80,7 @@ class ServerClient(
         } catch (e: Exception) {
             return Reply.failed(ErrorKind.BadRequest, "The tools aren't a JSON array: ${e.message}", short = "bad request: tools")
         }
-        val exchange = http.post(CHAT, timeoutMs) { Prompts.requestBody(modelName(it.left()), request, tools, facts).toString() }
+        val exchange = http.exchange(CHAT, timeoutMs) { Prompts.requestBody(modelName(it.left()), request, tools, facts).toString() }
         return read(exchange, { failure, ms -> Reply.failed(failure, ms) }) { parse(JSONObject(it.text), it.ms) }
     }
 
@@ -97,8 +89,8 @@ class ServerClient(
      * `/v1/models` status, then, when it's running, its `/props`. Null when they can't be read.
      */
     fun props(timeoutMs: Int? = null): Props? = try {
-        val (code, body) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
-        val entry = if (code == 200) JSONObject(body).optJSONArray("data")?.optJSONObject(0) else null
+        val models = http.exchange("/v1/models", timeoutMs) as? LlamaHttp.Exchange.Answer
+        val entry = models?.let { JSONObject(it.text).optJSONArray("data")?.optJSONObject(0) }
         val sleep = entry?.optJSONObject("status")?.optJSONArray("args")?.let(::sleepIdleSeconds)
         when (entry?.optJSONObject("status")?.optString("value")) {
             null -> null
@@ -106,8 +98,8 @@ class ServerClient(
             "loading" -> Props(ModelState.Loading, null, sleep, entry.optString("id").ifEmpty { null })
             else -> {
                 val name = entry.getString("id").also { model = it }
-                val (propsCode, propsBody) = http.send("GET", "/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", null, auth = true, timeoutMs)
-                if (propsCode != 200) null else JSONObject(propsBody).let {
+                val answer = http.exchange("/props?model=${URLEncoder.encode(name, "UTF-8")}&autoload=false", timeoutMs) as? LlamaHttp.Exchange.Answer
+                answer?.let { JSONObject(it.text) }?.let {
                     Props(
                         if (it.optBoolean("is_sleeping")) ModelState.Asleep else ModelState.Loaded,
                         it.optJSONObject("modalities")?.optBoolean("audio") == true,
@@ -125,27 +117,18 @@ class ServerClient(
      * Stops the model's process on the laptop, freeing its GPU memory and RAM; the next request
      * starts it again (a few seconds, or longer from disk). Null when it worked or wasn't running.
      */
-    fun unload(timeoutMs: Int? = null): Failure? = try {
-        val body = JSONObject().put("model", modelName(timeoutMs)).toString()
-        val (code, text) = http.send("POST", "/models/unload", body, auth = true, timeoutMs)
-        val notRunning = code == 400 && text.contains("not running")
-        when {
-            notRunning -> null
-            code != 200 -> problem(code, text)
-            else -> {
-                // The router answers before the model's process has exited (about 2 s): wait for
-                // it, so a check straight after shows it unloaded.
-                repeat(20) {
-                    if (props(LinkContract.CHECK_TIMEOUT_MS)?.state == ModelState.Unloaded) return null
-                    Thread.sleep(250)
-                }
-                null
-            }
+    fun unload(timeoutMs: Int? = null): Failure? {
+        val exchange = http.exchange("/models/unload", timeoutMs, problemOf = { code, text ->
+            if (code == 400 && text.contains("not running")) NOT_RUNNING else problem(code, text)
+        }) { JSONObject().put("model", modelName(it.left())).toString() }
+        if (exchange is LlamaHttp.Exchange.Failed) return exchange.failure.takeUnless { it === NOT_RUNNING }
+        // The router answers before the model's process has exited (about 2 s): wait for it, so a
+        // check straight after shows it unloaded.
+        repeat(20) {
+            if (props(LinkContract.CHECK_TIMEOUT_MS)?.state == ModelState.Unloaded) return null
+            Thread.sleep(250)
         }
-    } catch (e: IOException) {
-        failureOf(e)
-    } catch (e: Exception) {
-        Failure(ErrorKind.BadReply, "Couldn't read your computer's answer: ${e.message}")
+        return null
     }
 
     /**
@@ -154,9 +137,7 @@ class ServerClient(
      */
     fun wake(timeoutMs: Int? = null): Props? {
         val props = props(LinkContract.CHECK_TIMEOUT_MS) ?: return null
-        if (props.state != ModelState.Loaded) runCatching {
-            http.send("POST", "/v1/chat/completions", Prompts.wakeBody(modelName(timeoutMs)), auth = true, timeoutMs)
-        }
+        if (props.state != ModelState.Loaded) http.exchange(CHAT, timeoutMs) { Prompts.wakeBody(modelName(it.left())) }
         return props
     }
 
@@ -165,7 +146,7 @@ class ServerClient(
 
     /** [transcribe] with the request [body] given the model's name (the bench types heard lines in place of audio). */
     internal fun transcribe(body: (model: String) -> String, timeoutMs: Int?): Transcript =
-        read(http.post(CHAT, timeoutMs) { body(modelName(it.left())) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
+        read(http.exchange(CHAT, timeoutMs) { body(modelName(it.left())) }, { failure, ms -> Transcript.failed(failure, ms) }) { parseTranscript(JSONObject(it.text), it.ms) }
 
     /**
      * [request] as one command (or none) with the caller's own prompt: [Instructed]. In [Instructed.Mode.Json]
@@ -177,7 +158,7 @@ class ServerClient(
         var raw = ""
         var truncated = false
         val problemOf = if (mode is Instructed.Mode.Json) LlamaHttp.Companion::schemaProblem else LlamaHttp.Companion::problem
-        val exchange = http.post(CHAT, timeoutMs, problemOf) { Instructed.body(modelName(it.left()), request, mode) }
+        val exchange = http.exchange(CHAT, timeoutMs, problemOf = problemOf) { Instructed.body(modelName(it.left()), request, mode) }
         return read(exchange, { failure, ms -> Rewritten.failed(failure, request, asked, ms, raw, truncated) }, "the command") { answer ->
             val ms = answer.ms
             val reply = JSONObject(answer.text)
@@ -222,15 +203,19 @@ class ServerClient(
     /** The model to name in requests: the one given, or the first in `/v1/models`. */
     private fun modelName(timeoutMs: Int?): String {
         if (model.isEmpty()) {
-            val (code, body) = http.send("GET", "/v1/models", null, auth = true, timeoutMs)
-            if (code != 200) throw LlamaHttp.Companion.Refused(problem(code, body))
-            model = JSONObject(body).optJSONArray("data")?.optJSONObject(0)?.optString("id").orEmpty()
+            when (val models = http.exchange("/v1/models", timeoutMs)) {
+                is LlamaHttp.Exchange.Failed -> throw LlamaHttp.Companion.Refused(models.failure)
+                is LlamaHttp.Exchange.Answer -> model = JSONObject(models.text).optJSONArray("data")?.optJSONObject(0)?.optString("id").orEmpty()
+            }
         }
         return model
     }
 
     companion object {
         private const val CHAT = "/v1/chat/completions"
+
+        /** unload's "not running" (HTTP 400): nothing to unload, so not a failure. */
+        private val NOT_RUNNING = Failure(ErrorKind.Server, "The model isn't running")
 
         /**
          * Common Hindi words in Latin letters, as a second opinion on the model's "hindi", which

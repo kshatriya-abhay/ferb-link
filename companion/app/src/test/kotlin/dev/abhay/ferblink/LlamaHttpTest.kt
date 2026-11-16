@@ -24,7 +24,7 @@ class LlamaHttpTest {
         var looked = ""
         val http = LlamaHttp("http://laptop.example.ts.net", "secret", 3_000, 3_000, null, resolve = { name -> looked = name; arrayOf(ip("203.0.113.5")) })
         var built = false
-        val exchange = http.post("/v1/chat/completions", 1_000) { built = true; "{}" }
+        val exchange = http.exchange("/v1/chat/completions", 1_000) { built = true; "{}" }
         assertThat(looked).isEqualTo("laptop.example.ts.net")
         assertThat(built).isTrue()
         val failed = exchange as LlamaHttp.Exchange.Failed
@@ -35,7 +35,7 @@ class LlamaHttpTest {
     @Test
     fun `one answer outside the tailnet among inside ones is refused too`() {
         val http = LlamaHttp("http://laptop.example.ts.net", "secret", 3_000, 3_000, null, resolve = { arrayOf(ip("100.101.102.103"), ip("203.0.113.5")) })
-        val failed = http.post("/v1/chat/completions", 1_000) { "{}" } as LlamaHttp.Exchange.Failed
+        val failed = http.exchange("/v1/chat/completions", 1_000) { "{}" } as LlamaHttp.Exchange.Failed
         assertThat(failed.failure.message).isEqualTo(LlamaHttp.NOT_ON_TAILNET)
     }
 }

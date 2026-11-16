@@ -55,17 +55,22 @@ class LlamaHttp(
     }
 
     /**
-     * POSTs [body] to [path] with the key, all within [timeoutMs] (the client's read timeout
-     * without it). [body] is built inside with the call's [Deadline], so a failure while building
-     * it (looking up the model's name) is one too, and takes its time from the same limit. An
-     * answer other than 200 fails by [problemOf].
+     * One request to [path], and the only way in: it never throws. A GET without [body], a POST
+     * with it; [body] is built inside with the call's [Deadline], so a failure while building it
+     * (looking up the model's name) is one too, and takes its time from the same limit: all of it
+     * within [timeoutMs] (the client's read timeout without it). An answer other than 200 fails
+     * by [problemOf].
      */
-    fun post(path: String, timeoutMs: Int?, problemOf: (Int, String) -> Failure = { code, text -> problem(code, text) }, body: (Deadline) -> String): Exchange {
+    fun exchange(
+        path: String, timeoutMs: Int?, auth: Boolean = true,
+        problemOf: (Int, String) -> Failure = { code, text -> problem(code, text) },
+        body: ((Deadline) -> String)? = null,
+    ): Exchange {
         val started = System.nanoTime()
         val deadline = Deadline(timeoutMs ?: readTimeoutMs)
         return try {
-            val text = body(deadline)
-            val (code, answer) = send("POST", path, text, auth = true, deadline.left())
+            val text = body?.invoke(deadline)
+            val (code, answer) = send(if (text == null) "GET" else "POST", path, text, auth, deadline.left())
             if (code == 200) Exchange.Answer(answer, msSince(started)) else Exchange.Failed(problemOf(code, answer), msSince(started))
         } catch (e: IOException) {
             Exchange.Failed(failureOf(e), msSince(started))
@@ -79,7 +84,7 @@ class LlamaHttp(
      * to Android's pool, so the next request (transcribe, then complete) skips a new TCP handshake
      * over the tailnet. It's closed only when something went wrong.
      */
-    fun send(method: String, path: String, body: String?, auth: Boolean, timeoutMs: Int?): Pair<Int, String> {
+    private fun send(method: String, path: String, body: String?, auth: Boolean, timeoutMs: Int?): Pair<Int, String> {
         val started = System.nanoTime()
         val connection = URL(base + path).openConnection() as HttpURLConnection
         var ok = false
