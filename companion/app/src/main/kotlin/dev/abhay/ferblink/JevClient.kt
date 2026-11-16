@@ -32,10 +32,12 @@ class JevClient(
     fun decide(request: String, toolsJson: String, timeoutMs: Int = LinkContract.DECIDE_TIMEOUT_MS): Decision {
         val started = System.nanoTime()
         val tools = try {
-            tools(JSONArray(toolsJson))
+            tools(JSONArray(toolsJson)).distinctBy { it.first }
         } catch (e: Exception) {
             return Decision.failed(Failure(ErrorKind.BadRequest, "The tools aren't a JSON array of named tools: ${e.message}", "bad request: tools"))
         }
+        // Nothing to choose but "none": not worth a paid call.
+        if (tools.isEmpty()) return Decision.failed(Failure(ErrorKind.BadRequest, "No tools to choose from", "bad request: no tools"))
         if (request.isBlank()) return Decision.failed(Failure(ErrorKind.BadRequest, "No request", "bad request: no request"))
         val options = options(request, tools.map { it.first })
         val body = body(request, tools.toMap(), options, model)

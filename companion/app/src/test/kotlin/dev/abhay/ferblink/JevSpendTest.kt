@@ -57,7 +57,7 @@ class JevSpendTest {
     fun `each call adds to the spend, and at the cap Jev turns itself off and says why`() {
         val state = State()
         val calls = LinkCalls(state, Executor { it.run() }, debug = false)
-        fun decide() = JSONObject(calls.answer("decide", mapOf("request" to "hello", "tools" to "[]"), "test")["reply"] as String)
+        fun decide() = JSONObject(calls.answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL), "test")["reply"] as String)
 
         assertThat(decide().getBoolean("success")).isTrue()
         assertThat(state.jevSpentUsd).isWithin(1e-12).of(1_000 * JevClient.USD_PER_INPUT_TOKEN)
@@ -66,7 +66,7 @@ class JevSpendTest {
         // A third call could take the spend past the cap (2.5 calls' worth): it isn't sent, and
         // Jev stays on for a call small enough to fit.
         val over = decide()
-        assertThat(over.getString("error_detail")).contains("spending limit")
+        assertThat(over.getString("error")).isEqualTo("Jev's limit near")
         assertThat(this.calls).isEqualTo(2)
         assertThat(state.jevOn).isTrue()
 
@@ -89,13 +89,13 @@ class JevSpendTest {
 
     @Test
     fun `calls at once never take the spend past the cap`() {
-        val ceiling = JevClient.ceilingUsd("hello", "[]")
+        val ceiling = JevClient.ceilingUsd("hello", ONE_TOOL)
         usageTokens = 300
         delayMs = 200
         // Room for one call's ceiling, not two.
         val state = State().apply { jevCapUsd = ceiling * 1.2 }
         val calls = LinkCalls(state, Executor { it.run() }, debug = false)
-        val threads = List(6) { Thread { calls.answer("decide", mapOf("request" to "hello", "tools" to "[]"), "test") } }
+        val threads = List(6) { Thread { calls.answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL), "test") } }
         threads.forEach { it.start() }
         threads.forEach { it.join() }
         assertThat(this.calls).isEqualTo(1)
@@ -109,5 +109,35 @@ class JevSpendTest {
         val estimate = JevClient.estimateTokens(body, 3) * JevClient.USD_PER_INPUT_TOKEN
         // The estimate was within 5% of the bills (estimateTokens); the ceiling leaves far more room.
         assertThat(JevClient.ceilingUsd("shaam 7 baje ka alarm lagao", tools)).isGreaterThan(estimate * 1.5)
+    }
+
+    @Test
+    fun `a call refused near the cap says so, not that the limit was reached, and Jev stays on`() {
+        val state = State().apply { jevCapUsd = JevClient.ceilingUsd("hello", ONE_TOOL) * 0.5 }
+        val reply = JSONObject(LinkCalls(state, Executor { it.run() }, debug = false).answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL), "test")["reply"] as String)
+        assertThat(reply.getString("error")).isEqualTo("Jev's limit near")
+        assertThat(state.jevOn).isTrue()
+        assertThat(this.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `a call queued behind a slow one still ends within its timeout`() {
+        usageTokens = 300
+        delayMs = 1_500
+        val state = State()
+        val calls = LinkCalls(state, Executor { it.run() }, debug = false)
+        val first = Thread { calls.answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL, "timeout_ms" to 5_000), "test") }
+        first.start()
+        Thread.sleep(200)
+        val started = System.nanoTime()
+        val reply = JSONObject(calls.answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL, "timeout_ms" to 1_000), "test")["reply"] as String)
+        val ms = (System.nanoTime() - started) / 1_000_000
+        first.join()
+        assertThat(reply.getString("error_kind")).isEqualTo("timeout")
+        assertThat(ms).isLessThan(1_400)
+    }
+
+    private companion object {
+        const val ONE_TOOL = """[{"name": "set_timer", "description": "Start a countdown timer"}]"""
     }
 }

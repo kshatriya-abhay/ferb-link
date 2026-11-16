@@ -81,7 +81,8 @@ class LinkSettings(context: Context) : LinkState {
     /** Kept in billionths of a dollar: a call costs about 15,000–40,000. */
     override var jevSpentUsd: Double
         get() = prefs.getLong(KEY_JEV_SPENT_NANO, 0) / 1e9
-        set(value) = prefs.edit { putLong(KEY_JEV_SPENT_NANO, Math.round(value * 1e9)) }
+        // Written at once: a cost already billed mustn't be lost if the process is killed.
+        set(value) = prefs.edit(commit = true) { putLong(KEY_JEV_SPENT_NANO, Math.round(value * 1e9)) }
 
     override var jevCapUsd: Double
         get() = prefs.getString(KEY_JEV_CAP_USD, null)?.toDoubleOrNull() ?: DEFAULT_JEV_CAP_USD

@@ -171,4 +171,11 @@ class JevClientTest {
     private companion object {
         const val KEY = "ts_test_key_never_logged_0123456789"
     }
+
+    @Test
+    fun `no tools to choose from is a bad request, and nothing is sent or billed`() {
+        val decision = client().decide("set a timer", "[]")
+        assertThat(decision.failure!!.kind).isEqualTo(ErrorKind.BadRequest)
+        assertThat(decision.billed.usd).isEqualTo(0.0)
+    }
 }

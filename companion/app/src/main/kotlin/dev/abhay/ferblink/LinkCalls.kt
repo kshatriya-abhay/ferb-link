@@ -48,7 +48,7 @@ class LinkCalls(
      */
     class Shared {
         internal val waking = AtomicBoolean(false)
-        internal val spending = Any()
+        internal val spending = java.util.concurrent.locks.ReentrantLock()
 
         companion object {
             val PROCESS = Shared()
@@ -206,8 +206,23 @@ class LinkCalls(
      */
     fun decide(request: String, toolsJson: String, timeoutMs: Int, test: Boolean = false): JevClient.Decision =
         // One Jev call at a time, checked and counted under the lock: calls at once can't each pass
-        // the cap. A call goes only if its cost's ceiling still fits under the cap.
-        synchronized(shared.spending) {
+        // the cap. A call goes only if its cost's ceiling still fits under the cap. Waiting for the
+        // lock comes out of [timeoutMs], so a queued call still ends in time.
+        decideLocked(System.nanoTime() + timeoutMs * 1_000_000L, timeoutMs) { left -> decideNow(request, toolsJson, left, test) }
+
+    private fun decideLocked(end: Long, timeoutMs: Int, decide: (Int) -> JevClient.Decision): JevClient.Decision {
+        val busy = Failure(ErrorKind.Timeout, "Another Jev call was still running", "timed out")
+        if (!shared.spending.tryLock(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)) return JevClient.Decision.failed(busy)
+        try {
+            val left = ((end - System.nanoTime()) / 1_000_000).toInt()
+            return if (left < 1) JevClient.Decision.failed(busy) else decide(left)
+        } finally {
+            shared.spending.unlock()
+        }
+    }
+
+    private fun decideNow(request: String, toolsJson: String, timeoutMs: Int, test: Boolean): JevClient.Decision =
+        run {
             val off = when {
                 !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
                 !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
@@ -218,10 +233,12 @@ class LinkCalls(
                 }
                 request.length > LinkContract.MAX_REQUEST_CHARS -> Failure(ErrorKind.BadRequest, REQUEST_TOO_LONG, TOO_LONG)
                 // Under the cap, but this call might take it over: refuse it, and leave Jev on for smaller ones.
-                state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> capReached()
+                state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> Failure(
+                    ErrorKind.Off, "This request could cost more than what's left under Jev's limit; a shorter one may still go.", "Jev's limit near",
+                )
                 else -> null
             }
-            if (off != null) return@synchronized JevClient.Decision.failed(off)
+            if (off != null) return@run JevClient.Decision.failed(off)
             state.jev(trace).decide(request, toolsJson, timeoutMs).also { decision ->
                 state.jevSpentUsd += decision.billed.usd
                 if (state.jevSpentUsd >= state.jevCapUsd) turnJevOff()
