@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publishes dist/ferb-link-<versionName>.apk as GitHub release v<versionName> (`mise run
 # companion:publish`). Only you run this: it needs a terminal and asks you to type the version.
-# It refuses when the tag exists, the tree has changes, the commit isn't pushed, or the APK isn't
-# signed with the key in release-cert.sha256.
+# It refuses when the tag exists, the tree has changes, the commit isn't pushed, the APK wasn't
+# built from this commit (release.sh's .commit), or it isn't signed with the key in release-cert.sha256.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -18,6 +18,9 @@ CERT_FILE=${FERB_RELEASE_CERT_FILE:-$ROOT/release-cert.sha256}
 [ -s "$CERT_FILE" ] || fail "No $CERT_FILE"
 [ "$(release/cert.sh "$APK")" = "$(tr -d '[:space:]' < "$CERT_FILE")" ] || fail "$APK isn't signed with the key in $CERT_FILE"
 [ -z "$(git status --porcelain)" ] || fail "Commit or stash your changes first"
+BUILT=$(cat "dist/ferb-link-$VERSION.commit" 2>/dev/null || true)
+[ "$BUILT" = "$(git rev-parse HEAD)" ] ||
+  fail "$APK was built from ${BUILT:-an unknown commit}, not HEAD $(git rev-parse HEAD): check out that commit, or run mise run companion:release again"
 git fetch -q origin
 git merge-base --is-ancestor HEAD origin/main || fail "Push $(git rev-parse --short HEAD) to origin/main first"
 ! gh release view "$TAG" >/dev/null 2>&1 || fail "Release $TAG exists"

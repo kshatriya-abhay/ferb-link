@@ -13,7 +13,8 @@
 #
 # The signed APK's certificate must match release-cert.sha256 (its SHA-256, public, the same line in
 # Ferb's repo). Without that file, the first run writes it and stops, to be compared and committed.
-# Out: dist/ferb-link-<versionName>.apk and its .sha256. Publishing is separate (publish.sh).
+# Out: dist/ferb-link-<versionName>.apk, its .sha256, and its .commit (the commit it was built from,
+# which publish.sh tags). Publishing is separate (publish.sh).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -25,6 +26,9 @@ BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -
 export FERB_RELEASE_KEYSTORE=${FERB_RELEASE_KEYSTORE:-$HOME/.android/keystores/release-key-abhay.jks}
 CERT_FILE=${FERB_RELEASE_CERT_FILE:-$ROOT/release-cert.sha256}
 [ -f "$FERB_RELEASE_KEYSTORE" ] || fail "No keystore at $FERB_RELEASE_KEYSTORE (set FERB_RELEASE_KEYSTORE)"
+# Built from a commit, so the release's source is exactly what the APK holds.
+[ -z "$(git status --porcelain)" ] || fail "Commit or stash your changes first: a release is built from a commit"
+COMMIT=$(git rev-parse HEAD)
 
 # ask VAR prompt [secret]: VAR from the environment, or typed in.
 ask() {
@@ -71,6 +75,7 @@ mkdir -p dist
 APK=ferb-link-$VERSION.apk
 cp "$TMP/signed.apk" "dist/$APK"
 (cd dist && sha256sum "$APK" > "$APK.sha256")
-echo "dist/$APK, signed by $DIGEST"
+echo "$COMMIT" > "dist/ferb-link-$VERSION.commit"
+echo "dist/$APK, built from $COMMIT, signed by $DIGEST"
 cat "dist/$APK.sha256"
 echo "To publish it: mise run companion:publish (you run it; it asks first)."
