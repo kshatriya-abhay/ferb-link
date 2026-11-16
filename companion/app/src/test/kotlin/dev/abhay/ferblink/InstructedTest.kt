@@ -71,4 +71,16 @@ class InstructedTest {
             assertThat(runCatching { Instructed.parseJson(bad) }.isFailure).isTrue()
         }
     }
+
+    @Test
+    fun `a whole first line ended by a newline isn't cut off, one without it is`() {
+        assertThat(Instructed.cutOff("Set an alarm for 7 am\n", "length")).isFalse()
+        assertThat(Instructed.cutOff("Set an alarm for", "length")).isTrue()
+    }
+
+    @Test
+    fun `a Long max_tokens over Int's range clamps to the cap`() {
+        val ask = Instructed.Ask.from(mapOf(LinkContract.EXTRA_INSTRUCTIONS to "x", LinkContract.EXTRA_MAX_TOKENS to 3_000_000_000L))
+        assertThat(ask.mode!!.maxTokens).isEqualTo(LinkContract.MAX_REWRITE_TOKENS)
+    }
 }

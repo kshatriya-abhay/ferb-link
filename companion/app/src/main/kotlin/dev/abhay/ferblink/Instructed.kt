@@ -93,7 +93,7 @@ object Instructed {
      * matter ([parse] reads only the first), and NONE is whole however it ended.
      */
     fun cutOff(raw: String, finishReason: String?): Boolean {
-        if (finishReason != "length" || raw.trim().contains('\n')) return false
+        if (finishReason != "length" || raw.trimStart().contains('\n')) return false
         // NONE (null) is whole; an empty answer is parse's own error.
         return runCatching { parse(raw) }.getOrNull() != null
     }
@@ -105,6 +105,6 @@ object Instructed {
     fun maxTokens(extras: Map<String, Any?>): Int {
         val default = if ((extras[LinkContract.EXTRA_JSON_SCHEMA] as? String).isNullOrBlank()) LinkContract.REWRITE_MAX_TOKENS
             else LinkContract.REWRITE_JSON_MAX_TOKENS
-        return ((extras[LinkContract.EXTRA_MAX_TOKENS] as? Number)?.toInt() ?: default).coerceIn(1, LinkContract.MAX_REWRITE_TOKENS)
+        return ((extras[LinkContract.EXTRA_MAX_TOKENS] as? Number)?.toLong()?.coerceIn(1, LinkContract.MAX_REWRITE_TOKENS.toLong())?.toInt() ?: default).coerceIn(1, LinkContract.MAX_REWRITE_TOKENS)
     }
 }
