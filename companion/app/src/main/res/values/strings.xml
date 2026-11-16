@@ -106,6 +106,7 @@
     <string name="guide_auth">Pair again: mise run server:pair on your computer.</string>
     <string name="guide_loading">Try again in a few seconds.</string>
     <string name="guide_server">See mise run server:logs on your computer.</string>
+    <string name="guide_server_start">Start it: mise run server:start on your computer.</string>
     <string name="guide_bad_reply">Something else answered at this address. Check it, or pair again.</string>
 
     <!-- First-use hints, shown once -->

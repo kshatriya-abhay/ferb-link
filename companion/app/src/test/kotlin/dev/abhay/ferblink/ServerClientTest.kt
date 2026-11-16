@@ -419,9 +419,10 @@ class ServerClientTest {
     }
 
     @Test
-    fun `Serve's 502 for a stopped server says the server isn't running`() {
+    fun `Serve's 502 for a stopped server says the server isn't running, as a server error`() {
         val failure = LlamaHttp.problem(502, "")
-        assertThat(failure.kind).isEqualTo(ErrorKind.Unreachable)
-        assertThat(failure.message).isEqualTo(LlamaHttp.SERVER_STOPPED)
+        assertThat(failure.kind).isEqualTo(ErrorKind.Server)
+        assertThat(failure.short).isEqualTo("server not running")
+        assertThat(failure.message).isEqualTo(LlamaHttp.SERVER_NOT_RUNNING)
     }
 }

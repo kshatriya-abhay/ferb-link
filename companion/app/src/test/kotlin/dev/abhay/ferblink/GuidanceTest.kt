@@ -58,4 +58,11 @@ class GuidanceTest {
         assertThat(Hint.forStatus(Health("m", 0, null, ModelState.Asleep, audio = false))).containsExactly(Hint.TextOnly, Hint.Unload).inOrder()
         assertThat(Hint.forStatus(Health("m", 0, null, ModelState.Unloaded, audio = null))).isEmpty()
     }
+
+    @Test
+    fun `a stopped server behind Serve says to start it, not to get on the tailnet`() {
+        val failure = LlamaHttp.problem(502, "")
+        assertThat(Guidance.of(failure, vpnActive = true)).isEqualTo(R.string.guide_server_start)
+        assertThat(Guidance.of(failure, vpnActive = true)).isNotEqualTo(R.string.guide_unreachable)
+    }
 }

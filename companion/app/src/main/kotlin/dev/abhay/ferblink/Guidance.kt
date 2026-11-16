@@ -23,9 +23,11 @@ object Guidance {
         }
         ErrorKind.Timeout -> R.string.guide_timeout
         ErrorKind.Auth -> R.string.guide_auth
-        ErrorKind.Server ->
-            if (failure.short == "model loading") R.string.guide_loading
-            else R.string.guide_server
+        ErrorKind.Server -> when {
+            failure.short == "model loading" -> R.string.guide_loading
+            failure.message == LlamaHttp.SERVER_NOT_RUNNING -> R.string.guide_server_start
+            else -> R.string.guide_server
+        }
         ErrorKind.BadReply -> R.string.guide_bad_reply
     }
 }
