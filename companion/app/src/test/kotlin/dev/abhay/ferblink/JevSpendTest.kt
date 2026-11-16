@@ -66,7 +66,9 @@ class JevSpendTest {
         // A third call could take the spend past the cap (2.5 calls' worth): it isn't sent, and
         // Jev stays on for a call small enough to fit.
         val over = decide()
-        assertThat(over.getString("error")).isEqualTo("Jev's limit near")
+        assertThat(over.getString("error")).isEqualTo("near its spending limit")
+        // Ferb's cap check reads the at-cap detail's opening words: kept for the cap, not this.
+        assertThat(over.getString("error_detail")).doesNotContain("Jev reached its spending limit")
         assertThat(this.calls).isEqualTo(2)
         assertThat(state.jevOn).isTrue()
 
@@ -115,7 +117,7 @@ class JevSpendTest {
     fun `a call refused near the cap says so, not that the limit was reached, and Jev stays on`() {
         val state = State().apply { jevCapUsd = JevClient.ceilingUsd("hello", ONE_TOOL) * 0.5 }
         val reply = JSONObject(LinkCalls(state, Executor { it.run() }, debug = false).answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL), "test")["reply"] as String)
-        assertThat(reply.getString("error")).isEqualTo("Jev's limit near")
+        assertThat(reply.getString("error")).isEqualTo("near its spending limit")
         assertThat(state.jevOn).isTrue()
         assertThat(this.calls).isEqualTo(0)
     }

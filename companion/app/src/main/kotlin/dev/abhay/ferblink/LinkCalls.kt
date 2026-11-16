@@ -234,7 +234,9 @@ class LinkCalls(
                 requestProblem(request) != null -> requestProblem(request)
                 // Under the cap, but this call might take it over: refuse it, and leave Jev on for smaller ones.
                 state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> Failure(
-                    ErrorKind.Off, "This request could cost more than what's left under Jev's limit; a shorter one may still go.", "Jev's limit near",
+                    ErrorKind.Off, "This request could cost more than what's left under Jev's limit; a shorter one may still go.",
+                    // Ferb's chat says "Jev " + this: "Jev near its spending limit".
+                    "near its spending limit",
                 )
                 else -> null
             }
