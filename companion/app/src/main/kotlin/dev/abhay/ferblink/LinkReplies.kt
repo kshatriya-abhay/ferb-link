@@ -55,7 +55,7 @@ data class Reply(
         .put("model", model)
         .put("ms", ms)
         .put("source", "laptop")
-        .apply { if (failure != null) put("error", failure.short).put("error_detail", failure.message).put("error_kind", failure.kind.wire) }
+        .putFailure(failure)
         .toString()
 
     companion object {
@@ -89,7 +89,14 @@ enum class ErrorKind(val wire: String, val short: String) {
 }
 
 /** [message] is a sentence for details (the reply's `error_detail`); [short] goes in `error`. */
-data class Failure(val kind: ErrorKind, val message: String, val short: String = kind.short)
+data class Failure(val kind: ErrorKind, val message: String, val short: String = kind.short) {
+    /** The error triple every failed reply and `check` carry, written here only. */
+    val fields: Map<String, String>
+        get() = mapOf(LinkContract.RESULT_ERROR to short, LinkContract.RESULT_ERROR_DETAIL to message, LinkContract.RESULT_ERROR_KIND to kind.wire)
+}
+
+/** [failure]'s error triple in this reply, when there is one. */
+internal fun JSONObject.putFailure(failure: Failure?): JSONObject = apply { failure?.fields?.forEach { (key, value) -> put(key, value) } }
 
 /** [ServerClient.rewrite]'s answer: the commands (empty: no action asked), what was [sent], and the model's [raw] text. */
 data class Rewritten(
@@ -118,13 +125,7 @@ data class Rewritten(
         .put("raw", raw)
         .put("model", model)
         .put("ms", ms)
-        .apply {
-            failure?.let {
-                put("error", it.short)
-                put("error_detail", it.message)
-                put("error_kind", it.kind.wire)
-            }
-        }
+        .putFailure(failure)
 
     /**
      * What `rewrite` gives Ferb: the commands and `invented`, without the harness's `sent`. `raw`
@@ -173,7 +174,7 @@ data class Transcript(val heard: String, val text: String, val model: String, va
         .put("model", model)
         .put("ms", ms)
         .put("source", "laptop")
-        .apply { if (failure != null) put("error", failure.short).put("error_detail", failure.message).put("error_kind", failure.kind.wire) }
+        .putFailure(failure)
         .toString()
 
     companion object {

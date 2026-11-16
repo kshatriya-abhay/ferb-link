@@ -125,13 +125,7 @@ class JevClient(
             .put("model", model)
             .put("ms", ms)
             .put("source", "jev")
-            .apply {
-                failure?.let {
-                    put("error", it.short)
-                    put("error_detail", it.message)
-                    put("error_kind", it.kind.wire)
-                }
-            }
+            .putFailure(failure)
             .toString()
 
         companion object {

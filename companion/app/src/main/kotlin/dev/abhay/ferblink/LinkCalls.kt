@@ -82,11 +82,7 @@ class LinkCalls(
                 put(LinkContract.RESULT_MODEL, health.model ?: state.lastModel)
                 put(LinkContract.RESULT_AUDIO, state.audio)
                 state.modelStateNow(now())?.let { put(LinkContract.RESULT_MODEL_STATE, it) }
-                health.failure?.let {
-                    put(LinkContract.RESULT_ERROR, it.short)
-                    put(LinkContract.RESULT_ERROR_DETAIL, it.message)
-                    put(LinkContract.RESULT_ERROR_KIND, it.kind.wire)
-                }
+                health.failure?.let { putAll(it.fields) }
             }
         }
         LinkContract.METHOD_WAKE -> {
