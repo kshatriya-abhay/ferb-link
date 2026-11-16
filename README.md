@@ -80,7 +80,7 @@ What leaves the phone, and what's stored on it: [PRIVACY.md](PRIVACY.md).
 | The server doesn't come up | `mise run server:logs`. With the CUDA build, check `nvidia-smi` works; otherwise try `mise run server:install vulkan`. Out of GPU memory: set `GPU_LAYERS` lower in `server/server.conf`, or `auto`. |
 | `server:tailnet on` says access denied | Quick start step 2: `sudo tailscale set --operator=$USER`. |
 | The camera doesn't open Ferb Link from the QR code | Some camera apps don't open `ferblink://` links: copy the link it shows and tap **Paste link**. |
-| Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. |
+| Ferb Link: "can't reach your computer" | The phone's Tailscale is connected? `mise run server:tailnet` says it's on? The address is the full `….ts.net` name with `http://`. Ferb Link takes plain HTTP only to Tailscale names, not a `100.x` address. "Your computer's name didn't lead into your tailnet": the name resolved outside it, so Tailscale is likely off on the phone, and nothing was sent. |
 | Ferb Link: "Can't find your computer's name" with Tailscale on | The phone's Private DNS is set to a provider (NextDNS, for example), so Android skips Tailscale's DNS. Set **Settings → Network & internet → Private DNS** to **Automatic**. To keep that provider, add it as the tailnet's nameserver in Tailscale's admin console (DNS) instead. |
 | Ferb Link: "key refused" | Pair again (`mise run server:pair`), or enter the key from `mise run server:key`. |
 | "This pairing link doesn't work" | The server isn't on the tailnet (`mise run server:tailnet on`), or the link was cut off: run `server:pair` again. |
@@ -104,7 +104,7 @@ mise run server:key        # the API key, for Ferb Link
 
 **Access.** The server listens on 127.0.0.1 only, so it's reachable from outside only through Tailscale Serve, and only from devices on your tailnet. Requests also need the API key; `/health` answers without it.
 
-**Plain HTTP.** Tailscale already encrypts traffic between your devices (WireGuard), so Ferb Link uses plain HTTP, and only to `ts.net` names.
+**Plain HTTP.** Tailscale already encrypts traffic between your devices (WireGuard), so Ferb Link uses plain HTTP, only to `ts.net` names, and only when the name leads into your tailnet (an address in 100.64.0.0/10): with Tailscale off, nothing is sent.
 
 **On demand.** The model unloads after 5 minutes without a request and loads again on the next one, in 2–4 s from an SSD. Ferb asks Ferb Link to wake it when you start recording, so the load hides behind your speech.
 
@@ -135,7 +135,7 @@ mise run companion:try "set a timer for 5"   # ask Ferb Link through adb, as Fer
 
 Ferb Link's screens, its contract with Ferb, and its tests are in [companion/README.md](companion/README.md). With Ferb's repo next to this one, `server:start` refuses to start while Ferb's bench runs (models run one at a time), and `server:chat` offers Ferb's tools.
 
-**Making a release** (the maintainer): `mise run companion:release` builds and signs `dist/ferb-link-<version>.apk` and its `.sha256`, and `mise run companion:publish` creates GitHub release `v<version>`. `companion:release` asks for the key alias and keystore password unless `FERB_RELEASE_KEY_ALIAS` and `FERB_RELEASE_STORE_PASSWORD` are set (`FERB_RELEASE_KEYSTORE` names the keystore; `FERB_RELEASE_KEY_PASSWORD` only if the key's password differs). They reach `apksigner` through the environment only. The certificate must match `release-cert.sha256`. Before signing, `release/check-reflection.sh` checks that R8 kept every class Android creates by name. `companion:publish` refuses without a terminal, with uncommitted or unpushed changes, when the tag exists, or when the certificate doesn't match.
+**Making a release** (the maintainer): `mise run companion:release` builds and signs `dist/ferb-link-<version>.apk` and its `.sha256`, and `mise run companion:publish` creates GitHub release `v<version>`. `companion:release` asks for the key alias and keystore password unless `FERB_RELEASE_KEY_ALIAS` and `FERB_RELEASE_STORE_PASSWORD` are set (`FERB_RELEASE_KEYSTORE` names the keystore; `FERB_RELEASE_KEY_PASSWORD` only if the key's password differs). They reach `apksigner` through the environment only. The certificate must match `release-cert.sha256`. Before signing, `release/check-reflection.sh` checks that R8 kept every class Android creates by name. `companion:release` refuses uncommitted changes and records the commit it built from (`dist/ferb-link-<version>.commit`). `companion:publish` refuses without a terminal, with uncommitted or unpushed changes, when the APK was built from another commit, when the tag exists, or when the certificate doesn't match.
 
 ## Credits
 
