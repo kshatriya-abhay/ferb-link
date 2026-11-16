@@ -118,6 +118,7 @@ class JevSpendTest {
         val state = State().apply { jevCapUsd = JevClient.ceilingUsd("hello", ONE_TOOL) * 0.5 }
         val reply = JSONObject(LinkCalls(state, Executor { it.run() }, debug = false).answer("decide", mapOf("request" to "hello", "tools" to ONE_TOOL), "test")["reply"] as String)
         assertThat(reply.getString("error")).isEqualTo("near its spending limit")
+        assertThat(reply.getBoolean("jev_capped")).isTrue()
         assertThat(state.jevOn).isTrue()
         assertThat(this.calls).isEqualTo(0)
     }

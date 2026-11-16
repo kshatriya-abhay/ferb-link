@@ -114,6 +114,8 @@ class JevClient(
         val ms: Long,
         val billed: Billed,
         val failure: Failure?,
+        /** Refused because of Jev's spending cap, reached or near ([LinkContract.RESULT_JEV_CAPPED]). */
+        val capped: Boolean = false,
     ) {
         /** Shaped as Ferb Link's other replies: `success`, then the answer or `error`, `error_detail`, `error_kind`. */
         fun toJson(): String = JSONObject()
@@ -125,6 +127,7 @@ class JevClient(
             .put("ms", ms)
             .put("source", "jev")
             .putFailure(failure)
+            .apply { if (capped) put(LinkContract.RESULT_JEV_CAPPED, true) }
             .toString()
 
         companion object {

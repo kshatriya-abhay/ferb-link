@@ -223,24 +223,25 @@ class LinkCalls(
 
     private fun decideNow(request: String, toolsJson: String, timeoutMs: Int, test: Boolean): JevClient.Decision =
         run {
-            val off = when {
-                !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached()
-                !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off")
-                !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up")
+            // The refusal, and whether the cap is why (the reply's jev_capped, so Ferb needn't read prose).
+            val (off, capped) = when {
+                !state.jevOn && state.jevOffReason == LinkContract.JEV_OFF_CAP -> capReached() to true
+                !state.jevOn && !test -> Failure(ErrorKind.Off, "Jev is off in Ferb Link", "Jev off") to false
+                !state.jevConfigured -> Failure(ErrorKind.NotSetUp, "Jev has no TypeSafe key in Ferb Link", "Jev not set up") to false
                 !state.jevUnderCap -> {
                     turnJevOff()
-                    capReached()
+                    capReached() to true
                 }
-                requestProblem(request) != null -> requestProblem(request)
+                requestProblem(request) != null -> requestProblem(request) to false
                 // Under the cap, but this call might take it over: refuse it, and leave Jev on for smaller ones.
                 state.jevSpentUsd + JevClient.ceilingUsd(request, toolsJson) > state.jevCapUsd -> Failure(
                     ErrorKind.Off, "This request could cost more than what's left under Jev's limit; a shorter one may still go.",
                     // Ferb's chat says "Jev " + this: "Jev near its spending limit".
                     "near its spending limit",
-                )
-                else -> null
+                ) to true
+                else -> null to false
             }
-            if (off != null) return@run JevClient.Decision.failed(off)
+            if (off != null) return@run JevClient.Decision.failed(off).copy(capped = capped)
             state.jev(trace).decide(request, toolsJson, timeoutMs).also { decision ->
                 state.jevSpentUsd += decision.billed.usd
                 if (!state.jevUnderCap) turnJevOff()

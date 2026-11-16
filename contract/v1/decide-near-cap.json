@@ -1,0 +1,24 @@
+{
+  "method": "decide",
+  "note": "Jev is on, but this call could take the spend past the cap: refused, jev_capped, and Jev stays on.",
+  "extras": {
+    "request": "set a timer for 5 minutes",
+    "tools": "[{\"name\": \"set_alarm\", \"description\": \"Set an alarm\", \"parameters\": {\"type\": \"object\", \"properties\": {\"time\": {\"type\": \"string\", \"description\": \"The time, such as 7:30 am\"}}, \"required\": [\"time\"]}}]"
+  },
+  "result": {
+    "reply": {
+      "choice": "",
+      "error": "near its spending limit",
+      "error_detail": "This request could cost more than what's left under Jev's limit; a shorter one may still go.",
+      "error_kind": "off",
+      "jev_capped": true,
+      "model": "",
+      "ms": 0,
+      "options": [],
+      "probabilities": {},
+      "source": "jev",
+      "success": false
+    },
+    "version": 1
+  }
+}

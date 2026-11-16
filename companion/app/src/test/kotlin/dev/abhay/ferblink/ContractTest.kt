@@ -211,6 +211,8 @@ class ContractTest {
         Case("decide-off", "decide", "Jev is off in Ferb Link (its default): nothing is sent.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)),
         Case("decide-cap", "decide", "Jev reached its spending cap and turned itself off: nothing is sent.",
             mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) { it.jevReady(); it.jevSpentUsd = 3.0 },
+        Case("decide-near-cap", "decide", "Jev is on, but this call could take the spend past the cap: refused, jev_capped, and Jev stays on.",
+            mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) { it.jevReady(); it.jevCapUsd = 0.000_001 },
         Case("decide-not_set_up", "decide", "Jev is on but has no key.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) { it.jevOn = true },
         Case("decide-bad_request", "decide", "No request.", mapOf("request" to "", "tools" to TOOLS)) { it.jevReady() },
         Case("decide-auth", "decide", "TypeSafe turns the key down.", mapOf("request" to "set a timer for 5 minutes", "tools" to TOOLS)) {

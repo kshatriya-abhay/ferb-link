@@ -87,7 +87,7 @@ object LinkContract {
      * [MAX_DECIDE_TIMEOUT_MS]); returns [RESULT_REPLY], [RESULT_VERSION]. The reply: `success`,
      * `choice` (a tool's name or "none"), `probabilities` (each option's), `options` (in the
      * order asked), `model`, `ms`, `source: "jev"`, and `error`, `error_detail`, `error_kind` on
-     * failure. Each call costs money: at its spending cap Jev turns itself off (`off`, and
+     * failure, with [RESULT_JEV_CAPPED] when the cap is why. Each call costs money: at its spending cap Jev turns itself off (`off`, and
      * [RESULT_JEV_OFF_REASON] [JEV_OFF_CAP] in status).
      */
     const val METHOD_DECIDE = "decide"
@@ -190,6 +190,12 @@ object LinkContract {
     /** In status, when Jev turned itself off: [JEV_OFF_CAP], it reached its spending cap. Missing otherwise. */
     const val RESULT_JEV_OFF_REASON = "jev_off_reason"
     const val JEV_OFF_CAP = "cap"
+    /**
+     * In [METHOD_DECIDE]'s reply: true when the call was refused because of Jev's spending cap,
+     * reached ([JEV_OFF_CAP], Jev turned off) or near (this call could pass it; Jev stays on).
+     * Missing otherwise, and in an older Ferb Link. The kind stays "off", so older Ferbs read it as before.
+     */
+    const val RESULT_JEV_CAPPED = "jev_capped"
     const val MODEL_LOADED = "loaded"
     const val MODEL_ASLEEP = "asleep"
     const val MODEL_UNLOADED = "unloaded"
