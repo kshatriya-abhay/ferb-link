@@ -46,8 +46,7 @@ ln -sfn "$(realpath "$BIN")" "$B/llama"
 
 source server/server.conf
 if [ ! -s "$KEY_FILE" ]; then
-  mkdir -p "$(dirname "$KEY_FILE")"
-  (umask 077; head -c 24 /dev/urandom | base64 | tr '+/' '-_' > "$KEY_FILE")
+  server/new-key.sh "$KEY_FILE"
   echo "Created the API key in $KEY_FILE (mise run server:key shows it)."
 fi
 # Never overwritten once it exists (the phone has it); only kept private.
@@ -164,8 +163,24 @@ raw = true
 run = "server/chat.sh"
 
 [tasks."server:key"]
-description = "Print the API key, to enter in the companion app"
-run = 'source server/server.conf; cat "$KEY_FILE"'
+description = "Print the API key, to enter in the companion app, or replace it with a new one (rotate)"
+usage = '''
+arg "[action]" help="rotate: a new key (the old one stops working; the phone pairs again)"
+'''
+run = '''
+set -euo pipefail
+source server/server.conf
+case "${usage_action:-}" in
+  "") cat "$KEY_FILE" ;;
+  # The new key is never printed: it reaches the phone by pairing. The server reads the key only
+  # when it starts, so a running one restarts (try-restart leaves a stopped one stopped).
+  rotate) server/new-key.sh "$KEY_FILE"
+          systemctl --user try-restart ferb-llama
+          echo "Made a new API key; the old one no longer works."
+          echo "Pair again: mise run server:pair" ;;
+  *) echo "action: rotate, or none to print the key"; exit 1 ;;
+esac
+'''
 
 [tasks."server:tailnet"]
 description = "Put the server on the tailnet at http://<laptop>.<tailnet>.ts.net (Tailscale Serve), or take it off"

@@ -105,4 +105,23 @@ python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["ta
 check "companion:pair: the key is never in adb's arguments" '[ -s "$P/adb-args" ] && ! grep -qF "$FAKE_KEY" "$P/adb-args"'
 check "companion:pair: the link reaches the phone on stdin" 'grep -qF "key=$FAKE_KEY" "$P/adb-stdin"'
 
+# server:key rotate replaces the key, private to you, never prints either key, restarts the server
+# only if it runs (try-restart), and says to pair again. Its own script from mise.toml, with a stub
+# systemctl and the key in a scratch file.
+K="$T/rotate"
+mkdir -p "$K/server" "$K/bin"
+cp "$ROOT/server/server.conf" "$ROOT/server/new-key.sh" "$K/server/"
+printf 'KEY_FILE=%s\n' "$K/key" > "$K/server/server.local.conf"
+printf '%s\n' "$FAKE_KEY" > "$K/key"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/systemctl-args"\n' "$K" > "$K/bin/systemctl"
+chmod +x "$K/bin/systemctl"
+python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["tasks"]["server:key"]["run"])' "$ROOT/mise.toml" > "$K/key.sh"
+out=$(cd "$K" && PATH="$K/bin:$PATH" usage_action=rotate bash key.sh </dev/null 2>&1) || true
+check "server:key rotate: a new key" '[ -s "$K/key" ] && [ "$(cat "$K/key")" != "$FAKE_KEY" ]'
+check "server:key rotate: only you can read it" '[ "$(stat -c %a "$K/key")" = 600 ]'
+check "server:key rotate: no key printed, old or new" '! grep -qF "$FAKE_KEY" <<<"$out" && ! grep -qF "$(cat "$K/key")" <<<"$out"'
+check "server:key rotate: restarts the server only if it runs" '[ "$(cat "$K/systemctl-args")" = "--user try-restart ferb-llama" ]'
+check "server:key rotate: says to pair again" 'grep -qF "Pair again: mise run server:pair" <<<"$out"'
+check "server:key rotate: no temporary file left" '! ls "$K" | grep -qE "^key\.[[:alnum:]]{6}$"'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

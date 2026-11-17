@@ -97,7 +97,7 @@ mise run server:stop       # stop it (server:start again later; it also starts a
 mise run server:unload     # free the GPU now; the next request loads the model again
 mise run server:mode text  # text only, about 1 GB less GPU memory (server:mode full to go back)
 mise run server:chat       # try the model in the terminal: chat, /tools for Ferb's tools, /image, /audio, /record
-mise run server:key        # the API key, for Ferb Link
+mise run server:key        # the API key, for Ferb Link (server:key rotate: a new one; pair again after)
 ```
 
 ## How the server works
