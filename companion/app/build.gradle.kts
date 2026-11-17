@@ -17,12 +17,23 @@ android {
         versionCode = 1
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["linkAuthority"] = "dev.abhay.ferblink.link"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
+        // The release build (R8) as its own app, dev.abhay.ferblink.smoke, signed with the debug key:
+        // to try a change on the phone beside release Ferb Link, whose data stays untouched. Its own
+        // provider authority, so the two install side by side; Ferb never calls it.
+        create("smoke") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".smoke"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            manifestPlaceholders["linkAuthority"] = "dev.abhay.ferblink.smoke.link"
         }
     }
 

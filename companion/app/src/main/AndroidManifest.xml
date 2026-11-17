@@ -39,7 +39,7 @@
              with this app's key. -->
         <provider
             android:name=".LinkProvider"
-            android:authorities="dev.abhay.ferblink.link"
+            android:authorities="${linkAuthority}"
             android:exported="true" />
     </application>
 </manifest>

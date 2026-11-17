@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The smoke build's name in the launcher, apart from release Ferb Link. -->
+    <string name="app_name">Ferb Link smoke</string>
+</resources>
