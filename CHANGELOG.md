@@ -14,6 +14,19 @@ This release is about code quality: a file-by-file review of Ferb Link and its s
 - **Rewrite.** Ferb Link rewrites only with the prompt Ferb sends (every Ferb version sends one); its older built-in prompt is gone.
 - **On the computer.** The server and Ferb's benchmark no longer run models side by side, a server start refused during a benchmark retries every 30 s, and `mise run server:chat` no longer loads the model just to start.
 
+### If you moved to a new phone while using Ferb Link 0.1
+
+Ferb Link 0.1 didn't stop Android from copying its settings during a phone-to-phone transfer. Those settings include your computer's API key, and your TypeSafe key if you entered one. Cloud backup was already off, so the keys went only to the phone you moved to. 0.2 stops this copying.
+
+If you didn't move phones with 0.1 installed, there's nothing to do. If you did, both phones have the keys. To make a new computer key that only the phone you pair next will have, run this on your computer:
+
+```sh
+mise run server:key rotate
+mise run server:pair
+```
+
+Then scan the code with the phone you use. For Jev, make a new key in your TypeSafe account and enter it in Ferb Link.
+
 ## 0.1
 
 The first release.
