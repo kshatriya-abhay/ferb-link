@@ -124,4 +124,16 @@ check "server:key rotate: restarts the server only if it runs" '[ "$(cat "$K/sys
 check "server:key rotate: says to pair again" 'grep -qF "Pair again: mise run server:pair" <<<"$out"'
 check "server:key rotate: no temporary file left" '! ls "$K" | grep -qE "^key\.[[:alnum:]]{6}$"'
 
+# publish.sh's release notes: release/changelog-section.sh prints the "## VERSION" section, "###"
+# subheadings in, blank edges trimmed, and fails on a missing or empty section (so publish refuses).
+C="$T/CHANGELOG.md"
+printf '# Changelog\n\n## 0.3\n\n## 0.2\n\nIntro.\n\n### Voice\n\n- one\n- two\n\n## 0.10\n\nTen.\n\n## 0.1\n\nThe first.\n' > "$C"
+cs() { "$ROOT/release/changelog-section.sh" "$1" "$C" 2>/dev/null; }
+check "changelog-section: the section, ### in, edges trimmed" '[ "$(cs 0.2)" = "$(printf "Intro.\n\n### Voice\n\n- one\n- two")" ]'
+check "changelog-section: the last section, to the end" '[ "$(cs 0.1)" = "The first." ]'
+check "changelog-section: the exact heading (0.1 isn't 0.10)" '[ "$(cs 0.10)" = "Ten." ]'
+check "changelog-section: a missing section fails" '! cs 0.4 >/dev/null'
+check "changelog-section: an empty section fails" '! cs 0.3 >/dev/null'
+check "changelog-section: the real CHANGELOG has this version" '"$ROOT/release/changelog-section.sh" "$(sed -n "s/^ *versionName = \"\(.*\)\"/\1/p" "$ROOT/companion/app/build.gradle.kts")" >/dev/null'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }
