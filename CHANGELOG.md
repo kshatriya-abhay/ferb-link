@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Ferb Link 0.2 closed as soon as it opened on a phone where it was already connected to your computer (after updating from 0.1, or reopening it after pairing). It opens again. Ferb's requests through Ferb Link worked throughout; only Ferb Link's own screen was affected.
+
 ## 0.2
 
 This release is about code quality: a file-by-file review of Ferb Link and its server, following the principles of [pstack](https://github.com/cursor/plugins/tree/main/pstack).

@@ -14,8 +14,8 @@ android {
         applicationId = "dev.abhay.ferblink"
         minSdk = 33
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["linkAuthority"] = "dev.abhay.ferblink.link"
     }
