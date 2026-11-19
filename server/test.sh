@@ -136,4 +136,38 @@ check "changelog-section: a missing section fails" '! cs 0.4 >/dev/null'
 check "changelog-section: an empty section fails" '! cs 0.3 >/dev/null'
 check "changelog-section: the real CHANGELOG has this version" '"$ROOT/release/changelog-section.sh" "$(sed -n "s/^ *versionName = \"\(.*\)\"/\1/p" "$ROOT/companion/app/build.gradle.kts")" >/dev/null'
 
+# publish.sh's release-candidate gate: release/rc-verify.sh passes only a record for this APK's
+# sha256, its name and version, with the upgrade, fresh and phone runs all passed.
+G="$T/rc"
+mkdir -p "$G"
+printf 'not really an apk\n' > "$G/ferb-link-9.9.apk"
+GSHA=$(sha256sum "$G/ferb-link-9.9.apk" | cut -d' ' -f1)
+echo abc > "$G/ferb-link-9.9.commit"
+CROSS="pass ferb v0.2 $(printf "%064d" 1)"
+rc() { # rc FILE sha256 upgrade fresh phone result [cross] [commit]
+  printf 'name=ferb-link\nversion=9.9\napk=ferb-link-9.9.apk\nsha256=%s\ncommit=%s\ndate=2026-11-19T18:00:00+05:30\nupgrade=%s\nfresh=%s\ncross=%s\nphone=%s\nresult=%s\n' "$2" "${8:-abc}" "$3" "$4" "${7-$CROSS}" "$5" "$6" > "$1"
+}
+verify() { "$ROOT/release/rc-verify.sh" "$1" "$G/ferb-link-9.9.apk" 9.9 >/dev/null 2>&1; }
+rc "$G/pass.rc" "$GSHA" pass pass "pass 2026-11-19T18:30:00+05:30" pass
+check "rc-verify: a passing record for this APK passes" 'verify "$G/pass.rc"'
+check "rc-verify: no record refuses" '! verify "$G/none.rc"'
+rc "$G/other.rc" "$(printf "%064d" 0)" pass pass "pass 2026-11-19T18:30:00+05:30" pass
+check "rc-verify: a record for another APK (sha256) refuses" '! verify "$G/other.rc"'
+rc "$G/up.rc" "$GSHA" "fail crash after install -r" pass "pass 2026-11-19T18:30:00+05:30" fail
+check "rc-verify: a failed upgrade run refuses" '! verify "$G/up.rc"'
+rc "$G/fresh.rc" "$GSHA" pass "fail crash on launch" "pass 2026-11-19T18:30:00+05:30" fail
+check "rc-verify: a failed fresh run refuses" '! verify "$G/fresh.rc"'
+rc "$G/pending.rc" "$GSHA" pass pass pending fail
+rc "$G/cross.rc" "$GSHA" pass pass "pass 2026-11-19T18:30:00+05:30" fail "fail ferb v0.2 $(printf "%064d" 1) Ferb's Ferb Link page crashed"
+check "rc-verify: a failed cross run refuses" '! verify "$G/cross.rc"'
+rc "$G/nocross.rc" "$GSHA" pass pass "pass 2026-11-19T18:30:00+05:30" pass ""
+check "rc-verify: no cross result refuses" '! verify "$G/nocross.rc"'
+rc "$G/commit.rc" "$GSHA" pass pass "pass 2026-11-19T18:30:00+05:30" pass "$CROSS" def
+check "rc-verify: a record for another commit refuses" '! verify "$G/commit.rc"'
+check "rc-verify: the phone checklist not done refuses" '! verify "$G/pending.rc"'
+rc "$G/result.rc" "$GSHA" pass pass "pass 2026-11-19T18:30:00+05:30" fail
+check "rc-verify: result not pass refuses" '! verify "$G/result.rc"'
+check "rc-verify: another version refuses" '! "$ROOT/release/rc-verify.sh" "$G/pass.rc" "$G/ferb-link-9.9.apk" 9.8 >/dev/null 2>&1'
+check "publish.sh checks the record before it asks for the version" '[ "$(grep -n "^release/rc-verify.sh" "$ROOT/release/publish.sh" | cut -d: -f1)" -lt "$(grep -n "^read -rp" "$ROOT/release/publish.sh" | cut -d: -f1)" ]'
+
 [ "$fails" = 0 ] && echo "All server tests passed." || { echo "$fails failed."; exit 1; }

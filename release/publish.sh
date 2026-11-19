@@ -3,7 +3,8 @@
 # companion:publish`). Only you run this: it needs a terminal and asks you to type the version.
 # It refuses when the tag exists, the tree has changes, the commit isn't pushed, the APK wasn't
 # built from this commit (release.sh's .commit), it isn't signed with the key in release-cert.sha256, or
-# CHANGELOG.md has no section for the version (its notes: release/changelog-section.sh).
+# CHANGELOG.md has no section for the version (its notes: release/changelog-section.sh), or the APK
+# has no passing release-candidate record (release/rc-verify.sh, written by mise run rc:check).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -25,6 +26,8 @@ BUILT=$(cat "dist/ferb-link-$VERSION.commit" 2>/dev/null || true)
 git fetch -q origin
 git merge-base --is-ancestor HEAD origin/main || fail "Push $(git rev-parse --short HEAD) to origin/main first"
 ! gh release view "$TAG" >/dev/null 2>&1 || fail "Release $TAG exists"
+# Only an APK that passed its release-candidate checks (the emulator's and the phone's).
+release/rc-verify.sh "dist/ferb-link-$VERSION.rc" "$APK" "$VERSION" || fail "Not published."
 # The release notes are CHANGELOG.md's section for this version, with the signing line after it.
 NOTES=$(release/changelog-section.sh "$VERSION") || fail "Write the \"## $VERSION\" section in CHANGELOG.md first"
 
