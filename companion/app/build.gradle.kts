@@ -46,6 +46,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Robolectric tests read the app's merged resources and manifest.
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 dependencies {
@@ -66,6 +69,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)

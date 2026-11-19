@@ -71,6 +71,9 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(State(settings.serverUrl, settings.apiKey, settings.enabled, configured = settings.configured, hints = unseenHints()))
     val state: StateFlow<State> = _state.asStateFlow()
     val recent = RecentRequests.entries
+    // Before init, which runs check(): Kotlin sets properties and runs init blocks in file order, so
+    // one declared below init is still null there (0.2 crashed on every start with a saved pairing).
+    private val checks = LatestJob(viewModelScope)
 
     init {
         _state.update { it.copy(jev = jev()) }
@@ -176,8 +179,6 @@ class LinkViewModel(application: Application) : AndroidViewModel(application) {
 
     /** The same calls Ferb's requests get ([LinkCalls]), so the screen shows and notes what Ferb would. */
     private fun calls() = LinkCalls(settings, { it.run() }, BuildConfig.DEBUG)
-
-    private val checks = LatestJob(viewModelScope)
 
     fun check() {
         if (!settings.configured) return
