@@ -325,6 +325,22 @@ description = "Build the release APK and sign it with the release key (asks for 
 raw = true
 run = "release/release.sh"
 
+[tasks."emu:start"]
+description = "Boot the test emulator headless (AVD ferb-test, made on first use) and print its serial; reuses a running one"
+run = "release/emu.sh start"
+
+[tasks."emu:stop"]
+description = "Stop the test emulator"
+run = "release/emu.sh stop"
+
+[tasks."rc:check"]
+description = "Check the release candidate (dist's signed APK) on an emulator and write its record; rc:check phone records the phone checklist"
+usage = '''
+arg "[step]" help="phone: record your answer to the phone checklist (docs/development.md)"
+'''
+raw = true
+run = 'release/rc-check.sh ${usage_step:-}'
+
 [tasks."companion:publish"]
 description = "Publish dist/'s APK as a GitHub release (you run it: it asks you to type the version)"
 raw = true
